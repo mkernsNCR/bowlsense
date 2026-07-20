@@ -1,0 +1,19 @@
+{
+  "name": "BowlSense",
+  "short_name": "BowlSense",
+  "description": "Track your bowling scores, leagues, tournaments, and performance",
+  "categories": ["sports", "health"],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#863bff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-512.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+.npm/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+.cache/
+
+# Environment & secrets (NEVER commit)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+
+# Database files (contain user data — backed up via backup.sh)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+backend/bowling.db
+backend/bowling.db-journal
+backend/bowling.db-wal
+backend/bowling.db-shm
+bowling.db
+
+# Backups (handled by backup.sh, don't commit)
+backups/
+backend/backups/
+*.sql.gz
+*.db.gz
+*.dump
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+backend/server.log
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.lcov
+playwright-report/
+playwright/.cache/
+test-results/
+playwright-test/screenshots/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.fuse_hidden*
+.Trash-*
+
+# Vite (frontend also has its own .gitignore — kept for redundancy)
+.vite/
+
+# TypeScript
+*.tsbuildinfo
+
+# Runtime / temp
+.tmp/
+.temp/
+*.pid
+*.seed
+*.pid.lock
+
+# Backup / cron output
+backup-*.log

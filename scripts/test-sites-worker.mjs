@@ -50,7 +50,6 @@ class D1Mock {
 }
 
 const database = new DatabaseSync(":memory:");
-database.exec(await readFile(new URL("../.openai/drizzle/0000_bowlsense.sql", import.meta.url), "utf8"));
 const env = {
   DB: new D1Mock(database),
   ASSETS: { fetch: async () => new Response("not found", { status: 404 }) },

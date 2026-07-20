@@ -1,3 +1,5 @@
+import { schemaStatements } from "../db/schema";
+
 interface D1Result<T = Record<string, unknown>> {
   results?: T[];
   meta?: { last_row_id?: number; changes?: number };
@@ -23,6 +25,20 @@ interface Env {
 type Row = Record<string, any>;
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+
+let schemaReady: Promise<void> | undefined;
+
+async function ensureSchema(db: D1Database): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = db.batch(schemaStatements.map((statement) => db.prepare(statement)))
+      .then(() => undefined)
+      .catch((caught) => {
+        schemaReady = undefined;
+        throw caught;
+      });
+  }
+  return schemaReady;
+}
 
 function json(value: unknown, status = 200, headers: HeadersInit = {}): Response {
   return new Response(JSON.stringify(value), {
@@ -705,6 +721,7 @@ export default {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/health" || url.pathname.startsWith("/api/") || url.pathname === "/balls/search") {
+        await ensureSchema(env.DB);
         return await handleApi(request, env, url);
       }
       const asset = await env.ASSETS.fetch(request);

@@ -1,7 +1,7 @@
 // BowlSense PWA Service Worker
 // Cache-first for app shell, network-first for API
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4-sites';
 const SHELL_CACHE = `bowlsense-shell-${CACHE_VERSION}`;
 
 // App shell assets to cache on install
@@ -109,5 +109,5 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Everything else → network with no caching
-  event.respondWith(fetch(request).catch(() => cached || new Response('', { status: 200 })));
+  event.respondWith(fetch(request).catch(() => new Response('', { status: 503 })));
 });

@@ -1,0 +1,11 @@
+{
+  "name": "bowlsense-sites",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix frontend run build && node scripts/build-sites.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

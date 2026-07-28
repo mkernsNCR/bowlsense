@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from '../components/BowlingScorer'
+import { ActionIcon, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
 import {
   copyTournamentShareLink,
   downloadTournamentCard,
@@ -71,12 +72,14 @@ interface TournamentBracket {
   standings: TournamentBracketStanding[]
 }
 
+interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
+
 function frameMarks(frameData?: string | null): string | null {
   if (!frameData) return null
   try {
-    const parsed = JSON.parse(frameData) as any
+    const parsed = JSON.parse(frameData) as { frames?: StoredFrame[] }
     const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames.map((f: any, idx: number) => {
+    return frames.map((f, idx: number) => {
       const b1 = f?.ball1, b2 = f?.ball2, b3 = f?.ball3
       const strike = b1 === 10
       const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
@@ -118,7 +121,14 @@ export default function TournamentsPage() {
   }
 
   if (window.location.pathname === '/tournaments/new') {
-    return <TournamentForm title="New Tournament" submitText="Create Tournament" onSubmitDone={(newId) => navigate(`/tournaments/${newId}`)} />
+    return (
+      <>
+        <CompetitionHeader area="tournaments" title="Tournaments" detail="Events, squads, series, and finish." />
+        <CompetitionSheet title="New tournament" closeTo="/tournaments">
+          <TournamentForm title="New Tournament" submitText="Create tournament" onSubmitDone={(newId) => navigate(`/tournaments/${newId}`)} />
+        </CompetitionSheet>
+      </>
+    )
   }
 
   return <TournamentList />
@@ -132,17 +142,19 @@ function TournamentList() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 10, flexWrap: 'wrap' }}>
-        <h1>Tournaments</h1>
-        <Link to="/tournaments/new" className="btn btn-primary">+ New Tournament</Link>
-      </div>
+      <CompetitionHeader
+        area="tournaments"
+        title="Tournaments"
+        detail="Events, squads, series, and finish."
+        action={<Link to="/tournaments/new" className="btn btn-primary"><ActionIcon name="add" /> New tournament</Link>}
+      />
 
       {isLoading && <div className="muted">Loading tournaments...</div>}
 
       {!isLoading && !tournaments?.length && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="muted">No tournaments yet.</div>
-          <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create your first tournament →</Link>
+          <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create your first tournament</Link>
         </div>
       )}
 
@@ -198,22 +210,20 @@ function TournamentForm({ title, submitText, initial, tournamentId, onSubmitDone
 
   return (
     <div>
-      <h1 style={{ marginBottom: 14 }}>{title}</h1>
       <div className="card" style={{ display: 'grid', gap: 10 }}>
-        <input placeholder="Tournament Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        <input placeholder="Location" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
-        <label className="muted" style={{ fontSize: 12 }}>Date *</label>
-        <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-        <label className="muted" style={{ fontSize: 12 }}>End Date (optional)</label>
-        <input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
-        <input placeholder="Format (Singles, Doubles, Team...)" value={form.format} onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))} />
-        <input type="number" step="0.01" placeholder="Entry Fee ($)" value={form.entryFee} onChange={(e) => setForm((f) => ({ ...f, entryFee: e.target.value }))} />
-        <input type="number" step="0.01" placeholder="Prize Fund ($)" value={form.prizeFund} onChange={(e) => setForm((f) => ({ ...f, prizeFund: e.target.value }))} />
-        <input type="number" min={1} placeholder="Placement" value={form.placement} onChange={(e) => setForm((f) => ({ ...f, placement: e.target.value }))} />
-        <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+        <span className="sr-only">{title}</span>
+        <label>Tournament name<input autoFocus required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></label>
+        <label>Location<input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} /></label>
+        <label>Date<input required type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></label>
+        <label>End date <span className="muted">optional</span><input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} /></label>
+        <label>Format<input placeholder="Singles, doubles, team…" value={form.format} onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))} /></label>
+        <label>Entry fee<input type="number" step="0.01" inputMode="decimal" value={form.entryFee} onChange={(e) => setForm((f) => ({ ...f, entryFee: e.target.value }))} /></label>
+        <label>Prize fund<input type="number" step="0.01" inputMode="decimal" value={form.prizeFund} onChange={(e) => setForm((f) => ({ ...f, prizeFund: e.target.value }))} /></label>
+        <label>Placement<input type="number" min={1} inputMode="numeric" value={form.placement} onChange={(e) => setForm((f) => ({ ...f, placement: e.target.value }))} /></label>
+        <label>Notes<textarea placeholder="Optional, private to your account" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></label>
 
         <button className="btn btn-primary" disabled={mutation.isPending || !form.name.trim() || !form.date} onClick={() => mutation.mutate()}>
-          {mutation.isPending ? 'Saving...' : submitText}
+          {mutation.isPending ? 'Saving…' : submitText}
         </button>
       </div>
     </div>
@@ -288,23 +298,28 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
 
   if (isEditing) {
     return (
-      <TournamentForm
-        title="Edit Tournament"
-        submitText="Save Changes"
-        tournamentId={id}
-        initial={{
-          name: tournament.name || '',
-          location: tournament.location || '',
-          date: tournament.date || '',
-          endDate: tournament.endDate || '',
-          format: tournament.format || '',
-          entryFee: tournament.entryFee?.toString() || '',
-          prizeFund: tournament.prizeFund?.toString() || '',
-          placement: tournament.placement?.toString() || '',
-          notes: tournament.notes || '',
-        }}
-        onSubmitDone={(savedId) => navigate(`/tournaments/${savedId}`)}
-      />
+      <>
+        <CompetitionHeader area="tournaments" title={tournament.name} detail={[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ')} />
+        <CompetitionSheet title="Edit tournament" closeTo={`/tournaments/${id}`}>
+          <TournamentForm
+            title="Edit Tournament"
+            submitText="Save changes"
+            tournamentId={id}
+            initial={{
+              name: tournament.name || '',
+              location: tournament.location || '',
+              date: tournament.date || '',
+              endDate: tournament.endDate || '',
+              format: tournament.format || '',
+              entryFee: tournament.entryFee?.toString() || '',
+              prizeFund: tournament.prizeFund?.toString() || '',
+              placement: tournament.placement?.toString() || '',
+              notes: tournament.notes || '',
+            }}
+            onSubmitDone={(savedId) => navigate(`/tournaments/${savedId}`)}
+          />
+        </CompetitionSheet>
+      </>
     )
   }
 
@@ -348,21 +363,26 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'start', marginBottom: 14 }}>
-        <div>
-          <h1 style={{ marginBottom: 4 }}>{tournament.name}</h1>
-          <div className="muted" style={{ fontSize: 13 }}>{[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ')}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
+      <CompetitionHeader
+        area="tournaments"
+        title={tournament.name}
+        detail={[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ') || 'Tournament competition'}
+        action={<button className="btn btn-primary" onClick={() => setShowScorer(true)}><ActionIcon name="add" /> Add game</button>}
+      />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', marginBottom: 14 }}>
           <button
             className="btn btn-primary"
             onClick={() => setShareMenuOpen((v) => !v)}
-            style={{ minHeight: 36, padding: '6px 14px', fontWeight: 700 }}
+            aria-expanded={shareMenuOpen}
+            aria-haspopup="menu"
+            style={{ minHeight: 44, padding: '6px 14px', fontWeight: 700 }}
           >
-            {copiedLink ? '✅ Copied!' : sharing ? '⏳ Sharing...' : '📤 Share'}
+            <ActionIcon name="share" /> {copiedLink ? 'Copied' : sharing ? 'Sharing…' : 'Share'}
           </button>
           {shareMenuOpen && (
             <div
+              role="menu"
+              aria-label="Tournament sharing options"
               style={{
                 position: 'absolute',
                 right: 0,
@@ -379,39 +399,42 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
               onMouseLeave={() => setShareMenuOpen(false)}
             >
               <button
+                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleShare}
               >
-                📤 Share Card
+                Share card
               </button>
               <button
+                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleCopyLink}
               >
-                🔗 Copy Link
+                Copy link
               </button>
               <button
+                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleDownloadCard}
               >
-                💾 Download Image
+                Download image
               </button>
               <button
+                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13 }}
                 onClick={handleXShare}
               >
-                𝕏 Share on X
+                Share on X
               </button>
             </div>
           )}
           <a href={`/tournaments/${id}/standings`} className="btn btn-ghost" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Standings</a>
-          <button className="btn btn-ghost" onClick={onEdit}>Edit</button>
+          <button className="btn btn-ghost" onClick={onEdit}><ActionIcon name="edit" /> Edit</button>
           <button className="btn btn-danger" onClick={() => { if (confirm('Delete this tournament and all games?')) deleteTournament.mutate() }}>Delete</button>
-        </div>
       </div>
 
       <div style={{ width: '100%', overflowX: 'auto', marginBottom: 14 }}>
@@ -465,7 +488,8 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                   </div>
 
                   {rescoringGameId === g.id && (
-                    <div style={{ marginTop: 10, marginLeft: -12, marginRight: -12 }}>
+                    <CompetitionSheet title={`Edit game ${g.gameNumber}`} closeTo={`/tournaments/${id}`} onClose={() => setRescoringGameId(null)}>
+                    <div>
                       <BowlingScorer
                         gameNumber={g.gameNumber}
                         balls={balls || []}
@@ -477,6 +501,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                         onCancel={() => setRescoringGameId(null)}
                       />
                     </div>
+                    </CompetitionSheet>
                   )}
                 </div>
               )
@@ -485,10 +510,11 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
 
           {!showScorer ? (
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setShowScorer(true)}>
-              🎳 Bowl a Game
+              Bowl a game
             </button>
           ) : (
-            <div style={{ marginTop: 10 }}>
+            <CompetitionSheet title={`Add game ${nextGameNumber}`} closeTo={`/tournaments/${id}`} onClose={() => setShowScorer(false)}>
+            <div>
               <div style={{ padding: '0 4px 8px', display: 'grid', gap: 8 }}>
                 <div className="muted" style={{ fontSize: 12 }}>Game {nextGameNumber}</div>
                 <input
@@ -510,6 +536,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 onCancel={() => setShowScorer(false)}
               />
             </div>
+            </CompetitionSheet>
           )}
         </>
       )}

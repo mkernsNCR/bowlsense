@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import ShareCard from './ShareCard'
+import { ActionIcon } from '../features/competition/CompetitionUI'
 
 interface PerfectGameCelebrationProps {
   score: number
@@ -12,43 +13,26 @@ interface PerfectGameCelebrationProps {
   onRetake: () => void
 }
 
-interface ConfettiParticle {
-  id: number
-  x: number
-  y: number
-  size: number
-  color: string
-  delay: number
-  duration: number
-  drift: number
-  rotate: number
-  shape: 'square' | 'circle'
-}
-
 function getStats(frameData: string) {
   try {
     const parsed = JSON.parse(frameData)
     const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-
     let strikes = 0
     let spares = 0
 
-    frames.forEach((f: any, idx: number) => {
-      const b1 = f?.ball1
-      const b2 = f?.ball2
-      const b3 = f?.ball3
-      if (idx < 9) {
-        if (b1 === 10) strikes += 1
-        else if (typeof b1 === 'number' && typeof b2 === 'number' && b1 + b2 === 10) spares += 1
-      } else {
-        if (b1 === 10) strikes += 1
-        if (b2 === 10) strikes += 1
-        if (b3 === 10) strikes += 1
-        if (b1 !== 10 && typeof b1 === 'number' && typeof b2 === 'number' && b1 + b2 === 10) spares += 1
-        if (b2 !== 10 && typeof b2 === 'number' && typeof b3 === 'number' && b2 + b3 === 10) spares += 1
+    frames.forEach((frame: { ball1?: number; ball2?: number; ball3?: number }, index: number) => {
+      const { ball1, ball2, ball3 } = frame
+      if (index < 9) {
+        if (ball1 === 10) strikes += 1
+        else if (typeof ball1 === 'number' && typeof ball2 === 'number' && ball1 + ball2 === 10) spares += 1
+        return
       }
+      if (ball1 === 10) strikes += 1
+      if (ball2 === 10) strikes += 1
+      if (ball3 === 10) strikes += 1
+      if (ball1 !== 10 && typeof ball1 === 'number' && typeof ball2 === 'number' && ball1 + ball2 === 10) spares += 1
+      if (ball2 !== 10 && typeof ball2 === 'number' && typeof ball3 === 'number' && ball2 + ball3 === 10) spares += 1
     })
-
     return { strikes, spares, splits: 0 }
   } catch {
     return { strikes: 0, spares: 0, splits: 0 }
@@ -66,99 +50,28 @@ export default function PerfectGameCelebration({
   onRetake,
 }: PerfectGameCelebrationProps) {
   const [showShareCard, setShowShareCard] = useState(false)
-
-  const particles = useMemo<ConfettiParticle[]>(() => {
-    const colors = ['#fbbf24', '#a78bfa', '#ffffff', '#34d399']
-    return Array.from({ length: 60 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 50,
-      size: 6 + Math.random() * 6,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      delay: Math.random() * 0.8,
-      duration: 2 + Math.random() * 1,
-      drift: -30 + Math.random() * 60,
-      rotate: -280 + Math.random() * 560,
-      shape: Math.random() > 0.5 ? 'square' : 'circle',
-    }))
-  }, [])
-
   const stats = useMemo(() => getStats(frameData), [frameData])
 
   return (
     <>
-      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-          {particles.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                position: 'absolute',
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                width: p.size,
-                height: p.size,
-                background: p.color,
-                borderRadius: p.shape === 'circle' ? '50%' : '2px',
-                opacity: 0.95,
-                animation: `confetti-fall-${p.id} ${p.duration}s ease-out ${p.delay}s forwards`,
-              }}
-            />
-          ))}
-        </div>
-
-        <div style={{ width: '100%', maxWidth: 420, background: '#0d0d1a', borderRadius: 24, border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 30px 80px rgba(0,0,0,0.6)', padding: '28px 22px', position: 'relative', zIndex: 1 }}>
-          <div className="perfect-badge" style={{ width: 'fit-content', margin: '0 auto 12px', background: '#fbbf24', color: '#0d0d1a', borderRadius: 999, fontSize: 14, fontWeight: 800, letterSpacing: '0.08em', padding: '6px 20px' }}>
-            PERFECT GAME
+      <div className="perfect-result" role="dialog" aria-modal="true" aria-labelledby="perfect-result-title">
+        <section className="perfect-result__card">
+          <div className="perfect-result__line" aria-hidden="true" />
+          <p className="competition-eyebrow">Perfect game confirmed</p>
+          <h2 id="perfect-result-title">Twelve strikes. One clean card.</h2>
+          <div className="perfect-result__score" aria-label={`${score} points`}>{score}</div>
+          <p className="perfect-result__context">Game {gameNumber} · {session.location} · {session.date}</p>
+          <div className="perfect-result__actions">
+            <button className="btn btn-primary" onClick={() => { onShare(); setShowShareCard(true) }}><ActionIcon name="share" /> Share score card</button>
+            <button className="btn btn-ghost" onClick={onSave}><ActionIcon name="save" /> Save game</button>
+            <button className="btn btn-ghost" onClick={onRetake}>Retake</button>
           </div>
-
-          <div className="perfect-score" style={{ textAlign: 'center', color: '#fbbf24', fontSize: 120, fontWeight: 900, lineHeight: 0.95, margin: '2px 0 2px' }}>
-            {score}
-          </div>
-
-          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.74)', letterSpacing: '0.08em', fontWeight: 700, fontSize: 13, marginBottom: 20 }}>
-            ALL 12 STRIKES
-          </div>
-
-          <div style={{ display: 'grid', gap: 12 }}>
-            <button
-              className="btn"
-              onClick={() => {
-                onShare()
-                setShowShareCard(true)
-              }}
-              style={{ minHeight: 50, border: 'none', borderRadius: 14, background: '#fbbf24', color: '#0d0d1a', fontWeight: 800, fontSize: 15 }}
-            >
-              📤 Share Card
-            </button>
-            <button
-              className="btn"
-              onClick={onSave}
-              style={{ minHeight: 46, borderRadius: 14, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700 }}
-            >
-              💾 Save Game
-            </button>
-            <button
-              className="btn"
-              onClick={onRetake}
-              style={{ minHeight: 46, borderRadius: 14, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700 }}
-            >
-              🔄 Retake
-            </button>
-          </div>
-        </div>
+        </section>
       </div>
 
       {showShareCard && (
         <ShareCard
-          game={{
-            gameNumber,
-            score,
-            strikes: stats.strikes,
-            spares: stats.spares,
-            splits: stats.splits,
-            frameData,
-          }}
+          game={{ gameNumber, score, strikes: stats.strikes, spares: stats.spares, splits: stats.splits, frameData }}
           session={session}
           ballName={ballName}
           onClose={() => setShowShareCard(false)}
@@ -166,40 +79,17 @@ export default function PerfectGameCelebration({
       )}
 
       <style>{`
-        .perfect-badge {
-          animation: badge-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-
-        .perfect-score {
-          animation:
-            score-pop 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
-            score-glow 500ms ease-in-out 3;
-        }
-
-        @keyframes badge-pop {
-          from { opacity: 0; transform: scale(0); }
-          to { opacity: 1; transform: scale(1); }
-        }
-
-        @keyframes score-pop {
-          0% { transform: scale(0.5); opacity: 0; }
-          70% { transform: scale(1.08); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes score-glow {
-          0%, 100% { text-shadow: 0 0 0 rgba(251,191,36,0); }
-          50% { text-shadow: 0 0 40px rgba(251,191,36,0.8); }
-        }
-
-        ${particles
-          .map(
-            (p) => `@keyframes confetti-fall-${p.id} {
-              0% { transform: translate3d(0, -20px, 0) rotate(0deg); opacity: 1; }
-              100% { transform: translate3d(${p.drift}px, 110vh, 0) rotate(${p.rotate}deg); opacity: 0.95; }
-            }`,
-          )
-          .join('\n')}
+        .perfect-result { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; color: #f8f5ff; background: rgba(14, 10, 22, .94); }
+        .perfect-result__card { position: relative; width: min(100%, 520px); padding: clamp(28px, 7vw, 52px); overflow: hidden; background: #191423; border: 1px solid rgba(255,255,255,.16); border-radius: 22px; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+        .perfect-result__line { position: absolute; inset: 0 0 auto; height: 4px; background: #b89af0; transform-origin: left; animation: perfect-line 700ms ease-out both; }
+        .perfect-result h2 { max-width: 420px; margin: 0; font-size: clamp(1.65rem, 6vw, 2.7rem); line-height: 1.05; letter-spacing: -.04em; }
+        .perfect-result__score { margin: 30px 0 20px; color: #e1c7ff; font-size: clamp(6.5rem, 28vw, 10rem); font-weight: 850; line-height: .7; letter-spacing: -.08em; }
+        .perfect-result__context { color: rgba(255,255,255,.68); }
+        .perfect-result__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 28px; }
+        .perfect-result__actions .btn:first-child { grid-column: 1 / -1; }
+        @keyframes perfect-line { from { transform: scaleX(0); } }
+        @media (max-width: 420px) { .perfect-result__actions { grid-template-columns: 1fr; } .perfect-result__actions .btn:first-child { grid-column: auto; } }
+        @media (prefers-reduced-motion: reduce) { .perfect-result__line { animation: none; } }
       `}</style>
     </>
   )

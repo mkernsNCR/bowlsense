@@ -208,7 +208,7 @@ export default function TournamentShare() {
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui', padding: 24 }}>
         <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
           <h2>Tournament not found</h2>
-          <Link to="/tournaments" style={{ color: '#a78bfa' }}>← Back to Tournaments</Link>
+          <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
         </div>
       </div>
     )
@@ -253,7 +253,7 @@ export default function TournamentShare() {
               transition: 'background 0.2s',
             }}
           >
-            {copied ? '✅ Copied!' : '📤 Copy Link'}
+            {copied ? 'Link copied' : 'Copy link'}
           </button>
           <button
             onClick={handleDownload}
@@ -266,7 +266,7 @@ export default function TournamentShare() {
               transition: 'background 0.2s',
             }}
           >
-            {downloaded ? '✅ Downloaded!' : '💾 Download Card'}
+            {downloaded ? 'Downloaded' : 'Download card'}
           </button>
           <a
             href={twitterUrl}
@@ -364,8 +364,8 @@ export default function TournamentShare() {
           color: 'rgba(255,255,255,0.5)', fontSize: 13,
         }}>
           <span>Tracked with BowlSense 🧠</span>
-          <Link to={`/tournaments/${tournamentId}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>
-            ← View Tournament
+          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>
+            BowlSense home
           </Link>
         </div>
       </div>

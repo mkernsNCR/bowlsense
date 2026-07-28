@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import BowlingScorer from '../components/BowlingScorer'
+import { ActionIcon, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
 
 interface Ball { id: number; name: string }
 interface LeagueGame {
@@ -63,12 +64,14 @@ interface WeekGameScore {
   frameData?: string | null
 }
 
+interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
+
 function frameMarks(frameData?: string | null): string | null {
   if (!frameData) return null
   try {
-    const parsed = JSON.parse(frameData) as any
+    const parsed = JSON.parse(frameData) as { frames?: StoredFrame[] }
     const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames.map((f: any, idx: number) => {
+    return frames.map((f, idx: number) => {
       const b1 = f?.ball1, b2 = f?.ball2, b3 = f?.ball3
       const strike = b1 === 10
       const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
@@ -97,7 +100,16 @@ export default function LeaguesPage() {
   if (id) return <LeagueDetail id={id} />
 
   const isCreate = window.location.pathname === '/leagues/new'
-  if (isCreate) return <LeagueCreate onDone={(newId) => navigate(`/leagues/${newId}`)} />
+  if (isCreate) {
+    return (
+      <>
+        <CompetitionHeader area="leagues" title="Leagues" detail="Your weekly competition, in one place." />
+        <CompetitionSheet title="New league" closeTo="/leagues">
+          <LeagueCreate onDone={(newId) => navigate(`/leagues/${newId}`)} />
+        </CompetitionSheet>
+      </>
+    )
+  }
   return <LeagueList />
 }
 
@@ -109,17 +121,19 @@ function LeagueList() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 10, flexWrap: 'wrap' }}>
-        <h1>Leagues</h1>
-        <Link to="/leagues/new" className="btn btn-primary">+ New League</Link>
-      </div>
+      <CompetitionHeader
+        area="leagues"
+        title="Leagues"
+        detail="Your weekly competition, in one place."
+        action={<Link to="/leagues/new" className="btn btn-primary"><ActionIcon name="add" /> New league</Link>}
+      />
 
       {isLoading && <div className="muted">Loading leagues...</div>}
 
       {!isLoading && !leagues?.length && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="muted">No leagues yet.</div>
-          <Link to="/leagues/new" style={{ color: 'var(--accent)' }}>Create your first league →</Link>
+          <Link to="/leagues/new" style={{ color: 'var(--accent)' }}>Create your first league</Link>
         </div>
       )}
 
@@ -133,7 +147,7 @@ function LeagueList() {
                   {[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ') || 'League'}
                 </div>
               </div>
-              <span style={{ color: 'var(--accent)', fontSize: 20 }}>›</span>
+              <span style={{ color: 'var(--accent)', fontSize: 14 }} aria-hidden="true">View</span>
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <MiniPill label="Weeks" value={league.weekCount ?? 0} />
@@ -164,21 +178,20 @@ function LeagueCreate({ onDone }: { onDone: (id: number) => void }) {
 
   return (
     <div>
-      <h1 style={{ marginBottom: 14 }}>New League</h1>
       <div className="card" style={{ display: 'grid', gap: 10 }}>
-        <input placeholder="League Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        <input placeholder="Location" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
-        <input placeholder="Season (e.g. 2026 Spring)" value={form.season} onChange={(e) => setForm((f) => ({ ...f, season: e.target.value }))} />
+        <label>League name<input autoFocus required placeholder="Thursday Classic" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></label>
+        <label>Location<input placeholder="Center or city" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} /></label>
+        <label>Season<input placeholder="2026 Spring" value={form.season} onChange={(e) => setForm((f) => ({ ...f, season: e.target.value }))} /></label>
+        <label>Day of week
         <select value={form.dayOfWeek} onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: e.target.value }))}>
           <option value="">Day of Week</option>
           {days.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
-        <input type="number" min={1} placeholder="Games Per Week" value={form.gamesPerWeek} onChange={(e) => setForm((f) => ({ ...f, gamesPerWeek: e.target.value }))} />
-        <label className="muted" style={{ fontSize: 12 }}>Start Date</label>
-        <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
-        <label className="muted" style={{ fontSize: 12 }}>End Date</label>
-        <input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
-        <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+        </label>
+        <label>Games per week<input type="number" min={1} value={form.gamesPerWeek} onChange={(e) => setForm((f) => ({ ...f, gamesPerWeek: e.target.value }))} /></label>
+        <label>Start date<input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} /></label>
+        <label>End date<input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} /></label>
+        <label>Notes<textarea placeholder="Optional, private to your account" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></label>
         <button
           className="btn btn-primary"
           disabled={!form.name.trim() || createLeague.isPending}
@@ -193,7 +206,7 @@ function LeagueCreate({ onDone }: { onDone: (id: number) => void }) {
             notes: form.notes,
           })}
         >
-          {createLeague.isPending ? 'Creating...' : 'Create League'}
+          {createLeague.isPending ? 'Creating…' : 'Create league'}
         </button>
       </div>
     </div>
@@ -277,37 +290,38 @@ function LeagueDetail({ id }: { id: string }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <h1 style={{ marginBottom: 4 }}>{league.name}</h1>
-          <div className="muted" style={{ fontSize: 13 }}>{[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ')}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <CompetitionHeader
+        area="leagues"
+        title={league.name}
+        detail={[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ') || 'League competition'}
+        action={<button className="btn btn-primary" onClick={() => setShowLogWeek(true)}><ActionIcon name="add" /> Log this week</button>}
+      />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button
             className="btn btn-ghost"
-            style={{ minHeight: 36, padding: '6px 12px', fontSize: 13, borderColor: 'rgba(167,139,250,0.4)', color: '#c4b5fd' }}
+            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13, borderColor: 'rgba(167,139,250,0.4)', color: '#c4b5fd' }}
             onClick={() => navigate(`/leagues/${league.id}/leaderboard`)}
           >
-            🏆 Leaderboard
+            Leaderboard
           </button>
 
           <button
             className="btn btn-primary"
-            style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}
+            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13 }}
             onClick={() => navigate(`/leagues/${league.id}/share`)}
           >
-            📤 Share League
+            <ActionIcon name="share" /> Share league
           </button>
 
           <button
             className="btn btn-ghost"
-            style={{ minHeight: 36, padding: '6px 12px', fontSize: 13, borderColor: 'rgba(251,191,36,0.4)' }}
+            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13, borderColor: 'rgba(251,191,36,0.4)' }}
             onClick={() => navigate(`/leagues/${league.id}/recap`)}
           >
-            📣 Share Recap
+            Share recap
           </button>
 
-          <button className="btn btn-ghost" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }} onClick={() => {
+          <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 12px', fontSize: 13 }} onClick={() => {
             setLeagueForm({
               name: league.name || '',
               location: league.location || '',
@@ -319,32 +333,31 @@ function LeagueDetail({ id }: { id: string }) {
               notes: league.notes || '',
             })
             setEditingLeague(true)
-          }}>Edit</button>
-          <button className="btn btn-danger" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }} onClick={() => { if (confirm('Delete this league and all logged weeks/games?')) deleteLeague.mutate() }}>Delete</button>
-        </div>
+          }}><ActionIcon name="edit" /> Edit</button>
+          <button className="btn btn-danger" style={{ minHeight: 44, padding: '6px 12px', fontSize: 13 }} onClick={() => { if (confirm('Delete this league and all logged weeks/games?')) deleteLeague.mutate() }}>Delete</button>
       </div>
 
       {editingLeague && (
-        <div className="card" style={{ marginBottom: 16, background: '#131326', border: '1px solid var(--accent)' }}>
-          <div style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 10, fontWeight: 600 }}>Editing League</div>
+        <CompetitionSheet title="Edit league" closeTo={`/leagues/${id}`} onClose={() => setEditingLeague(false)}>
+        <div className="card">
           <div style={{ display: 'grid', gap: 10 }}>
-            <input placeholder="League Name*" value={leagueForm.name} onChange={e => setLeagueForm(f => ({ ...f, name: e.target.value }))} />
-            <input placeholder="Location" value={leagueForm.location} onChange={e => setLeagueForm(f => ({ ...f, location: e.target.value }))} />
+            <label>League name<input autoFocus required value={leagueForm.name} onChange={e => setLeagueForm(f => ({ ...f, name: e.target.value }))} /></label>
+            <label>Location<input value={leagueForm.location} onChange={e => setLeagueForm(f => ({ ...f, location: e.target.value }))} /></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <input placeholder="Season (e.g. 2025-26)" value={leagueForm.season} onChange={e => setLeagueForm(f => ({ ...f, season: e.target.value }))} />
-              <select value={leagueForm.dayOfWeek} onChange={e => setLeagueForm(f => ({ ...f, dayOfWeek: e.target.value }))}>
+              <label>Season<input placeholder="2025–26" value={leagueForm.season} onChange={e => setLeagueForm(f => ({ ...f, season: e.target.value }))} /></label>
+              <label>Day<select value={leagueForm.dayOfWeek} onChange={e => setLeagueForm(f => ({ ...f, dayOfWeek: e.target.value }))}>
                 <option value="">Day of Week</option>
                 {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+              </select></label>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <input type="number" placeholder="Games/Week" value={leagueForm.gamesPerWeek} onChange={e => setLeagueForm(f => ({ ...f, gamesPerWeek: e.target.value }))} />
-              <input type="date" value={leagueForm.startDate} onChange={e => setLeagueForm(f => ({ ...f, startDate: e.target.value }))} />
+              <label>Games per week<input type="number" min={1} value={leagueForm.gamesPerWeek} onChange={e => setLeagueForm(f => ({ ...f, gamesPerWeek: e.target.value }))} /></label>
+              <label>Start date<input type="date" value={leagueForm.startDate} onChange={e => setLeagueForm(f => ({ ...f, startDate: e.target.value }))} /></label>
             </div>
-            <input type="date" value={leagueForm.endDate} onChange={e => setLeagueForm(f => ({ ...f, endDate: e.target.value }))} />
-            <input placeholder="Notes" value={leagueForm.notes} onChange={e => setLeagueForm(f => ({ ...f, notes: e.target.value }))} />
+            <label>End date<input type="date" value={leagueForm.endDate} onChange={e => setLeagueForm(f => ({ ...f, endDate: e.target.value }))} /></label>
+            <label>Notes<textarea value={leagueForm.notes} onChange={e => setLeagueForm(f => ({ ...f, notes: e.target.value }))} /></label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" style={{ minHeight: 36, padding: '6px 16px' }} onClick={() => updateLeague.mutate({
+              <button className="btn btn-primary" style={{ minHeight: 44, padding: '6px 16px' }} onClick={() => updateLeague.mutate({
                 name: leagueForm.name,
                 location: leagueForm.location,
                 season: leagueForm.season,
@@ -354,12 +367,13 @@ function LeagueDetail({ id }: { id: string }) {
                 endDate: leagueForm.endDate,
                 notes: leagueForm.notes,
               })}>
-                {updateLeague.isPending ? 'Saving...' : 'Save'}
+                {updateLeague.isPending ? 'Saving…' : 'Save changes'}
               </button>
-              <button className="btn btn-ghost" style={{ minHeight: 36, padding: '6px 16px' }} onClick={() => setEditingLeague(false)}>Cancel</button>
+              <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 16px' }} onClick={() => setEditingLeague(false)}>Cancel</button>
             </div>
           </div>
         </div>
+        </CompetitionSheet>
       )}
 
       <div style={{ width: '100%', overflowX: 'auto', marginBottom: 18 }}>
@@ -371,22 +385,22 @@ function LeagueDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <button className="btn btn-primary" style={{ width: '100%', marginBottom: 12 }} onClick={() => setShowLogWeek((s) => !s)}>
-        {showLogWeek ? 'Cancel' : '+ Log This Week'}
-      </button>
+      {!showLogWeek && <button className="btn btn-primary" style={{ width: '100%', marginBottom: 12 }} onClick={() => setShowLogWeek(true)}><ActionIcon name="add" /> Log this week</button>}
 
       {showLogWeek && (
-        <LogWeekForm
-          leagueId={league.id}
-          gamesPerWeek={league.gamesPerWeek || 3}
-          nextWeekNumber={nextWeekNumber}
-          balls={balls || []}
-          onSaved={() => {
-            setShowLogWeek(false)
-            qc.invalidateQueries({ queryKey: ['league', id] })
-            qc.invalidateQueries({ queryKey: ['leagues'] })
-          }}
-        />
+        <CompetitionSheet title={`Log week ${nextWeekNumber}`} closeTo={`/leagues/${id}`} onClose={() => setShowLogWeek(false)}>
+          <LogWeekForm
+            leagueId={league.id}
+            gamesPerWeek={league.gamesPerWeek || 3}
+            nextWeekNumber={nextWeekNumber}
+            balls={balls || []}
+            onSaved={() => {
+              setShowLogWeek(false)
+              qc.invalidateQueries({ queryKey: ['league', id] })
+              qc.invalidateQueries({ queryKey: ['leagues'] })
+            }}
+          />
+        </CompetitionSheet>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
@@ -406,7 +420,7 @@ function LeagueDetail({ id }: { id: string }) {
                       W/L: {week.gamesWon}-{week.gamesLost}
                     </div>
                   </div>
-                  <span style={{ color: 'var(--accent)' }}>{expanded ? '▾' : '▸'}</span>
+                  <span style={{ color: 'var(--accent)' }} aria-hidden="true">{expanded ? 'Collapse' : 'Expand'}</span>
                 </div>
               </button>
 
@@ -421,7 +435,7 @@ function LeagueDetail({ id }: { id: string }) {
               <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                 <button
                   className="btn btn-ghost"
-                  style={{ minHeight: 32, padding: '5px 10px' }}
+                  style={{ minHeight: 44, padding: '5px 10px' }}
                   onClick={() => {
                     setEditingWeekId(week.id)
                     setWeekForm({
@@ -438,22 +452,23 @@ function LeagueDetail({ id }: { id: string }) {
               </div>
 
               {editingWeekId === week.id && (
+                <CompetitionSheet title={`Edit week ${week.weekNumber}`} closeTo={`/leagues/${id}`} onClose={() => setEditingWeekId(null)}>
                 <div style={{ marginTop: 10, border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: '#131326' }}>
-                  <div style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>Editing...</div>
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <input type="date" value={weekForm.date} onChange={(e) => setWeekForm((f) => ({ ...f, date: e.target.value }))} />
-                    <input placeholder="Opponent" value={weekForm.opponent} onChange={(e) => setWeekForm((f) => ({ ...f, opponent: e.target.value }))} />
+                    <label>Date<input type="date" value={weekForm.date} onChange={(e) => setWeekForm((f) => ({ ...f, date: e.target.value }))} /></label>
+                    <label>Opponent<input value={weekForm.opponent} onChange={(e) => setWeekForm((f) => ({ ...f, opponent: e.target.value }))} /></label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <input type="number" placeholder="Games Won" value={weekForm.gamesWon} onChange={(e) => setWeekForm((f) => ({ ...f, gamesWon: e.target.value }))} />
-                      <input type="number" placeholder="Games Lost" value={weekForm.gamesLost} onChange={(e) => setWeekForm((f) => ({ ...f, gamesLost: e.target.value }))} />
+                      <label>Games won<input type="number" min={0} value={weekForm.gamesWon} onChange={(e) => setWeekForm((f) => ({ ...f, gamesWon: e.target.value }))} /></label>
+                      <label>Games lost<input type="number" min={0} value={weekForm.gamesLost} onChange={(e) => setWeekForm((f) => ({ ...f, gamesLost: e.target.value }))} /></label>
                     </div>
-                    <textarea placeholder="Notes" value={weekForm.notes} onChange={(e) => setWeekForm((f) => ({ ...f, notes: e.target.value }))} />
+                    <label>Notes<textarea value={weekForm.notes} onChange={(e) => setWeekForm((f) => ({ ...f, notes: e.target.value }))} /></label>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-primary" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => updateWeek.mutate({ weekId: week.id, data: { date: weekForm.date, opponent: weekForm.opponent, gamesWon: Number(weekForm.gamesWon || 0), gamesLost: Number(weekForm.gamesLost || 0), notes: weekForm.notes } })}>Save</button>
-                      <button className="btn btn-ghost" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => setEditingWeekId(null)}>Cancel</button>
+                      <button className="btn btn-primary" style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => updateWeek.mutate({ weekId: week.id, data: { date: weekForm.date, opponent: weekForm.opponent, gamesWon: Number(weekForm.gamesWon || 0), gamesLost: Number(weekForm.gamesLost || 0), notes: weekForm.notes } })}>Save</button>
+                      <button className="btn btn-ghost" style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => setEditingWeekId(null)}>Cancel</button>
                     </div>
                   </div>
                 </div>
+                </CompetitionSheet>
               )}
 
               {expanded && (
@@ -476,7 +491,7 @@ function LeagueDetail({ id }: { id: string }) {
                             </div>
                             <button
                               className="btn btn-ghost"
-                              style={{ minHeight: 30, padding: '4px 8px' }}
+                              style={{ minHeight: 44, padding: '4px 8px' }}
                               onClick={() => setRescoringGameId(g.id)}
                             >
                               Edit
@@ -484,7 +499,8 @@ function LeagueDetail({ id }: { id: string }) {
                           </div>
 
                           {rescoringGameId === g.id && (
-                            <div style={{ marginTop: 10, marginLeft: -10, marginRight: -10 }}>
+                            <CompetitionSheet title={`Edit game ${g.gameNumber}`} closeTo={`/leagues/${id}`} onClose={() => setRescoringGameId(null)}>
+                            <div>
                               <BowlingScorer
                                 gameNumber={g.gameNumber}
                                 balls={balls || []}
@@ -493,6 +509,7 @@ function LeagueDetail({ id }: { id: string }) {
                                 onCancel={() => setRescoringGameId(null)}
                               />
                             </div>
+                            </CompetitionSheet>
                           )}
                         </div>
                       )
@@ -561,10 +578,9 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
 
   return (
     <div className="card" style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
-      <h3 style={{ fontSize: 16 }}>Log Week</h3>
-      <input type="number" min={1} value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)} placeholder="Week Number" />
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-      <input value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder="Opponent" />
+      <label>Week number<input type="number" min={1} value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)} /></label>
+      <label>Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+      <label>Opponent<input value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 10, background: '#0f0f1c', display: 'grid', gap: 10 }}>
         <div style={{ fontWeight: 650 }}>Games ({weekGames.length}/{gamesPerWeek})</div>
@@ -608,13 +624,13 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <input type="number" placeholder="Games Won" value={gamesWon} onChange={(e) => setGamesWon(e.target.value)} />
-        <input type="number" placeholder="Games Lost" value={gamesLost} onChange={(e) => setGamesLost(e.target.value)} />
+        <label>Games won<input type="number" min={0} value={gamesWon} onChange={(e) => setGamesWon(e.target.value)} /></label>
+        <label>Games lost<input type="number" min={0} value={gamesLost} onChange={(e) => setGamesLost(e.target.value)} /></label>
       </div>
-      <textarea placeholder="Week notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <label>Notes<textarea placeholder="Optional, private to your account" value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
 
       <button className="btn btn-primary" onClick={() => submitWeek.mutate()} disabled={submitWeek.isPending || !date || !allGamesLogged}>
-        {submitWeek.isPending ? 'Saving...' : 'Save Week'}
+        {submitWeek.isPending ? 'Saving…' : 'Save week'}
       </button>
       {!allGamesLogged && <div className="muted" style={{ fontSize: 12 }}>Complete all {gamesPerWeek} games to submit this week.</div>}
     </div>

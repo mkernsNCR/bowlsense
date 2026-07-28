@@ -22,6 +22,8 @@ interface PerfectGame {
   lanes: string
 }
 
+interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
+
 function parseFrames(frameData?: string | null): string[] {
   if (!frameData) return []
   try {
@@ -33,7 +35,7 @@ function parseFrames(frameData?: string | null): string[] {
       if (v === 0) return '-'
       return String(v)
     }
-    return frames.map((f: any, idx: number) => {
+    return (frames as StoredFrame[]).map((f, idx: number) => {
       const b1 = f?.ball1
       const b2 = f?.ball2
       const b3 = f?.ball3
@@ -45,7 +47,7 @@ function parseFrames(frameData?: string | null): string[] {
         return b1 + b2 === 10 ? `${mark(b1)}/` : `${mark(b1)}${mark(b2)}`
       }
       const first = mark(b1)
-      const second = b2 != null ? (b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
+      const second = b2 != null ? (typeof b1 === 'number' && b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
       const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
       return `${first}${second}${third}`
     })
@@ -191,16 +193,16 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
         <Link
           to={`/sessions/${game.sessionId}`}
           className="btn btn-ghost"
-          style={{ flex: 1, minHeight: 36, fontSize: 13, justifyContent: 'center' }}
+          style={{ flex: 1, minHeight: 44, fontSize: 13, justifyContent: 'center' }}
         >
-          📋 View Session
+          View session
         </Link>
         <Link
           to={`/perfect-games/${game.id}`}
           className="btn"
           style={{
             flex: 1,
-            minHeight: 36,
+            minHeight: 44,
             fontSize: 13,
             background: 'rgba(251,191,36,0.15)',
             border: '1px solid rgba(251,191,36,0.35)',
@@ -210,7 +212,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             textDecoration: 'none',
           }}
         >
-          🔗 Share 300
+          Share 300
         </Link>
         <button
           type="button"
@@ -218,7 +220,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
           onClick={() => setShowShare(true)}
           style={{
             flex: 1,
-            minHeight: 36,
+            minHeight: 44,
             fontSize: 13,
             background: 'rgba(251,191,36,0.15)',
             border: '1px solid rgba(251,191,36,0.35)',
@@ -227,7 +229,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             justifyContent: 'center',
           }}
         >
-          🎨 Customize Share
+          Customize share
         </button>
       </div>
 
@@ -238,7 +240,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
           onClick={() => shareOnX(game.id, game.score, game.location)}
           style={{
             flex: 1,
-            minHeight: 36,
+            minHeight: 44,
             fontSize: 13,
             background: 'rgba(251,191,36,0.15)',
             border: '1px solid rgba(251,191,36,0.35)',
@@ -255,7 +257,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
           onClick={handleDownload}
           style={{
             flex: 1,
-            minHeight: 36,
+            minHeight: 44,
             fontSize: 13,
             background: 'rgba(251,191,36,0.15)',
             border: '1px solid rgba(251,191,36,0.35)',
@@ -264,23 +266,23 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             justifyContent: 'center',
           }}
         >
-          {downloaded ? '✅ Downloaded' : '⬇️ Download PNG'}
+          {downloaded ? 'Downloaded' : 'Download image'}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           onClick={handleNativeShare}
-          style={{ flex: 1, minHeight: 36, fontSize: 13, justifyContent: 'center' }}
+          style={{ flex: 1, minHeight: 44, fontSize: 13, justifyContent: 'center' }}
         >
-          {sharing ? 'Sharing…' : '📤 Share'}
+          {sharing ? 'Sharing…' : 'Share'}
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           onClick={handleCopyLink}
-          style={{ flex: 1, minHeight: 36, fontSize: 13, justifyContent: 'center' }}
+          style={{ flex: 1, minHeight: 44, fontSize: 13, justifyContent: 'center' }}
         >
-          {copied ? '✅ Copied' : '🔗 Copy Link'}
+          {copied ? 'Link copied' : 'Copy link'}
         </button>
       </div>
 
@@ -400,7 +402,7 @@ export default function PerfectGames() {
             Keep bowling — that 300 is out there waiting.
           </div>
           <Link to="/sessions/new" className="btn btn-primary">
-            🎳 Start a Session
+            Start a session
           </Link>
         </div>
       ) : (
@@ -484,13 +486,13 @@ export default function PerfectGames() {
           {quickAddPerfect ? (
             <div className="card" style={{ marginBottom: 16, padding: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontWeight: 700 }}>🎳 Log Your Perfect 300</span>
+                <span style={{ fontWeight: 700 }}>Log your perfect 300</span>
                 <button
                   className="btn btn-ghost"
-                  style={{ minHeight: 28, padding: '3px 8px', fontSize: 12 }}
+                  style={{ minHeight: 44, padding: '3px 8px', fontSize: 12 }}
                   onClick={() => setQuickAddPerfect(false)}
                 >
-                  ✕ Cancel
+                  Cancel
                 </button>
               </div>
               <QuickAddGame

@@ -106,7 +106,7 @@ export default function LeagueWeekShare() {
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', display: 'grid', placeItems: 'center', padding: 24 }}>
         <div style={{ textAlign: 'center' }}>
           <h2>League or week not found</h2>
-          <Link to="/leagues" className="btn btn-ghost" style={{ marginTop: 16 }}>← Back to Leagues</Link>
+          <Link to="/" className="btn btn-ghost" style={{ marginTop: 16 }}>BowlSense home</Link>
         </div>
       </div>
     )
@@ -123,8 +123,8 @@ export default function LeagueWeekShare() {
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
 
         {/* Back link */}
-        <Link to="/leagues" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
-          ← Back to Leagues
+        <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
+          BowlSense home
         </Link>
 
         {isLoading && (
@@ -135,8 +135,8 @@ export default function LeagueWeekShare() {
           <div style={{ textAlign: 'center', padding: 80 }}>
             <div style={{ color: '#fc8181', marginBottom: 16 }}>Failed to load week data.</div>
             <p style={{ color: 'rgba(255,255,255,0.6)' }}>No league weeks found. Log your first week to generate a share card! 🎳</p>
-            <Link to="/leagues" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-block' }}>
-              Go to Leagues
+            <Link to="/" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-block' }}>
+              BowlSense home
             </Link>
           </div>
         )}
@@ -145,7 +145,6 @@ export default function LeagueWeekShare() {
           <>
             {/* OG image preview */}
             <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 24, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-              {/* eslint-disable-next-line jsx-a11y/no-img-element */}
               <img src={ogImageUrl} alt="League week recap card" style={{ width: '100%', display: 'block' }} />
             </div>
 
@@ -227,7 +226,7 @@ export default function LeagueWeekShare() {
                   fontSize: 14,
                 }}
               >
-                {copied ? '✅ Copied!' : '📋 Copy Link'}
+                {copied ? 'Link copied' : 'Copy link'}
               </button>
               {canShare && (
                 <button
@@ -238,7 +237,7 @@ export default function LeagueWeekShare() {
                     fontSize: 14,
                   }}
                 >
-                  📤 More Share
+                  More sharing options
                 </button>
               )}
             </div>

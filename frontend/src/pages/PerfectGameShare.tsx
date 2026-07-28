@@ -120,7 +120,7 @@ export default function PerfectGameShare() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 64, marginBottom: 14 }}>🎳</div>
           <h1 style={{ marginBottom: 10 }}>Perfect game not found</h1>
-          <Link to="/perfect-games" className="btn btn-primary">View 300 Club</Link>
+          <Link to="/" className="btn btn-primary">BowlSense home</Link>
         </div>
       </div>
     )
@@ -218,7 +218,7 @@ export default function PerfectGameShare() {
             cursor: 'pointer',
           }}
         >
-          ⬇️ Download PNG
+          Download image
         </button>
         <button
           type="button"
@@ -237,7 +237,7 @@ export default function PerfectGameShare() {
             cursor: 'pointer',
           }}
         >
-          📤 Share
+          Share
         </button>
         <button
           type="button"
@@ -255,7 +255,7 @@ export default function PerfectGameShare() {
             cursor: 'pointer',
           }}
         >
-          {copied ? '✅ Copied!' : '🔗 Copy Link'}
+          {copied ? 'Link copied' : 'Copy link'}
         </button>
       </div>
 
@@ -315,8 +315,8 @@ export default function PerfectGameShare() {
 
       {/* Back link */}
       <div style={{ maxWidth: 860, margin: '28px auto 0', textAlign: 'center' }}>
-        <Link to="/perfect-games" style={{ color: 'rgba(167,139,250,0.8)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
-          ← View all 300s in BowlSense
+        <Link to="/" style={{ color: 'rgba(167,139,250,0.8)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+          BowlSense home
         </Link>
       </div>
     </div>

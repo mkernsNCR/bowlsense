@@ -2825,7 +2825,6 @@ fastify.get('/tournaments/:id/share', async (request, reply) => {
       entryFee: tournament.entry_fee,
       prizeFund: tournament.prize_fund,
       placement: tournament.placement,
-      notes: tournament.notes,
     },
     stats: {
       totalGames: scores.length,

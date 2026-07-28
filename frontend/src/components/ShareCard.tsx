@@ -18,6 +18,8 @@ interface ShareCardProps {
   onClose: () => void
 }
 
+interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
+
 function parseFrames(frameData?: string | null): string[] {
   if (!frameData) return []
   try {
@@ -30,7 +32,7 @@ function parseFrames(frameData?: string | null): string[] {
       return String(v)
     }
 
-    return frames.map((f: any, idx: number) => {
+    return (frames as StoredFrame[]).map((f, idx: number) => {
       const b1 = f?.ball1
       const b2 = f?.ball2
       const b3 = f?.ball3
@@ -41,7 +43,7 @@ function parseFrames(frameData?: string | null): string[] {
         return b1 + b2 === 10 ? `${mark(b1)}/` : `${mark(b1)}${mark(b2)}`
       }
       const first = mark(b1)
-      const second = b2 != null ? (b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
+      const second = b2 != null ? (typeof b1 === 'number' && b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
       const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
       return `${first}${second}${third}`
     })
@@ -67,8 +69,50 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
 
 export default function ShareCard({ game, session, ballName, onClose }: ShareCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const [sharing, setSharing] = useState(false)
   const marks = useMemo(() => parseFrames(game.frameData), [game.frameData])
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const firstButton = dialogRef.current?.querySelector<HTMLElement>('button')
+    firstButton?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])
+      if (focusable.length === 0) {
+        event.preventDefault()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+      previouslyFocused?.focus()
+    }
+  }, [onClose])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -91,7 +135,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
 
     ctx.fillStyle = 'rgba(255,255,255,0.65)'
     ctx.font = '500 14px sans-serif'
-    ctx.fillText('🎳 BowlSense', 24, 34)
+    ctx.fillText('BowlSense', 24, 34)
 
     const isPerfect = game.score === 300
     const isElite = game.score >= 280
@@ -108,7 +152,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
       ctx.font = '700 18px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText('🏆 PERFECT GAME', bx + bw / 2, by + bh / 2 + 1)
+      ctx.fillText('PERFECT GAME', bx + bw / 2, by + bh / 2 + 1)
       ctx.textAlign = 'left'
       ctx.textBaseline = 'alphabetic'
     }
@@ -173,7 +217,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
       ctx.textAlign = 'right'
       ctx.fillStyle = 'rgba(255,255,255,0.9)'
       ctx.font = '600 16px sans-serif'
-      ctx.fillText(`🎳 ${ballName}`, w - 24, 416)
+      ctx.fillText(ballName, w - 24, 416)
     }
   }, [game.score, marks, session.date, session.lanes, session.location, ballName])
 
@@ -225,6 +269,10 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
 
   return (
     <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Share game score ${game.score}`}
       style={{
         position: 'fixed',
         inset: 0,
@@ -244,22 +292,22 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
           ref={canvasRef}
           width={800}
           height={460}
-          style={{ width: 400, height: 230, borderRadius: 14, display: 'block', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
+          style={{ width: 'min(400px, calc(100vw - 32px))', height: 'auto', maxWidth: '100%', borderRadius: 14, display: 'block', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
         />
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button className="btn btn-primary" style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10 }} onClick={saveImage}>
-            💾 Save Image
+          <button className="btn btn-primary" style={{ minHeight: 44, padding: '6px 12px', borderRadius: 10 }} onClick={saveImage}>
+            Save image
           </button>
 
           {canShare && (
-            <button className="btn btn-ghost" style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10 }} onClick={shareImage}>
-              📤 Share
+            <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 12px', borderRadius: 10 }} onClick={shareImage}>
+              Share
             </button>
           )}
 
-          <button className="btn btn-ghost" style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10 }} onClick={onClose}>
-            ✕ Close
+          <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 12px', borderRadius: 10 }} onClick={onClose}>
+            Close
           </button>
         </div>
       </div>

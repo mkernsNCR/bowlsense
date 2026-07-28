@@ -129,7 +129,7 @@ export default function LeagueShare() {
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui', padding: 24 }}>
         <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
           <h2>League not found</h2>
-          <Link to="/leagues" style={{ color: '#a78bfa' }}>← Back to Leagues</Link>
+          <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
         </div>
       </div>
     )
@@ -174,7 +174,7 @@ export default function LeagueShare() {
               transition: 'background 0.2s',
             }}
           >
-            {copied ? '✅ Copied!' : '📤 Copy Link'}
+            {copied ? 'Link copied' : 'Copy link'}
           </button>
           <a
             href={twitterUrl}
@@ -308,8 +308,8 @@ export default function LeagueShare() {
           color: 'rgba(255,255,255,0.5)', fontSize: 13,
         }}>
           <span>Tracked with BowlSense 🧠</span>
-          <Link to={`/leagues/${leagueId}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>
-            ← View Full League
+          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>
+            BowlSense home
           </Link>
         </div>
       </div>

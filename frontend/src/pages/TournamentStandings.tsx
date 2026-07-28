@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import { ActionIcon, CompetitionHeader } from '../features/competition/CompetitionUI'
 
 interface TournamentStanding {
   rank: number
@@ -74,7 +75,7 @@ export default function TournamentStandings() {
     queryKey: ['tournament', tournamentId],
     enabled: !invalidId,
     queryFn: async () => {
-      const res = await fetch(`/api/tournaments/${tournamentId}`)
+      const res = await fetch(`/api/tournaments/${tournamentId}/share`)
       if (!res.ok) throw new Error('Failed to load tournament')
       return res.json()
     },
@@ -91,7 +92,7 @@ export default function TournamentStandings() {
     return parts.join(' · ')
   }, [tournament?.tournament?.location, tournament?.tournament?.format, tournament?.tournament?.date])
 
-  const title = tournament?.tournament?.name ? `${tournament.tournament.name} Standings 🎯` : 'Tournament Standings 🎯'
+  const title = tournament?.tournament?.name ? `${tournament.tournament.name} standings` : 'Tournament standings'
   const description = subtitle || 'Tournament standings'
   const ogImageUrl = `/api/tournaments/${tournamentId}/standings/og-image`
 
@@ -153,14 +154,14 @@ export default function TournamentStandings() {
         <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: '#121228' }}>
           <h2 style={{ marginBottom: 8 }}>Tournament not found</h2>
           <p className="muted">The tournament link looks invalid.</p>
-          <Link to="/tournaments" className="btn btn-ghost">← Back to Tournaments</Link>
+          <Link to="/tournaments" className="btn btn-ghost">Back to tournaments</Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: '24px 16px 40px' }}>
+    <div>
       <div style={{ maxWidth: 1040, margin: '0 auto' }}>
         <style>{`
           .ts-mobile-cards {
@@ -179,28 +180,15 @@ export default function TournamentStandings() {
           }
         `}</style>
 
-        <div style={{ display: 'inline-flex', padding: '6px 12px', borderRadius: 999, background: 'rgba(167,139,250,0.18)', color: '#c4b5fd', fontWeight: 700, fontSize: 12, letterSpacing: 0.5, marginBottom: 14 }}>
-          🏆 TOURNAMENT STANDINGS
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900 }}>
-              {tournament?.tournament?.name || 'Tournament Standings'}
-            </h1>
-            <div style={{ color: 'rgba(255,255,255,0.75)', marginTop: 8 }}>{subtitle}</div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <button
-              onClick={shareCopy}
-              className="btn btn-primary"
-              style={{ background: '#a78bfa', borderColor: '#a78bfa', color: '#140f2b' }}
-            >
-              {copied ? '✅ Copied!' : '📤 Share'}
-            </button>
+        <CompetitionHeader
+          area="tournaments"
+          title={tournament?.tournament?.name || 'Tournament standings'}
+          detail={subtitle}
+          action={<button onClick={shareCopy} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share standings'}</button>}
+        />
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
             <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the ${tournament?.tournament?.name || 'tournament'} standings! 🎯`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the ${tournament?.tournament?.name || 'tournament'} standings.`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-ghost"
@@ -212,11 +200,10 @@ export default function TournamentStandings() {
               onClick={handleDownloadPng}
               disabled={downloading}
               className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none', minHeight: 40 }}
+              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none', minHeight: 44 }}
             >
-              {downloading ? '⏳ Saving...' : '⬇️ Download PNG'}
+              {downloading ? 'Saving…' : 'Download image'}
             </button>
-          </div>
         </div>
 
         {isLoading && <div className="card" style={{ background: '#121228' }}>Loading standings...</div>}
@@ -233,9 +220,9 @@ export default function TournamentStandings() {
                 <StatCard
                   label="Placement"
                   value={
-                    tournament.stats.placement === 1 ? '🥇 1st'
-                    : tournament.stats.placement === 2 ? '🥈 2nd'
-                    : tournament.stats.placement === 3 ? '🥉 3rd'
+                    tournament.stats.placement === 1 ? '1st'
+                    : tournament.stats.placement === 2 ? '2nd'
+                    : tournament.stats.placement === 3 ? '3rd'
                     : `#${tournament.stats.placement}`
                   }
                 />
@@ -245,7 +232,7 @@ export default function TournamentStandings() {
             <div style={{ background: '#121228', borderRadius: 16, border: '1px solid rgba(167,139,250,0.2)', overflow: 'hidden' }}>
               {!data.standings?.length ? (
                 <div style={{ padding: 28, textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>
-                  No games logged yet — check back after your next tournament! 🎯
+                  No games logged yet. Add a game after your next tournament.
                 </div>
               ) : (
                 <>
@@ -309,10 +296,10 @@ export default function TournamentStandings() {
         )}
 
         <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'rgba(255,255,255,0.65)', fontSize: 13 }}>
-          <div>Tracked with BowlSense 🧠</div>
+          <div>Tracked with BowlSense</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <a href={`/tournaments/${tournamentId}/standings/share`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>📤 Share Standings</a>
-            <Link to={`/tournaments/${tournamentId}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>← View Tournament</Link>
+            <a href={`/tournaments/${tournamentId}/standings/share`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>Share standings</a>
+            <Link to={`/tournaments/${tournamentId}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>View tournament</Link>
           </div>
         </div>
       </div>

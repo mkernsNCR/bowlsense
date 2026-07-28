@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import ShareCard from '../components/ShareCard'
+import { ActionIcon, PublicShell } from '../features/competition/CompetitionUI'
 
 interface PublicGamePayload {
   game: {
@@ -64,7 +64,7 @@ export default function ShareScore() {
     return `/api/games/${data.game.id}/og-image`
   }, [data])
 
-  const title = useMemo(() => (data ? `I scored ${data.game.score}! 🎳` : 'BowlSense Score Share'), [data])
+  const title = useMemo(() => (data ? `${data.game.score} — BowlSense score` : 'BowlSense score'), [data])
   const description = useMemo(() => {
     if (!data) return 'BowlSense'
     return `${data.session.location || 'Unknown Alley'} · ${data.session.date || ''}`
@@ -99,7 +99,7 @@ export default function ShareScore() {
 
   const shareOnX = () => {
     if (!data) return
-    const text = `I just scored ${data.game.score} at ${data.session.location || 'the alley'}! 🎳 #BowlSense`
+    const text = `I just scored ${data.game.score} at ${data.session.location || 'the alley'}. #BowlSense`
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
@@ -129,7 +129,7 @@ export default function ShareScore() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center' }}>
-        <div className="muted">Loading score card...</div>
+        <div className="muted">Loading score card…</div>
       </div>
     )
   }
@@ -146,29 +146,28 @@ export default function ShareScore() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', padding: '28px 16px 20px' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, textAlign: 'center' }}>🎳 I just scored {data.game.score}!</h1>
-
-        <div style={{ width: '100%', maxWidth: 800 }}>
-          <div style={{ position: 'relative', width: '100%', paddingTop: '57.5%', borderRadius: 14, overflow: 'hidden', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}>
-            <div style={{ position: 'absolute', inset: 0 }}>
-              <ShareCard
-                game={data.game}
-                session={{ location: data.session.location, date: data.session.date, lanes: data.session.lanes || '' }}
-                ballName={data.game.ballName || undefined}
-                onClose={() => {}}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, width: '100%', maxWidth: 800, flexWrap: 'wrap' }}>
+    <PublicShell
+      eyebrow="Game result"
+      title={data.player?.name ? `${data.player.name} rolled ${data.game.score}` : `A ${data.game.score} game`}
+      detail={[data.session.location, data.session.date, data.session.lanes ? `Lanes ${data.session.lanes}` : null].filter(Boolean).join(' · ')}
+      action={<button type="button" onClick={copyLink} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share result'}</button>}
+    >
+      <div className="share-result">
+        <section className="share-result__primary" aria-label={`Final score ${data.game.score}`}>
+          <div><div className="share-result__score">{data.game.score}</div><div className="share-result__label">Final score · Game {data.game.gameNumber}</div></div>
+        </section>
+        <dl className="share-result__facts">
+          <div className="share-result__fact"><dt>Strikes</dt><dd>{data.game.strikes}</dd></div>
+          <div className="share-result__fact"><dt>Spares</dt><dd>{data.game.spares}</dd></div>
+          <div className="share-result__fact"><dt>Splits</dt><dd>{data.game.splits}</dd></div>
+          {data.game.ballName && <div className="share-result__fact"><dt>Ball</dt><dd>{data.game.ballName}</dd></div>}
+        </dl>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={shareOnX}
-            className="btn"
-            style={{ flex: 1, minHeight: 48, minWidth: 160, background: '#7c3aed', color: 'white', border: '1px solid rgba(167,139,250,0.5)', fontWeight: 800, borderRadius: 12 }}
+            className="btn btn-ghost"
           >
             Share on X
           </button>
@@ -177,22 +176,17 @@ export default function ShareScore() {
             onClick={handleDownloadPng}
             disabled={downloading}
             className="btn btn-ghost"
-            style={{ flex: 1, minHeight: 48, minWidth: 160, border: '1px solid rgba(167,139,250,0.5)', color: 'white', fontWeight: 800, borderRadius: 12 }}
           >
-            {downloading ? '⏳ Saving...' : '⬇️ Download PNG'}
+            {downloading ? 'Saving…' : 'Download image'}
           </button>
           <button
             type="button"
             onClick={copyLink}
             className="btn btn-ghost"
-            style={{ flex: 1, minHeight: 48, minWidth: 160, border: '1px solid rgba(167,139,250,0.5)', color: 'white', fontWeight: 800, borderRadius: 12 }}
           >
-            {copied ? 'Copied!' : 'Copy Link'}
+            {copied ? 'Link copied' : 'Copy link'}
           </button>
-        </div>
-
-        <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, marginTop: 2 }}>Made with 🎳 BowlSense</div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

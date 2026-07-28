@@ -72,9 +72,10 @@ export default function PublicLeagueLeaderboard() {
     queryKey: ['public-league-meta', leagueId],
     enabled: !invalidId,
     queryFn: async () => {
-      const res = await fetch(`/api/leagues/${leagueId}`)
+      const res = await fetch(`/api/leagues/${leagueId}/share`)
       if (!res.ok) throw new Error('Failed to load league')
-      return res.json()
+      const payload = await res.json() as { league: LeagueMeta; stats: { average: number } }
+      return { ...payload.league, stats: { average: payload.stats.average } }
     },
   })
 
@@ -123,7 +124,7 @@ export default function PublicLeagueLeaderboard() {
         <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: '#121228' }}>
           <h2 style={{ marginBottom: 8 }}>League not found</h2>
           <p className="muted">The league link looks invalid.</p>
-          <Link to="/leagues" className="btn btn-ghost">← Back to My Leagues</Link>
+          <Link to="/" className="btn btn-ghost">BowlSense home</Link>
         </div>
       </div>
     )
@@ -166,7 +167,7 @@ export default function PublicLeagueLeaderboard() {
               className="btn btn-primary"
               style={{ background: '#a78bfa', borderColor: '#a78bfa', color: '#140f2b' }}
             >
-              {copied ? '✅ Copied!' : '📤 Share'}
+              {copied ? 'Link copied' : 'Share'}
             </button>
             <a
               href={twitterIntent}
@@ -260,7 +261,7 @@ export default function PublicLeagueLeaderboard() {
 
         <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'rgba(255,255,255,0.65)' }}>
           <div>Tracked with BowlSense</div>
-          <Link to="/leagues" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>← Back to My Leagues</Link>
+          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>BowlSense home</Link>
         </div>
       </div>
     </div>

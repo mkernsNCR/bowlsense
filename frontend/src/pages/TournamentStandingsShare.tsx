@@ -103,7 +103,7 @@ export default function TournamentStandingsShare() {
     queryKey: ['tournament', tournamentId],
     enabled: !invalid,
     queryFn: async () => {
-      const res = await fetch(`/api/tournaments/${tournamentId}`)
+      const res = await fetch(`/api/tournaments/${tournamentId}/share`)
       if (!res.ok) throw new Error('Failed to load')
       return res.json()
     },
@@ -130,7 +130,7 @@ export default function TournamentStandingsShare() {
 
   const title = useMemo(() => {
     return tournament?.name ? `${tournament.name} Standings 🎯` : 'Tournament Standings 🎯'
-  }, [tournament?.name])
+  }, [tournament])
 
   useEffect(() => {
     if (!tournament) return
@@ -194,7 +194,7 @@ export default function TournamentStandingsShare() {
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui', padding: 24 }}>
         <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
           <h2 style={{ marginBottom: 8 }}>Tournament not found</h2>
-          <Link to="/tournaments" style={{ color: '#a78bfa' }}>← Back to Tournaments</Link>
+          <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
         </div>
       </div>
     )
@@ -253,7 +253,7 @@ export default function TournamentStandingsShare() {
               transition: 'background 0.2s',
             }}
           >
-            {copied ? '✅ Copied!' : '📤 Copy Link'}
+            {copied ? 'Link copied' : 'Copy link'}
           </button>
           <a
             href={twitterUrl}
@@ -286,7 +286,7 @@ export default function TournamentStandingsShare() {
               transition: 'background 0.2s',
             }}
           >
-            {downloaded ? '✅ Downloaded!' : '💾 Download Card'}
+            {downloaded ? 'Downloaded' : 'Download card'}
           </button>
         </div>
 
@@ -457,10 +457,10 @@ export default function TournamentStandingsShare() {
         }}>
           <span>Tracked with BowlSense 🧠</span>
           <Link
-            to={`/tournaments/${tournamentId}`}
+            to="/"
             style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}
           >
-            ← View Tournament
+            BowlSense home
           </Link>
         </div>
       </div>

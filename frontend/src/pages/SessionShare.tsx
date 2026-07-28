@@ -5,6 +5,7 @@ import {
   downloadSessionCard,
   nativeShareSession,
 } from '../utils/sessionShare'
+import { ActionIcon, PublicShell } from '../features/competition/CompetitionUI'
 
 interface PublicSessionPayload {
   session: {
@@ -132,7 +133,7 @@ export default function SessionShare() {
   }
 
   if (loading) {
-    return <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center' }} className="muted">Loading share card...</div>
+    return <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center' }} className="muted">Loading share card…</div>
   }
 
   if (notFound || !data) {
@@ -140,34 +141,35 @@ export default function SessionShare() {
       <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24 }}>
         <div>
           <h1 style={{ marginBottom: 8 }}>Session not found</h1>
-          <Link to="/sessions" className="btn btn-primary">Back to Sessions</Link>
+          <Link to="/" className="btn btn-primary">BowlSense home</Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{ maxWidth: 920, margin: '0 auto', paddingBottom: 64 }}>
-      <h1 style={{ marginBottom: 6, fontSize: 'clamp(1.5rem, 5vw, 2.2rem)' }}>🎳 Session Share</h1>
-      <div className="muted" style={{ marginBottom: 14 }}>{description}</div>
-
-      <div className="card" style={{ padding: 10, marginBottom: 12 }}>
-        <img src={imageUrl} alt="Session share card" style={{ width: '100%', borderRadius: 12, display: 'block' }} />
+    <PublicShell
+      eyebrow="Session result"
+      title={`${data.summary.series} series`}
+      detail={[data.session.location, data.session.date, data.session.lanes ? `Lanes ${data.session.lanes}` : null].filter(Boolean).join(' · ')}
+      action={<button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}><ActionIcon name="share" /> {busy === 'share' ? 'Sharing…' : 'Share result'}</button>}
+    >
+      <div className="share-result">
+        <section className="share-result__primary" aria-label={`Series total ${data.summary.series}`}>
+          <div><div className="share-result__score">{data.summary.series}</div><div className="share-result__label">{data.summary.totalGames}-game series</div></div>
+        </section>
+        <dl className="share-result__facts">
+          <div className="share-result__fact"><dt>Average</dt><dd>{data.summary.average}</dd></div>
+          <div className="share-result__fact"><dt>High game</dt><dd>{data.summary.highGame}</dd></div>
+          <div className="share-result__fact"><dt>Perfect games</dt><dd>{data.summary.perfectGames}</dd></div>
+          <div className="share-result__fact"><dt>Game scores</dt><dd>{data.games.map((game) => game.score).join(' · ')}</dd></div>
+        </dl>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, marginBottom: 12 }}>
-        <button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}>{busy === 'share' ? 'Sharing...' : '📤 Share'}</button>
-        <button className="btn btn-ghost" onClick={copyLink}>{copied ? '✅ Copied' : '🔗 Copy Link'}</button>
-        <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading...' : '⬇️ Download PNG'}</button>
-        <a className="btn btn-ghost" href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>🖼️ Open Card</a>
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        <button className="btn btn-ghost" onClick={copyLink}>{copied ? 'Link copied' : 'Copy link'}</button>
+        <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading…' : 'Download image'}</button>
+        <a className="btn btn-ghost" href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Open score card</a>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>Games</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.totalGames}</div></div>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>Series</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.series}</div></div>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>Average</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.average}</div></div>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>High</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.highGame}</div></div>
-      </div>
-    </div>
+    </PublicShell>
   )
 }

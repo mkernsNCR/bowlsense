@@ -26,6 +26,15 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
+function recapNarrative(data: RecapData): string {
+  const opponent = data.week.opponent ? ` against ${data.week.opponent}` : ''
+  const record = data.week.tied > 0
+    ? `${data.week.won} wins, ${data.week.lost} losses, and ${data.week.tied} tie${data.week.tied === 1 ? '' : 's'}`
+    : `${data.week.won} wins and ${data.week.lost} losses`
+  const highNote = data.stats.highGame === 300 ? ' A perfect game capped the set.' : ` The high game was ${data.stats.highGame}.`
+  return `Week ${data.week.weekNumber}${opponent} finished with ${record}. The set averaged ${data.stats.average} across ${data.stats.totalGames} games.${highNote}`
+}
+
 export default function LeagueRecap() {
   const { id } = useParams()
   const leagueId = Number(id)
@@ -58,8 +67,6 @@ export default function LeagueRecap() {
   useEffect(() => {
     if (invalidId) return
     let cancelled = false
-    setLoading(true)
-    setError(null)
     fetch(`/api/leagues/${leagueId}/recap`)
       .then(r => { if (!r.ok) throw new Error('Recap not found'); return r.json() })
       .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
@@ -93,7 +100,7 @@ export default function LeagueRecap() {
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', display: 'grid', placeItems: 'center', padding: 24 }}>
         <div style={{ textAlign: 'center' }}>
           <h2>League not found</h2>
-          <Link to="/leagues" className="btn btn-ghost" style={{ marginTop: 16 }}>← Back to Leagues</Link>
+          <Link to="/leagues" className="btn btn-ghost" style={{ marginTop: 16 }}>Back to leagues</Link>
         </div>
       </div>
     )
@@ -103,7 +110,7 @@ export default function LeagueRecap() {
     <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '24px 16px 60px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <Link to="/leagues" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
-          ← Back to Leagues
+          Back to leagues
         </Link>
 
         {loading && (
@@ -126,7 +133,6 @@ export default function LeagueRecap() {
           <>
             {/* OG image preview */}
             <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 24, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={ogImageUrl} alt="League recap card" style={{ width: '100%', display: 'block' }} />
             </div>
 
@@ -141,6 +147,9 @@ export default function LeagueRecap() {
               <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16 }}>
                 Week {data.week.weekNumber} · {data.week.date} · vs {data.week.opponent}
               </div>
+              <p style={{ maxWidth: 680, margin: '16px 0 0', color: 'rgba(255,255,255,.84)', fontSize: 18, lineHeight: 1.6 }}>
+                {recapNarrative(data)}
+              </p>
             </div>
 
             {/* Game scores */}
@@ -187,21 +196,21 @@ export default function LeagueRecap() {
                 className="btn btn-ghost"
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
               >
-                {copied ? '✅ Copied!' : '📋 Copy Link'}
+                {copied ? 'Link copied' : 'Copy link'}
               </button>
               <button
                 onClick={downloadPng}
                 className="btn btn-ghost"
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: downloading ? '#34d399' : '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
               >
-                {downloading ? '✅ Downloaded!' : '📥 Download PNG'}
+                {downloading ? 'Downloaded' : 'Download image'}
               </button>
               <Link
                 to={`/leagues/${leagueId}/recap/share`}
                 className="btn btn-ghost"
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                🔗 Share Page
+                Share page
               </Link>
             </div>
 

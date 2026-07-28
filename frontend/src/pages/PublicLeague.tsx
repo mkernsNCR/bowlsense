@@ -68,8 +68,6 @@ interface LeagueLeaderboard {
   }[]
 }
 
-interface Ball { id: number; name: string }
-
 interface LeagueGame {
   id: number
   weekId: number
@@ -80,6 +78,18 @@ interface LeagueGame {
   splits: number | null
   ballId: number | null
   frameData?: string | null
+}
+
+interface ShareLeaguePayload {
+  league: Pick<League, 'id' | 'name' | 'location' | 'season' | 'dayOfWeek'>
+  weeks: Array<{
+    weekNumber: number
+    date: string
+    opponent: string | null
+    gamesWon: number
+    gamesLost: number
+    games: Array<Omit<LeagueGame, 'id' | 'weekId' | 'frameData'>>
+  }>
 }
 
 interface LeagueWeek {
@@ -106,31 +116,6 @@ interface League {
   notes: string | null
   weeks?: LeagueWeek[]
   stats?: LeagueStats
-}
-
-function frameMarks(frameData?: string | null): string | null {
-  if (!frameData) return null
-  try {
-    const parsed = JSON.parse(frameData) as any
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames.map((f: any, idx: number) => {
-      const b1 = f?.ball1, b2 = f?.ball2, b3 = f?.ball3
-      const strike = b1 === 10
-      const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
-      const mark = (v: number | null | undefined) => v == null ? '' : v === 10 ? 'X' : v === 0 ? '-' : String(v)
-      if (idx < 9) {
-        if (strike) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return `${mark(b1)}${spare ? '/' : mark(b2)}`
-      }
-      const second = b2 != null ? (b1 !== 10 && b1! + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${mark(b1)}${second}${third}`
-    }).filter(Boolean).join(' ')
-  } catch {
-    return null
-  }
 }
 
 function WeeklyTrendChart({ data }: { data: { weekNumber: number; average: number }[] }) {
@@ -197,7 +182,25 @@ export default function PublicLeague() {
 
   const { data: league, isLoading: leagueLoading } = useQuery<League>({
     queryKey: ['public-league', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}`).then(r => r.json()),
+    queryFn: async () => {
+      const response = await fetch(`/api/leagues/${leagueId}/share`)
+      if (!response.ok) throw new Error('League not found')
+      const payload = await response.json() as ShareLeaguePayload
+      return {
+        ...payload.league,
+        gamesPerWeek: 0,
+        startDate: null,
+        endDate: null,
+        notes: null,
+        weeks: payload.weeks.map((week) => ({
+          ...week,
+          id: week.weekNumber,
+          leagueId,
+          notes: null,
+          games: week.games.map((game, index) => ({ ...game, id: week.weekNumber * 100 + index, weekId: week.weekNumber, frameData: null })),
+        })),
+      }
+    },
     enabled: !isNaN(leagueId),
   })
 
@@ -217,11 +220,6 @@ export default function PublicLeague() {
     queryKey: ['public-league-leaderboard', leagueId],
     queryFn: () => fetch(`/api/leagues/${leagueId}/leaderboard`).then(r => r.json()),
     enabled: !isNaN(leagueId),
-  })
-
-  const { data: balls = [] } = useQuery<Ball[]>({
-    queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then(r => r.json()),
   })
 
   const copyLink = async () => {
@@ -251,7 +249,7 @@ export default function PublicLeague() {
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>League not found</div>
-        <Link to="/leagues" style={{ color: '#a78bfa' }}>← Back to Leagues</Link>
+        <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
       </div>
     )
   }
@@ -269,7 +267,7 @@ export default function PublicLeague() {
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>League not found</div>
-        <Link to="/leagues" style={{ color: '#a78bfa' }}>← Back to Leagues</Link>
+        <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
       </div>
     )
   }
@@ -331,7 +329,7 @@ export default function PublicLeague() {
               whiteSpace: 'nowrap', transition: 'all 0.2s',
             }}
           >
-            {copied ? '✅ Copied!' : '📤 Share Link'}
+            {copied ? 'Link copied' : 'Share link'}
           </button>
         </div>
       </div>
@@ -443,8 +441,6 @@ export default function PublicLeague() {
                   {weekGames.length > 0 && (
                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}>
                       {weekGames.map((g) => {
-                        const ballName = balls.find(b => b.id === g.ballId)?.name
-                        const marks = frameMarks(g.frameData)
                         const isHigh = g.score === stats?.high
                         return (
                           <div key={g.id} style={{
@@ -457,14 +453,6 @@ export default function PublicLeague() {
                               {g.score ?? '-'}
                             </div>
                             {isHigh && <div style={{ fontSize: 10, color: '#fbbf24', fontWeight: 700, marginTop: 2 }}>BEST</div>}
-                            {marks && (
-                              <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo', fontSize: 9, color: 'var(--muted)', marginTop: 3, letterSpacing: '-0.5px' }}>{marks}</div>
-                            )}
-                            {ballName && (
-                              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                🎳 {ballName}
-                              </div>
-                            )}
                           </div>
                         )
                       })}
@@ -517,7 +505,7 @@ export default function PublicLeague() {
                   cursor: 'pointer',
                 }}
               >
-                📤 Share Standings
+                Share standings
               </button>
             </div>
           </div>
@@ -603,8 +591,8 @@ export default function PublicLeague() {
       )}
 
       <div style={{ textAlign: 'center', marginTop: 32, marginBottom: 48 }}>
-        <Link to="/leagues" style={{ color: 'rgba(167,139,250,0.6)', fontSize: 13, textDecoration: 'none' }}>
-          ← Back to My Leagues
+        <Link to="/" style={{ color: 'rgba(167,139,250,0.6)', fontSize: 13, textDecoration: 'none' }}>
+          BowlSense home
         </Link>
         <div style={{ marginTop: 8 }}>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>Tracked with </span>

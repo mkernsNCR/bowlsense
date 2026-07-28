@@ -90,7 +90,7 @@ export default function LeagueRecapShare() {
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <div style={{ textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
           <h2>League not found</h2>
-          <Link to="/leagues" style={{ color: '#a78bfa', textDecoration: 'none' }}>← Back to Leagues</Link>
+          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none' }}>BowlSense home</Link>
         </div>
       </div>
     )
@@ -126,10 +126,10 @@ export default function LeagueRecapShare() {
             )}
           </div>
           <Link
-            to={`/leagues/${leagueId}`}
+            to="/"
             style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}
           >
-            ← Back to League
+            BowlSense home
           </Link>
         </div>
 
@@ -140,7 +140,6 @@ export default function LeagueRecapShare() {
           ) : error ? (
             <div style={{ height: 315, background: '#121228', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fc8181' }}>{error}</div>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={ogImageUrl} alt="League recap card" style={{ width: '100%', display: 'block' }} />
           )}
         </div>
@@ -158,7 +157,7 @@ export default function LeagueRecapShare() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            {downloading ? '✅ Downloaded!' : '📥 Download PNG Card'}
+            {downloading ? 'Downloaded' : 'Download image'}
           </button>
 
           <a
@@ -187,7 +186,7 @@ export default function LeagueRecapShare() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            {copied ? '✅ Link Copied!' : '📋 Copy Link'}
+            {copied ? 'Link copied' : 'Copy link'}
           </button>
         </div>
 

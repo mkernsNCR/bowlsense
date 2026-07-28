@@ -1,266 +1,194 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import BowlingScorer from './BowlingScorer'
+import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
+import ScoringIcon from '../features/scoring/ScoringIcon'
+import '../features/scoring/scoring.css'
 
 interface QuickAddGameProps {
   onDone?: (gameId: number) => void
 }
 
-interface SavedGame {
-  gameNumber: number
-  score: number
-  strikes: number
-  spares: number
-  splits: number
-  ballId: number | null
-  frameData: string
+interface SessionSummary {
+  id: number
+  date: string
+  location: string
+}
+
+interface SessionsPayload {
+  sessions?: SessionSummary[]
+}
+
+interface Ball {
+  id: number
+  name: string
+  brand?: string
+  thumbnailImage?: string
+}
+
+interface CreatedRecord {
+  id: number
+}
+
+function localDateValue() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
-  const qc = useQueryClient()
+  const queryClient = useQueryClient()
   const { settings } = useSettings()
-  const [showBowlingScorer, setShowBowlingScorer] = useState(false)
+  const [showScorer, setShowScorer] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
   const [sessionId, setSessionId] = useState<number | null>(null)
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [location, setLocation] = useState('')
+  const [date, setDate] = useState(localDateValue)
+  const [location, setLocation] = useState(settings.homeLanes || 'Home Lanes')
   const [lanes, setLanes] = useState('')
   const [gameNumber, setGameNumber] = useState(1)
   const [saved, setSaved] = useState(false)
 
-  const { data: sessions } = useQuery<any[]>({
-    queryKey: ['sessions'],
+  const sessionsQuery = useQuery<SessionSummary[]>({
+    queryKey: ['sessions', 'quick-add'],
     queryFn: async () => {
-      const data = await fetch('/api/sessions?limit=100&offset=0').then(r => r.json())
-      return Array.isArray(data) ? data : (data.sessions ?? [])
+      const response = await fetch('/api/sessions?limit=100&offset=0')
+      if (!response.ok) throw new Error('Sessions could not be loaded.')
+      const payload: SessionSummary[] | SessionsPayload = await response.json()
+      return Array.isArray(payload) ? payload : (payload.sessions ?? [])
     },
   })
 
-  const { data: balls = [] } = useQuery<any[]>({
+  const ballsQuery = useQuery<Ball[]>({
     queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then(r => r.json()),
+    queryFn: async () => {
+      const response = await fetch('/api/balls')
+      if (!response.ok) throw new Error('Balls could not be loaded.')
+      return response.json() as Promise<Ball[]>
+    },
   })
 
-  const latestSessionLocation = sessions && sessions.length
-    ? [...sessions].sort((a, b) => b.date.localeCompare(a.date))[0]?.location ?? ''
-    : ''
-
-  const createSessionMutation = useMutation({
+  const createSession = useMutation({
     mutationFn: async (payload: { date: string; location: string; lanes: string }) => {
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!response.ok) throw new Error('Failed to create session')
-      return response.json() as Promise<{ id: number }>
+      if (!response.ok) throw new Error('Session could not be created.')
+      return response.json() as Promise<CreatedRecord>
     },
   })
 
-  const createGameMutation = useMutation({
-    mutationFn: async (payload: { sessionId: number; gameNumber: number; score: number; strikes: number; spares: number; splits: number; ballId: number | null; frameData: string }) => {
+  const createGame = useMutation({
+    mutationFn: async (payload: SavedBowlingGame & { sessionId: number }) => {
       const response = await fetch('/api/games', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!response.ok) throw new Error('Failed to create game')
-      return response.json() as Promise<{ id: number }>
+      if (!response.ok) throw new Error('Game could not be saved.')
+      return response.json() as Promise<CreatedRecord>
     },
   })
 
-  const startGame = () => {
-    if (!date || !location) return
-    setShowBowlingScorer(true)
-  }
+  const recentLocation = sessionsQuery.data?.[0]?.location
 
-  const handleSave = async (game: SavedGame) => {
-    try {
-      let sid = sessionId
-      if (!sid) {
-        const res = await createSessionMutation.mutateAsync({
-          date,
-          location,
-          lanes,
-        })
-        sid = res.id
-        setSessionId(sid)
-      }
-
-      const gameRes = await createGameMutation.mutateAsync({
-        sessionId: sid,
-        gameNumber,
-        score: game.score,
-        strikes: game.strikes,
-        spares: game.spares,
-        splits: game.splits,
-        ballId: game.ballId,
-        frameData: game.frameData,
-      })
-
-      setSaved(true)
-      await qc.invalidateQueries({ queryKey: ['sessions'] })
-      await qc.invalidateQueries({ queryKey: ['stats'] })
-      await qc.invalidateQueries({ queryKey: ['games-recent'] })
-      await qc.invalidateQueries({ queryKey: ['recentGames'] })
-
-      const returnedId = (gameRes as any)?.id
-      if (returnedId) {
-        onDone?.(returnedId)
-      } else {
-        const sessionData = await fetch(`/api/sessions/${sid}`).then(r => r.json())
-        const highestGameId = sessionData?.games?.reduce((max: number, g: any) => Math.max(max, g.id || 0), 0)
-        if (highestGameId) onDone?.(highestGameId)
-      }
-    } catch (err) {
-      console.error('Failed to save game:', err)
+  const handleSave = async (game: SavedBowlingGame) => {
+    let activeSessionId = sessionId
+    if (!activeSessionId) {
+      const created = await createSession.mutateAsync({ date, location: location.trim(), lanes })
+      activeSessionId = created.id
+      setSessionId(created.id)
     }
+
+    const createdGame = await createGame.mutateAsync({ sessionId: activeSessionId, ...game })
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+      queryClient.invalidateQueries({ queryKey: ['stats'] }),
+      queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
+      queryClient.invalidateQueries({ queryKey: ['recentGames'] }),
+    ])
+    setSaved(true)
+    window.setTimeout(() => {
+      setShowScorer(false)
+      onDone?.(createdGame.id)
+    }, 520)
   }
 
-  if (saved && !showBowlingScorer) {
+  if (showScorer) {
     return (
-      <div style={{ textAlign: 'center', padding: '24px 16px' }}>
-        <div style={{ fontSize: 48, marginBottom: 10 }}>🎳</div>
-        <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>Game Saved!</div>
-        <div className="muted" style={{ marginBottom: 16 }}>{location} · Game {gameNumber}</div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button
-            className="btn"
-            onClick={() => {
-              setSaved(false)
-              setShowBowlingScorer(true)
-              setGameNumber(n => n + 1)
-            }}
-            style={{
-              background: 'rgba(167,139,250,0.15)',
-              border: '1px solid rgba(167,139,250,0.4)',
-              color: 'var(--accent)',
-              fontWeight: 800,
-              borderRadius: 12,
-              minHeight: 44,
-              padding: '8px 16px',
-            }}
-          >
-            ➕ Add Another
-          </button>
-          <button
-            className="btn btn-ghost"
-            onClick={() => window.location.href = '/sessions'}
-            style={{ minHeight: 44, padding: '8px 16px' }}
-          >
-            View Sessions
-          </button>
-        </div>
+      <div className="scoring-flow">
+        <BowlingScorer
+          gameNumber={gameNumber}
+          balls={ballsQuery.data ?? []}
+          defaultBallId={settings.defaultBallId}
+          onSave={handleSave}
+          onCancel={() => setShowScorer(false)}
+        />
       </div>
     )
   }
 
-  if (showBowlingScorer) {
+  if (saved) {
     return (
-      <div>
-        <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: 13 }}>
-          <span>📅 {date}</span>
-          <span>📍 {location}</span>
-          {lanes && <span>🎳 Lanes {lanes}</span>}
-          <span>Game {gameNumber}</span>
+      <div className="scoring-flow scoring-status" role="status">
+        <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
+        <h2>Game saved</h2>
+        <p>{location} · Game {gameNumber}</p>
+        <div className="scoring-toolbar" style={{ justifyContent: 'center' }}>
+          <button type="button" className="scoring-button primary" onClick={() => { setSaved(false); setGameNumber((number) => number + 1); setShowScorer(true) }}>
+            <ScoringIcon name="plus" /> Add another
+          </button>
+          <a href="/sessions" className="scoring-button secondary">View sessions</a>
         </div>
-        <BowlingScorer
-          gameNumber={gameNumber}
-          balls={balls}
-          defaultBallId={settings.defaultBallId}
-          onSave={handleSave}
-          onCancel={() => setShowBowlingScorer(false)}
-        />
       </div>
     )
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <div>
-          <label className="muted" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={e => setDate(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#131326',
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              color: 'var(--text)',
-              padding: '8px 10px',
-              fontSize: 14,
-              boxSizing: 'border-box',
-              minHeight: 40,
-            }}
-          />
+    <div className="scoring-flow">
+      <section className="scoring-group" aria-label="Quick game setup">
+        <div className="scoring-field">
+          <label htmlFor="quick-date">Date</label>
+          <input id="quick-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
-        <div>
-          <label className="muted" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>Location</label>
-          <input
-            type="text"
-            value={location}
-            onChange={e => setLocation(e.target.value)}
-            placeholder="Bowlero, AMF, etc."
-            style={{
-              width: '100%',
-              background: '#131326',
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              color: 'var(--text)',
-              padding: '8px 10px',
-              fontSize: 14,
-              boxSizing: 'border-box',
-              minHeight: 40,
-            }}
-          />
+        <div className="scoring-field">
+          <label htmlFor="quick-location">Center</label>
+          <input id="quick-location" type="text" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Home Lanes" />
         </div>
-      </div>
-      <div>
-        <label className="muted" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>Lanes (optional)</label>
-        <input
-          type="text"
-          value={lanes}
-          onChange={e => setLanes(e.target.value)}
-          placeholder="e.g. 1–2"
-          style={{
-            width: '100%',
-            background: '#131326',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            color: 'var(--text)',
-            padding: '8px 10px',
-            fontSize: 14,
-            boxSizing: 'border-box',
-            minHeight: 40,
-          }}
-        />
-      </div>
-      {!!latestSessionLocation && !location && (
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => setLocation(latestSessionLocation)}
-          style={{ minHeight: 36, fontSize: 13, padding: '4px 10px' }}
-        >
-          ↩ Use recent: {latestSessionLocation}
-        </button>
+      </section>
+
+      {recentLocation && recentLocation !== location && (
+        <button type="button" className="scoring-button quiet" onClick={() => setLocation(recentLocation)}>Use recent center: {recentLocation}</button>
       )}
+
+      <div className="scoring-disclosure">
+        <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
+          {showDetails ? 'Hide details' : 'Add details'} <ScoringIcon name="chevron" size={16} />
+        </button>
+      </div>
+
+      {showDetails && (
+        <section className="scoring-group">
+          <div className="scoring-field">
+            <label htmlFor="quick-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
+            <input id="quick-lanes" type="text" inputMode="numeric" value={lanes} onChange={(event) => setLanes(event.target.value)} placeholder="5–6" />
+          </div>
+        </section>
+      )}
+
+      {(sessionsQuery.isError || ballsQuery.isError) && <p className="scoring-error" role="alert">Some saved details could not be loaded. You can still start scoring.</p>}
+
       <button
-        className="btn btn-primary"
-        onClick={startGame}
-        disabled={!date || !location}
-        style={{
-          minHeight: 48,
-          fontWeight: 800,
-          fontSize: 16,
-          borderRadius: 12,
-          opacity: (!date || !location) ? 0.5 : 1,
-        }}
+        type="button"
+        className="scoring-button primary wide"
+        style={{ marginTop: 16, minHeight: 52 }}
+        disabled={!date || !location.trim()}
+        onClick={() => setShowScorer(true)}
       >
-        🎳 Start Game {gameNumber > 1 ? `#${gameNumber}` : ''}
+        Start bowling{gameNumber > 1 ? ` · Game ${gameNumber}` : ''}
       </button>
     </div>
   )

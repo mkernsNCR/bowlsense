@@ -1,37 +1,39 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import QuickAddGame from '../components/QuickAddGame'
+import ScoringIcon from '../features/scoring/ScoringIcon'
+import '../features/scoring/scoring.css'
 
 export default function QuickAdd() {
-  const [done, setDone] = useState(false)
+  const [savedGameId, setSavedGameId] = useState<number | null>(null)
 
-  return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 64px' }}>
-      <div style={{ marginBottom: 20 }}>
-        <Link to="/" style={{ color: 'var(--accent)', fontSize: 14 }}>← Home</Link>
-      </div>
-      <h1 style={{ marginBottom: 6 }}>🎳 Quick Add Game</h1>
-      <p className="muted" style={{ marginBottom: 20, fontSize: 14 }}>
-        Log a game in seconds — no session setup required.
-      </p>
-
-      {done ? (
-        <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-          <div style={{ fontSize: 56, marginBottom: 12 }}>✅</div>
-          <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>Game logged!</div>
-          <div className="muted" style={{ marginBottom: 24 }}>Head to a session to add more games.</div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/" className="btn btn-primary">Dashboard</Link>
-            <Link to="/sessions" className="btn btn-ghost">All Sessions</Link>
+  if (savedGameId) {
+    return (
+      <main className="scoring-flow scoring-page">
+        <div className="scoring-status" role="status">
+          <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
+          <h1 className="scoring-large-title">Game saved</h1>
+          <p className="scoring-subtitle">The score is ready in your session history.</p>
+          <div className="scoring-toolbar" style={{ justifyContent: 'center', marginTop: 20 }}>
+            <button type="button" className="scoring-button primary" onClick={() => setSavedGameId(null)}><ScoringIcon name="plus" /> Add another</button>
+            <Link to="/sessions" className="scoring-button secondary">View sessions</Link>
           </div>
         </div>
-      ) : (
-        <QuickAddGame
-          onDone={(_gameId: number) => {
-            setDone(true)
-          }}
-        />
-      )}
-    </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="scoring-flow scoring-page">
+      <div className="scoring-page-header">
+        <div>
+          <p className="scoring-eyebrow">Quick add</p>
+          <h1 className="scoring-large-title">Record a game</h1>
+          <p className="scoring-subtitle">Use the defaults or change the center before you start.</p>
+        </div>
+        <Link to="/" className="scoring-button quiet"><ScoringIcon name="arrow-left" size={18} /> Today</Link>
+      </div>
+      <QuickAddGame onDone={setSavedGameId} />
+    </main>
   )
 }

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { BallImage, GearHeader, GearNavigation, GearSheet, GearState } from '../features/gear/GearWorkspace'
 
 interface Ball {
   id: number
@@ -34,546 +35,376 @@ interface BowwwlBall {
   availability: string
 }
 
-export default function Balls() {
-  const qc = useQueryClient()
-  const emptyForm = { name: '', brand: '', color: '', notes: '' }
-  const [form, setForm] = useState(emptyForm)
-  const [manualMode, setManualMode] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<BowwwlBall[]>([])
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [selectedBall, setSelectedBall] = useState<BowwwlBall | null>(null)
-  const [searchLoading, setSearchLoading] = useState(false)
-  const [editingBallId, setEditingBallId] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState(emptyForm)
-  const [modalBall, setModalBall] = useState<Ball | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [imageCopied, setImageCopied] = useState(false)
-  const [imageCopyError, setImageCopyError] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<'name' | 'brand' | 'date' | 'coverstock'>('date')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [, setIsMobile] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+interface BallPerformance {
+  ballId: number
+  ballName: string
+  brand: string | null
+  gameCount: number
+  average: number
+}
 
-  const { data: ballList, isLoading } = useQuery<Ball[]>({
+type BallForm = Pick<Ball, 'name' | 'brand' | 'color' | 'notes'>
+type CoverFilter = 'all' | 'solid' | 'pearl' | 'hybrid' | 'urethane' | 'other'
+
+const EMPTY_FORM: BallForm = { name: '', brand: '', color: '', notes: '' }
+
+async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init)
+  if (!response.ok) throw new Error(`Request failed (${response.status})`)
+  return response.json() as Promise<T>
+}
+
+async function request(input: RequestInfo | URL, init?: RequestInit): Promise<void> {
+  const response = await fetch(input, init)
+  if (!response.ok) throw new Error(`Request failed (${response.status})`)
+}
+
+async function clipboardImage(path: string): Promise<void> {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Image clipboard unavailable')
+  const response = await fetch(`/api/balls/image-proxy?path=${encodeURIComponent(path)}`)
+  if (!response.ok) throw new Error(`Image request failed (${response.status})`)
+  const source = await response.blob()
+  let image = source
+  if (source.type !== 'image/png') {
+    image = await new Promise<Blob>((resolve, reject) => {
+      const element = new Image()
+      const objectUrl = URL.createObjectURL(source)
+      element.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = element.naturalWidth
+        canvas.height = element.naturalHeight
+        const context = canvas.getContext('2d')
+        if (!context) {
+          URL.revokeObjectURL(objectUrl)
+          reject(new Error('Image conversion unavailable'))
+          return
+        }
+        context.drawImage(element, 0, 0)
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(objectUrl)
+          if (blob) resolve(blob)
+          else reject(new Error('Image conversion failed'))
+        }, 'image/png')
+      }
+      element.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error('Image decode failed'))
+      }
+      element.src = objectUrl
+    })
+  }
+  await navigator.clipboard.write([new ClipboardItem({ [image.type]: image })])
+}
+
+function coverGroup(ball: Ball): CoverFilter {
+  const cover = `${ball.coverstockType || ''} ${ball.coverstockName || ''}`.toLowerCase()
+  if (cover.includes('solid')) return 'solid'
+  if (cover.includes('pearl')) return 'pearl'
+  if (cover.includes('hybrid')) return 'hybrid'
+  if (cover.includes('urethane')) return 'urethane'
+  return 'other'
+}
+
+function copyText(text: string): Promise<void> {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text)
+  const field = document.createElement('textarea')
+  field.value = text
+  field.style.position = 'fixed'
+  field.style.opacity = '0'
+  document.body.appendChild(field)
+  field.select()
+  const success = document.execCommand('copy')
+  field.remove()
+  return success ? Promise.resolve() : Promise.reject(new Error('Clipboard unavailable'))
+}
+
+export default function Balls() {
+  const queryClient = useQueryClient()
+  const [libraryQuery, setLibraryQuery] = useState('')
+  const [coverFilter, setCoverFilter] = useState<CoverFilter>('all')
+  const [addOpen, setAddOpen] = useState(false)
+  const [manualMode, setManualMode] = useState(false)
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogSearchTerm, setCatalogSearchTerm] = useState('')
+  const [selectedCatalogBall, setSelectedCatalogBall] = useState<BowwwlBall | null>(null)
+  const [manualForm, setManualForm] = useState<BallForm>(EMPTY_FORM)
+  const [selectedBall, setSelectedBall] = useState<Ball | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<BallForm>(EMPTY_FORM)
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
+  const [imageCopyState, setImageCopyState] = useState<'idle' | 'done' | 'error'>('idle')
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setCatalogSearchTerm(catalogQuery.trim()), 300)
+    return () => window.clearTimeout(timeout)
+  }, [catalogQuery])
+
+  const ballsQuery = useQuery<Ball[]>({
     queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then(r => r.json()),
+    queryFn: () => requestJson<Ball[]>('/api/balls'),
+  })
+
+  const performanceQuery = useQuery<BallPerformance[]>({
+    queryKey: ['ball-performance'],
+    queryFn: () => requestJson<BallPerformance[]>('/stats/by-ball'),
+  })
+
+  const catalogSearch = useQuery<BowwwlBall[]>({
+    queryKey: ['bowwwl-search', catalogSearchTerm],
+    queryFn: ({ signal }) => requestJson<BowwwlBall[]>(`/balls/search?q=${encodeURIComponent(catalogSearchTerm)}`, { signal }),
+    enabled: catalogSearchTerm.length >= 2 && !manualMode,
+    retry: false,
   })
 
   const addBall = useMutation({
-    mutationFn: (data: object) =>
-      fetch('/api/balls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }).then(r => r.json()),
+    mutationFn: (payload: object) => requestJson<Ball>('/api/balls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['balls'] })
-      setForm(emptyForm)
-      setSelectedBall(null)
-      setSearchQuery('')
-      setDebouncedQuery('')
-      setSearchResults([])
+      void queryClient.invalidateQueries({ queryKey: ['balls'] })
+      setManualForm(EMPTY_FORM)
+      setCatalogQuery('')
+      setSelectedCatalogBall(null)
+      setAddOpen(false)
     },
   })
 
   const updateBall = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: object }) =>
-      fetch(`/api/balls/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => {
-      setEditingBallId(null)
-      qc.invalidateQueries({ queryKey: ['balls'] })
+    mutationFn: ({ id, payload }: { id: number; payload: BallForm }) => request(`/api/balls/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+    onSuccess: (_, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['balls'] })
+      setSelectedBall((current) => current?.id === variables.id ? { ...current, ...variables.payload } : current)
+      setEditing(false)
     },
   })
 
   const deleteBall = useMutation({
-    mutationFn: (id: number) => fetch(`/api/balls/${id}`, { method: 'DELETE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['balls'] }),
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/balls/${id}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error(`Request failed (${response.status})`)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['balls'] })
+      setSelectedBall(null)
+    },
   })
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setDebouncedQuery(searchQuery)
-    }, 300)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [searchQuery])
+  const visibleBalls = useMemo(() => {
+    const normalized = libraryQuery.trim().toLowerCase()
+    return [...(ballsQuery.data || [])]
+      .filter((ball) => coverFilter === 'all' || coverGroup(ball) === coverFilter)
+      .filter((ball) => !normalized || `${ball.name} ${ball.brand} ${ball.color} ${ball.coverstockName || ''} ${ball.coverstockType || ''}`.toLowerCase().includes(normalized))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [ballsQuery.data, coverFilter, libraryQuery])
 
-  useEffect(() => {
-    if (debouncedQuery.length < 2) {
-      setSearchResults([])
-      setShowDropdown(false)
-      return
-    }
-    setSearchLoading(true)
-    fetch(`/balls/search?q=${encodeURIComponent(debouncedQuery)}`)
-      .then(r => r.json())
-      .then((data: BowwwlBall[]) => {
-        setSearchResults(data)
-        setShowDropdown(true)
-      })
-      .catch(() => setSearchResults([]))
-      .finally(() => setSearchLoading(false))
-  }, [debouncedQuery])
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640)
-    onResize()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-
-  useEffect(() => {
-    if (!modalBall) return
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setModalBall(null)
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-
-    // Lock body scroll while modal is open
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    // Hide bottom nav so it doesn't overlap the sheet
-    const nav = document.querySelector('.bottom-nav') as HTMLElement | null
-    const prevNavDisplay = nav ? nav.style.display : ''
-    if (nav) nav.style.display = 'none'
-
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = prevOverflow
-      if (nav) nav.style.display = prevNavDisplay
-    }
-  }, [modalBall])
-
-  const f = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, [field]: e.target.value }))
-
-  const handleSelectBall = (ball: BowwwlBall) => {
-    setSelectedBall(ball)
-    setShowDropdown(false)
-    setSearchQuery(ball.ball_name)
-  }
-
-  const handleAddFromDatabase = () => {
-    if (!selectedBall) return
-    addBall.mutate({
-      name: selectedBall.ball_name,
-      brand: selectedBall.brand_name,
-      color: '',
-      notes: '',
-      bowwwlId: selectedBall.ball_id,
-      coreType: selectedBall.core_type,
-      coreRg: selectedBall.core_rg,
-      coreDiff: selectedBall.core_diff,
-      coverstockName: selectedBall.coverstock_name,
-      coverstockType: selectedBall.coverstock_type,
-      factoryFinish: selectedBall.factory_finish,
-      thumbnailImage: selectedBall.thumbnail_image,
-    })
-  }
-
-  const chip = (label: string) => (
-    <span style={{ background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 999, padding: '3px 10px', fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
-      {label}
-    </span>
+  const performanceByBall = useMemo(
+    () => new Map((performanceQuery.data || []).map((performance) => [performance.ballId, performance])),
+    [performanceQuery.data],
   )
 
-  const handleCopyAll = () => {
-    if (!ballList?.length) return
-    const text = ballList.map(b => `${b.name}${b.brand ? ` (${b.brand})` : ''}`).join('\n')
-    const ok = copyTextToClipboard(text)
-    setCopied(ok)
-    setTimeout(() => setCopied(false), 1800)
+  const openBall = (ball: Ball) => {
+    setSelectedBall(ball)
+    setEditForm({ name: ball.name || '', brand: ball.brand || '', color: ball.color || '', notes: ball.notes || '' })
+    setEditing(false)
+    setImageCopyState('idle')
   }
 
-  function copyTextToClipboard(text: string): boolean {
-    // Try navigator.clipboard first (works on HTTPS / localhost)
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text)
-      return true
-    }
-    // Fallback: textarea selection (works on HTTP / any origin)
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.position = 'fixed'
-    ta.style.opacity = '0'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    const success = document.execCommand('copy')
-    document.body.removeChild(ta)
-    return success
-  }
-
-  const handleCopyImage = async () => {
-    if (!modalBall?.thumbnailImage) return
-    setImageCopied(false)
-    setImageCopyError(null)
-    try {
-      // Fetch via backend proxy to avoid CORS (bowwwl.com doesn't return ACAO headers,
-      // so a direct browser-side fetch is blocked and ClipboardItem can't get the blob).
-      const proxyUrl = `/api/balls/image-proxy?path=${encodeURIComponent(modalBall.thumbnailImage)}`
-      const res = await fetch(proxyUrl)
-      if (!res.ok) throw new Error(`proxy returned ${res.status}`)
-      const blob = await res.blob()
-      // Some browsers require a PNG for image clipboard. Re-encode via canvas if needed.
-      let finalBlob: Blob = blob
-      if (blob.type !== 'image/png' && blob.type !== 'image/jpeg') {
-        finalBlob = await new Promise<Blob>((resolve, reject) => {
-          const img = new Image()
-          const objectUrl = URL.createObjectURL(blob)
-          img.onload = () => {
-            const canvas = document.createElement('canvas')
-            canvas.width = img.naturalWidth
-            canvas.height = img.naturalHeight
-            const ctx = canvas.getContext('2d')
-            if (!ctx) { URL.revokeObjectURL(objectUrl); return reject(new Error('canvas failed')) }
-            ctx.drawImage(img, 0, 0)
-            canvas.toBlob(b => { URL.revokeObjectURL(objectUrl); b ? resolve(b) : reject(new Error('toBlob failed')) }, 'image/png')
-          }
-          img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('image load failed')) }
-          img.src = objectUrl
-        })
-      }
-      await navigator.clipboard.write([new ClipboardItem({ [finalBlob.type]: finalBlob })])
-      setImageCopied(true)
-      setTimeout(() => setImageCopied(false), 2000)
-    } catch (err: any) {
-      setImageCopyError(err?.message || 'copy failed')
-      setTimeout(() => setImageCopyError(null), 2500)
-    }
-  }
-
-  const sortedBalls = React.useMemo(() => {
-    if (!ballList) return []
-    return [...ballList].sort((a, b) => {
-      let cmp = 0
-      if (sortBy === 'name') cmp = (a.name || '').localeCompare(b.name || '')
-      else if (sortBy === 'brand') cmp = (a.brand || '').localeCompare(b.brand || '')
-      else if (sortBy === 'coverstock') cmp = (a.coverstockType || '').localeCompare(b.coverstockType || '')
-      else cmp = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-      return sortDir === 'asc' ? cmp : -cmp
+  const addCatalogBall = () => {
+    if (!selectedCatalogBall) return
+    addBall.mutate({
+      name: selectedCatalogBall.ball_name,
+      brand: selectedCatalogBall.brand_name,
+      color: '',
+      notes: '',
+      bowwwlId: selectedCatalogBall.ball_id,
+      coreType: selectedCatalogBall.core_type,
+      coreRg: selectedCatalogBall.core_rg,
+      coreDiff: selectedCatalogBall.core_diff,
+      coverstockName: selectedCatalogBall.coverstock_name,
+      coverstockType: selectedCatalogBall.coverstock_type,
+      factoryFinish: selectedCatalogBall.factory_finish,
+      thumbnailImage: selectedCatalogBall.thumbnail_image,
     })
-  }, [ballList, sortBy, sortDir])
+  }
 
-  const sortIcon = (key: typeof sortBy) => sortBy === key ? (sortDir === 'asc' ? '↑' : '↓') : ''
+  const copyLibrary = async () => {
+    if (!ballsQuery.data?.length) return
+    try {
+      await copyText(ballsQuery.data.map((ball) => `${ball.name}${ball.brand ? ` (${ball.brand})` : ''}`).join('\n'))
+      setCopyState('done')
+    } catch {
+      setCopyState('error')
+    }
+  }
+
+  const copySelectedImage = async () => {
+    if (!selectedBall?.thumbnailImage) return
+    try {
+      await clipboardImage(selectedBall.thumbnailImage)
+      setImageCopyState('done')
+    } catch {
+      setImageCopyState('error')
+    }
+  }
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <h1 style={{ marginBottom: 0 }}>My Balls</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Sort controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '4px 8px' }}>
-            <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 2 }}>Sort:</span>
-            {(['name','brand','date','coverstock'] as const).map(key => (
-              <button
-                key={key}
-                onClick={() => { if (sortBy === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortBy(key); setSortDir('asc') } }}
-                style={{
-                  background: sortBy === key ? 'rgba(167,139,250,0.2)' : 'transparent',
-                  border: 'none',
-                  borderRadius: 6,
-                  padding: '3px 7px',
-                  fontSize: 11,
-                  cursor: 'pointer',
-                  color: sortBy === key ? 'var(--accent)' : 'var(--muted)',
-                  fontWeight: sortBy === key ? 700 : 400,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {key === 'name' ? 'Name' : key === 'brand' ? 'Brand' : key === 'date' ? 'Added' : 'Cover'}{sortIcon(key)}
-              </button>
-            ))}
-          </div>
-          {ballList && ballList.length > 0 && (
-            <button
-              onClick={handleCopyAll}
-              className="btn btn-ghost"
-              style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              {copied ? '✅ Copied!' : '📋 Copy All'}
-            </button>
-          )}
-        </div>
-      </div>
+    <main className="gear-workspace">
+      <GearHeader
+        title="Ball library"
+        description="Your equipment bench—specs, surfaces, and the pieces available for every bag."
+        action={<button className="btn btn-primary" type="button" onClick={() => setAddOpen(true)}>Add a ball</button>}
+      />
+      <GearNavigation />
 
-      <div className="card" style={{ position: 'relative', marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ fontSize: 16 }}>Add a Ball</h3>
-          <button className="btn btn-ghost" style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10, fontSize: 12 }} onClick={() => { setManualMode(m => !m); setSelectedBall(null); setSearchQuery(''); setSearchResults([]) }}>
-            {manualMode ? 'Search Database' : 'Manual Entry'}
+      <div className="gear-toolbar">
+        <label className="gear-search">
+          <span className="sr-only">Search your ball library</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 5 5" /></svg>
+          <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search name, brand, or cover" />
+        </label>
+        <label className="gear-filter">
+          <span className="sr-only">Filter by coverstock</span>
+          <select value={coverFilter} onChange={(event) => setCoverFilter(event.target.value as CoverFilter)}>
+            <option value="all">All coverstocks</option>
+            <option value="solid">Solid</option>
+            <option value="pearl">Pearl</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="urethane">Urethane</option>
+            <option value="other">Other / unknown</option>
+          </select>
+        </label>
+        {Boolean(ballsQuery.data?.length) && (
+          <button className="btn btn-ghost" type="button" onClick={() => void copyLibrary()}>
+            {copyState === 'done' ? 'Copied' : copyState === 'error' ? 'Copy failed' : 'Copy list'}
           </button>
-        </div>
-
-        {!manualMode ? (
-          <div>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}>🔍</span>
-              <input
-                type="text"
-                placeholder="Search ball database..."
-                value={searchQuery}
-                onChange={e => { setSearchQuery(e.target.value); setSelectedBall(null) }}
-                style={{ paddingLeft: 38 }}
-              />
-              {searchLoading && <span className="muted" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12 }}>Searching...</span>}
-            </div>
-
-            {showDropdown && (
-              <div className="card" style={{ padding: 0, maxHeight: 320, overflowY: 'auto', marginBottom: 12 }}>
-                {searchResults.length > 0 ? searchResults.map(ball => (
-                  <button
-                    key={ball.ball_id}
-                    onClick={() => handleSelectBall(ball)}
-                    style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: 'inherit', minHeight: 56, padding: '12px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-                  >
-                    {ball.thumbnail_image && <img src={`https://www.bowwwl.com${ball.thumbnail_image}`} alt={ball.ball_name} style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }} />}
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{ball.ball_name}</div>
-                      <div className="muted" style={{ fontSize: 12 }}>{ball.brand_name}</div>
-                    </div>
-                  </button>
-                )) : (
-                  <div className="muted" style={{ padding: 14 }}>No results found.</div>
-                )}
-              </div>
-            )}
-
-            {selectedBall && (
-              <div className="card" style={{ borderColor: 'rgba(167,139,250,0.35)' }}>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                  {selectedBall.thumbnail_image && <img src={`https://www.bowwwl.com${selectedBall.thumbnail_image}`} alt={selectedBall.ball_name} style={{ width: 64, height: 64, borderRadius: 10, objectFit: 'cover' }} />}
-                  <div>
-                    <div style={{ fontWeight: 750 }}>{selectedBall.ball_name}</div>
-                    <div style={{ color: 'var(--accent)', fontSize: 13 }}>{selectedBall.brand_name}</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                  {selectedBall.core_type && chip(selectedBall.core_type)}
-                  {selectedBall.coverstock_type && chip(selectedBall.coverstock_type)}
-                  {selectedBall.factory_finish && chip(selectedBall.factory_finish)}
-                </div>
-                <button disabled={addBall.isPending} onClick={handleAddFromDatabase} className="btn btn-primary" style={{ width: '100%' }}>
-                  {addBall.isPending ? 'Adding...' : '+ Add to My Bag'}
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
-            <input type="text" placeholder="Name *" value={form.name} onChange={f('name')} />
-            <input type="text" placeholder="Brand" value={form.brand} onChange={f('brand')} />
-            <input type="text" placeholder="Color" value={form.color} onChange={f('color')} />
-            <input type="text" placeholder="Notes" value={form.notes} onChange={f('notes')} />
-            <button disabled={!form.name.trim() || addBall.isPending} onClick={() => addBall.mutate(form)} className="btn btn-primary" style={{ width: '100%' }}>
-              {addBall.isPending ? 'Adding...' : '+ Add Ball'}
-            </button>
-          </div>
         )}
       </div>
 
-      {isLoading && <div className="muted">Loading...</div>}
-
-      {!isLoading && !ballList?.length && (
-        <div className="card" style={{ textAlign: 'center', marginBottom: 16 }}>
-          <span className="muted">No balls in your bag yet.</span>
-        </div>
+      {ballsQuery.isLoading && <GearState kind="loading" title="Opening your equipment locker" detail="Loading saved balls and specifications." />}
+      {ballsQuery.isError && <GearState kind="error" title="Ball library unavailable" detail="The equipment service did not respond. Check the connection and try again." action={<button className="btn btn-ghost" type="button" onClick={() => void ballsQuery.refetch()}>Try again</button>} />}
+      {!ballsQuery.isLoading && !ballsQuery.isError && !ballsQuery.data?.length && (
+        <GearState kind="empty" title="Your locker is empty" detail="Add a ball from the Bowwwl catalog or enter one manually to start building arsenals." action={<button className="btn btn-primary" type="button" onClick={() => setAddOpen(true)}>Add your first ball</button>} />
+      )}
+      {Boolean(ballsQuery.data?.length) && (
+        <>
+          <p className="gear-result-count">{visibleBalls.length} of {ballsQuery.data?.length} balls</p>
+          {visibleBalls.length ? (
+            <section className="gear-library" aria-label="Ball library results">
+              {visibleBalls.map((ball) => (
+                <button className="gear-ball-card" type="button" key={ball.id} onClick={() => openBall(ball)}>
+                  <BallImage path={ball.thumbnailImage} name={ball.name} />
+                  <span className="gear-ball-card__copy">
+                    <strong>{ball.name}</strong>
+                    <span>{ball.brand || 'Brand not recorded'}{ball.color ? ` · ${ball.color}` : ''}</span>
+                    <span className="gear-ball-card__usage">
+                      {performanceQuery.isError
+                        ? 'Usage unavailable'
+                        : performanceByBall.has(ball.id)
+                        ? `${performanceByBall.get(ball.id)?.gameCount} games · ${performanceByBall.get(ball.id)?.average} average`
+                        : 'Never used in a logged game'}
+                    </span>
+                    <span className="gear-ball-card__specs">
+                      {ball.coverstockType && <span className="gear-chip">{ball.coverstockType}</span>}
+                      {ball.coreType && <span className="gear-chip">{ball.coreType}</span>}
+                      {ball.coreRg && <span className="gear-chip">RG {ball.coreRg}</span>}
+                      {!ball.coverstockType && !ball.coreType && !ball.coreRg && <span className="gear-chip gear-chip--missing">Specs incomplete</span>}
+                    </span>
+                  </span>
+                  <span className="gear-chevron" aria-hidden="true">›</span>
+                </button>
+              ))}
+            </section>
+          ) : (
+            <GearState kind="empty" title="No equipment matches" detail="Clear the search or choose a different coverstock filter." action={<button className="btn btn-ghost" type="button" onClick={() => { setLibraryQuery(''); setCoverFilter('all') }}>Clear filters</button>} />
+          )}
+        </>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-        {sortedBalls.map((b: Ball) => (
-          <div
-            key={b.id}
-            className="card"
-            style={{ padding: 12, cursor: 'pointer' }}
-            onClick={() => setModalBall(b)}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {b.thumbnailImage ? (
-                <img src={`https://www.bowwwl.com${b.thumbnailImage}`} alt={b.name} style={{ width: 54, height: 54, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-              ) : (
-                <div style={{ width: 54, height: 54, borderRadius: 10, border: '1px solid var(--border)', background: '#111122', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>🎱</div>
-              )}
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700 }}>{b.name}</div>
-                <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{b.brand}{b.color ? ` · ${b.color}` : ''}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {b.coreType && chip(b.coreType)}
-                  {b.coverstockType && chip(b.coverstockType)}
-                  {b.coreRg && b.coreDiff && chip(`RG ${b.coreRg} / Diff ${b.coreDiff}`)}
-                </div>
-              </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEditingBallId(b.id)
-                  setEditForm({ name: b.name || '', brand: b.brand || '', color: b.color || '', notes: b.notes || '' })
-                }}
-                className="btn btn-ghost"
-                style={{ minHeight: 36, padding: '6px 10px', borderRadius: 10 }}
-              >
-                ✏️
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (confirm(`Delete "${b.name}"?`)) deleteBall.mutate(b.id)
-                }}
-                className="btn btn-danger"
-                style={{ minHeight: 36, padding: '6px 10px', borderRadius: 10 }}
-              >
-                Remove
-              </button>
+      <GearSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add a ball" description="Search the Bowwwl catalog or record equipment manually.">
+        <div className="gear-segments" aria-label="Add ball method">
+          <button type="button" aria-pressed={!manualMode} className={!manualMode ? 'gear-segment is-active' : 'gear-segment'} onClick={() => setManualMode(false)}>Search catalog</button>
+          <button type="button" aria-pressed={manualMode} className={manualMode ? 'gear-segment is-active' : 'gear-segment'} onClick={() => setManualMode(true)}>Manual entry</button>
+        </div>
+        {manualMode ? (
+          <div className="gear-form">
+            <label>Name<input value={manualForm.name} onChange={(event) => setManualForm({ ...manualForm, name: event.target.value })} required /></label>
+            <div className="gear-form__row">
+              <label>Brand<input value={manualForm.brand} onChange={(event) => setManualForm({ ...manualForm, brand: event.target.value })} /></label>
+              <label>Color<input value={manualForm.color} onChange={(event) => setManualForm({ ...manualForm, color: event.target.value })} /></label>
             </div>
-
-            {editingBallId === b.id && (
-              <div
-                style={{ marginTop: 10, border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: '#131326', cursor: 'default' }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>Editing...</div>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  <input placeholder="Name" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
-                  <input placeholder="Brand" value={editForm.brand} onChange={(e) => setEditForm((f) => ({ ...f, brand: e.target.value }))} />
-                  <input placeholder="Color" value={editForm.color} onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))} />
-                  <textarea placeholder="Notes" value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-primary" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => updateBall.mutate({ id: b.id, data: editForm })}>Save</button>
-                    <button className="btn btn-ghost" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => setEditingBallId(null)}>Cancel</button>
-                  </div>
+            <label>Notes<textarea value={manualForm.notes} onChange={(event) => setManualForm({ ...manualForm, notes: event.target.value })} /></label>
+            {addBall.isError && <p className="gear-form__error">The ball could not be saved. Check the connection and try again.</p>}
+            <div className="gear-form__actions"><button className="btn btn-primary" type="button" disabled={!manualForm.name.trim() || addBall.isPending} onClick={() => addBall.mutate(manualForm)}>{addBall.isPending ? 'Saving…' : 'Save ball'}</button></div>
+          </div>
+        ) : (
+          <div className="gear-form">
+            <label>Ball name<input value={catalogQuery} onChange={(event) => { setCatalogQuery(event.target.value); setSelectedCatalogBall(null) }} placeholder="Type at least two characters" /></label>
+            {catalogSearch.isFetching && <p className="gear-result-count" aria-live="polite">Searching Bowwwl…</p>}
+            {catalogSearch.isError && <GearState kind="error" title="Catalog unavailable" detail="Bowwwl search could not be reached. You can still add this ball manually." action={<button className="btn btn-ghost" type="button" onClick={() => setManualMode(true)}>Use manual entry</button>} />}
+            {catalogSearch.data && !catalogSearch.data.length && catalogSearchTerm.length >= 2 && <GearState kind="empty" title="No catalog match" detail="Try a shorter name or add the equipment manually." action={<button className="btn btn-ghost" type="button" onClick={() => setManualMode(true)}>Use manual entry</button>} />}
+            {Boolean(catalogSearch.data?.length) && !selectedCatalogBall && (
+              <section className="gear-performance" aria-label="Bowwwl search results">
+                {catalogSearch.data?.map((ball) => (
+                  <button key={ball.ball_id} className="gear-ball-card" type="button" onClick={() => setSelectedCatalogBall(ball)}>
+                    <BallImage path={ball.thumbnail_image} name={ball.ball_name} size="small" />
+                    <span className="gear-ball-card__copy"><strong>{ball.ball_name}</strong><span>{ball.brand_name}</span></span>
+                    <span className="gear-chevron" aria-hidden="true">›</span>
+                  </button>
+                ))}
+              </section>
+            )}
+            {selectedCatalogBall && (
+              <div>
+                <div className="gear-detail-hero">
+                  <BallImage path={selectedCatalogBall.thumbnail_image} name={selectedCatalogBall.ball_name} size="large" />
+                  <div><h3>{selectedCatalogBall.ball_name}</h3><p>{selectedCatalogBall.brand_name}</p></div>
                 </div>
+                <div className="gear-spec-grid">
+                  <div className="gear-spec"><span>Cover</span><strong>{selectedCatalogBall.coverstock_type || 'Not listed'}</strong></div>
+                  <div className="gear-spec"><span>Core</span><strong>{selectedCatalogBall.core_type || 'Not listed'}</strong></div>
+                  <div className="gear-spec"><span>RG</span><strong>{selectedCatalogBall.core_rg || '—'}</strong></div>
+                  <div className="gear-spec"><span>Differential</span><strong>{selectedCatalogBall.core_diff || '—'}</strong></div>
+                </div>
+                {addBall.isError && <p className="gear-form__error">The ball could not be saved. Check the connection and try again.</p>}
+                <div className="gear-form__actions"><button className="btn btn-ghost" type="button" onClick={() => setSelectedCatalogBall(null)}>Back</button><button className="btn btn-primary" type="button" disabled={addBall.isPending} onClick={addCatalogBall}>{addBall.isPending ? 'Saving…' : 'Add to library'}</button></div>
               </div>
             )}
+          </div>
+        )}
+      </GearSheet>
+
+      <GearSheet open={Boolean(selectedBall)} onClose={() => setSelectedBall(null)} title={editing ? 'Edit ball' : selectedBall?.name || 'Ball details'} description={editing ? 'Update the details you track for this equipment.' : selectedBall?.brand || 'Equipment profile'}>
+        {selectedBall && (editing ? (
+          <div className="gear-form">
+            <label>Name<input value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></label>
+            <div className="gear-form__row">
+              <label>Brand<input value={editForm.brand} onChange={(event) => setEditForm({ ...editForm, brand: event.target.value })} /></label>
+              <label>Color<input value={editForm.color} onChange={(event) => setEditForm({ ...editForm, color: event.target.value })} /></label>
+            </div>
+            <label>Notes<textarea value={editForm.notes} onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })} /></label>
+            {updateBall.isError && <p className="gear-form__error">Changes could not be saved. Check the connection and try again.</p>}
+            <div className="gear-form__actions"><button className="btn btn-ghost" type="button" onClick={() => setEditing(false)}>Cancel</button><button className="btn btn-primary" type="button" disabled={!editForm.name.trim() || updateBall.isPending} onClick={() => updateBall.mutate({ id: selectedBall.id, payload: editForm })}>{updateBall.isPending ? 'Saving…' : 'Save changes'}</button></div>
+          </div>
+        ) : (
+          <div>
+            <div className="gear-detail-hero"><BallImage path={selectedBall.thumbnailImage} name={selectedBall.name} size="large" /><div><h3>{selectedBall.name}</h3><p>{selectedBall.brand || 'Brand not recorded'}{selectedBall.color ? ` · ${selectedBall.color}` : ''}</p></div></div>
+            <div className="gear-spec-grid">
+              <div className="gear-spec"><span>Core RG</span><strong>{selectedBall.coreRg || '—'}</strong></div>
+              <div className="gear-spec"><span>Differential</span><strong>{selectedBall.coreDiff || '—'}</strong></div>
+              <div className="gear-spec"><span>Coverstock</span><strong>{selectedBall.coverstockName || '—'}</strong></div>
+              <div className="gear-spec"><span>Surface</span><strong>{selectedBall.factoryFinish || '—'}</strong></div>
+            </div>
+            {selectedBall.notes && <p className="gear-notes">{selectedBall.notes}</p>}
+            {deleteBall.isError && <p className="gear-form__error">This ball could not be removed. It may still belong to an arsenal.</p>}
+            <div className="gear-danger-row"><button className="btn btn-danger" type="button" disabled={deleteBall.isPending} onClick={() => { if (window.confirm(`Remove “${selectedBall.name}” from your library?`)) deleteBall.mutate(selectedBall.id) }}>{deleteBall.isPending ? 'Removing…' : 'Remove'}</button><div className="gear-form__actions">{selectedBall.thumbnailImage && <button className="btn btn-ghost" type="button" onClick={() => void copySelectedImage()}>{imageCopyState === 'done' ? 'Image copied' : imageCopyState === 'error' ? 'Copy unavailable' : 'Copy image'}</button>}<button className="btn btn-primary" type="button" onClick={() => setEditing(true)}>Edit details</button></div></div>
           </div>
         ))}
-      </div>
-
-      {modalBall && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: 'rgba(0,0,0,0.8)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-          }}
-          onClick={() => setModalBall(null)}
-        >
-          <div
-            className="card"
-            style={{
-              width: '100%',
-              maxWidth: 600,
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderTop: '1px solid rgba(167,139,250,0.25)',
-              borderRadius: '24px 24px 0 0',
-              padding: '20px 20px',
-              paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 8px))',
-              position: 'relative',
-              maxHeight: '92vh',
-              overflowY: 'auto',
-              WebkitOverflowScrolling: 'touch',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drag handle */}
-            <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border)', margin: '0 auto 16px' }} />
-
-            <button
-              className="btn btn-ghost"
-              onClick={() => setModalBall(null)}
-              style={{ position: 'absolute', top: 16, right: 16, minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-            >
-              ✕
-            </button>
-
-            {/* Header row: image + name side by side */}
-            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
-              <button
-                onClick={handleCopyImage}
-                title="Copy image to clipboard"
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', borderRadius: 12, overflow: 'hidden', display: 'inline-block', position: 'relative', flexShrink: 0, width: 72, height: 72 }}
-              >
-                {modalBall.thumbnailImage ? (
-                  <img src={`https://www.bowwwl.com${modalBall.thumbnailImage}`} alt={modalBall.name} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border)', display: 'block' }} />
-                ) : (
-                  <div style={{ width: 72, height: 72, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg)', display: 'grid', placeItems: 'center', fontSize: 32 }}>🎱</div>
-                )}
-                {imageCopied && (
-                  <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,0.75)', color: '#fff', fontSize: 10, borderRadius: 999, padding: '2px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    ✅ Copied!
-                  </div>
-                )}
-                {imageCopyError && (
-                  <div style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(180,40,40,0.9)', color: '#fff', fontSize: 10, borderRadius: 999, padding: '2px 6px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    ❌ {imageCopyError}
-                  </div>
-                )}
-              </button>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1 }}>{modalBall.name}</div>
-                {modalBall.brand && <div style={{ color: 'var(--accent)', fontWeight: 600, marginTop: 3 }}>{modalBall.brand}</div>}
-                {modalBall.color && <div style={{ color: 'var(--muted)', fontSize: 13 }}>Color: {modalBall.color}</div>}
-              </div>
-            </div>
-
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', lineHeight: 1.1 }}>{modalBall.name}</div>
-            {modalBall.brand && <div style={{ color: 'var(--accent)', fontWeight: 600, marginTop: 4 }}>{modalBall.brand}</div>}
-            {modalBall.color && <div style={{ color: 'var(--muted)', marginTop: 4 }}>Color: {modalBall.color}</div>}
-
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, marginBottom: 14 }}>
-              {modalBall.coreType && chip(modalBall.coreType)}
-              {modalBall.coverstockType && chip(modalBall.coverstockType)}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>Core RG</div>
-                <div style={{ color: 'var(--text)', fontWeight: 600 }}>{modalBall.coreRg || '—'}</div>
-              </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>Core Differential</div>
-                <div style={{ color: 'var(--text)', fontWeight: 600 }}>{modalBall.coreDiff || '—'}</div>
-              </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>Coverstock</div>
-                <div style={{ color: 'var(--text)', fontWeight: 600 }}>{modalBall.coverstockName || '—'}</div>
-              </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>Coverstock Type</div>
-                <div style={{ color: 'var(--text)', fontWeight: 600 }}>{modalBall.coverstockType || '—'}</div>
-              </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, gridColumn: '1 / -1' }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12 }}>Factory Finish</div>
-                <div style={{ color: 'var(--text)', fontWeight: 600 }}>{modalBall.factoryFinish || '—'}</div>
-              </div>
-            </div>
-
-            {modalBall.notes && (
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                <div style={{ color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>Notes</div>
-                <div style={{ color: 'var(--text)' }}>{modalBall.notes}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      </GearSheet>
+    </main>
   )
 }

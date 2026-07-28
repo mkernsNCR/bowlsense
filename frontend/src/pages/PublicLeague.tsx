@@ -142,17 +142,17 @@ function WeeklyTrendChart({ data }: { data: { weekNumber: number; average: numbe
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>📈 Weekly Average Trend</div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 200, display: 'block' }}>
         {yTicks.map(t => (
-          <line key={t} x1={PAD.left} y1={yOf(t)} x2={W - PAD.right} y2={yOf(t)} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+          <line key={t} x1={PAD.left} y1={yOf(t)} x2={W - PAD.right} y2={yOf(t)} stroke="color-mix(in srgb, var(--ink) 8%, transparent)" strokeWidth="1" />
         ))}
         {yTicks.map(t => (
-          <text key={`lbl-${t}`} x={PAD.left - 6} y={yOf(t) + 3} textAnchor="end" fill="rgba(255,255,255,0.4)" fontSize="11">{t}</text>
+          <text key={`lbl-${t}`} x={PAD.left - 6} y={yOf(t) + 3} textAnchor="end" fill="color-mix(in srgb, var(--ink) 40%, transparent)" fontSize="11">{t}</text>
         ))}
-        <polyline points={points} fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={points} fill="none" stroke="var(--ink)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         {validData.map((d, i) => (
-          <circle key={d.weekNumber} cx={xOf(i)} cy={yOf(d.average)} r="4" fill="#a78bfa" stroke="#0d0d1a" strokeWidth="2" />
+          <circle key={d.weekNumber} cx={xOf(i)} cy={yOf(d.average)} r="4" fill="var(--ink)" stroke="var(--canvas)" strokeWidth="2" />
         ))}
         {validData.map((d, i) => (
-          <text key={`wl-${d.weekNumber}`} x={xOf(i)} y={H - 8} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="10">W{d.weekNumber}</text>
+          <text key={`wl-${d.weekNumber}`} x={xOf(i)} y={H - 8} textAnchor="middle" fill="color-mix(in srgb, var(--ink) 35%, transparent)" fontSize="10">W{d.weekNumber}</text>
         ))}
       </svg>
     </div>
@@ -162,10 +162,10 @@ function WeeklyTrendChart({ data }: { data: { weekNumber: number; average: numbe
 function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
   return (
     <div style={{
-      background: '#121228', border: '1px solid rgba(255,255,255,0.1)',
+      background: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--ink) 10%, transparent)',
       borderRadius: 16, padding: '14px 16px', textAlign: 'center',
     }}>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 11, color: 'color-mix(in srgb, var(--ink) 45%, transparent)', fontWeight: 600, marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
       <div style={{ fontSize: 30, fontWeight: 900, color: accent, lineHeight: 1.1 }}>{value}</div>
     </div>
   )
@@ -247,9 +247,8 @@ export default function PublicLeague() {
   if (isNaN(leagueId)) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>League not found</div>
-        <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
+        <Link className="public-link-target" to="/" style={{ color: 'var(--oil-violet)' }}>BowlSense home</Link>
       </div>
     )
   }
@@ -265,9 +264,8 @@ export default function PublicLeague() {
   if (!league) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
         <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>League not found</div>
-        <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
+        <Link className="public-link-target" to="/" style={{ color: 'var(--oil-violet)' }}>BowlSense home</Link>
       </div>
     )
   }
@@ -287,26 +285,21 @@ export default function PublicLeague() {
   }
 
   return (
-    <div>
+    <div className="public-competition-page">
       {/* Public banner */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(167,139,250,0.18) 0%, rgba(139,92,246,0.08) 50%, transparent 100%)',
-        border: '1px solid rgba(167,139,250,0.25)',
+        background: 'var(--surface)',
+        border: '1px solid var(--separator)',
         borderRadius: 20, padding: '20px', marginBottom: 20,
         position: 'relative', overflow: 'hidden',
       }}>
-        <div style={{
-          position: 'absolute', top: -30, right: -30, width: 140, height: 140,
-          background: 'radial-gradient(circle, rgba(167,139,250,0.2) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span style={{
-                background: 'rgba(167,139,250,0.22)', border: '1px solid rgba(167,139,250,0.4)',
+                background: 'color-mix(in srgb, var(--ink) 6%, transparent)', border: '1px solid var(--separator)',
                 borderRadius: 999, padding: '3px 10px',
-                fontSize: 11, fontWeight: 700, color: '#a78bfa', letterSpacing: '0.05em',
+                fontSize: 11, fontWeight: 700, color: 'var(--ink)', letterSpacing: '0.05em',
               }}>
                 🏆 PUBLIC STANDINGS
               </span>
@@ -320,11 +313,12 @@ export default function PublicLeague() {
           </div>
           <button
             onClick={copyLink}
+            className="public-action-target"
             style={{
-              background: copied ? 'rgba(52,211,153,0.2)' : 'rgba(167,139,250,0.18)',
-              border: `1px solid ${copied ? 'rgba(52,211,153,0.5)' : 'rgba(167,139,250,0.4)'}`,
+              background: copied ? 'color-mix(in srgb, var(--spare-green) 20%, transparent)' : 'color-mix(in srgb, var(--ink) 6%, transparent)',
+              border: `1px solid ${copied ? 'color-mix(in srgb, var(--spare-green) 50%, transparent)' : 'var(--separator)'}`,
               borderRadius: 12, padding: '8px 14px',
-              color: copied ? '#34d399' : '#a78bfa',
+              color: copied ? 'var(--spare-green)' : 'var(--ink)',
               fontWeight: 700, fontSize: 13, cursor: 'pointer',
               whiteSpace: 'nowrap', transition: 'all 0.2s',
             }}
@@ -334,10 +328,9 @@ export default function PublicLeague() {
         </div>
       </div>
 
-      <div style={{
-        display: 'inline-flex',
-        background: '#111126',
-        border: '1px solid rgba(255,255,255,0.12)',
+      <div className="public-tabs" style={{
+        background: 'var(--surface)',
+        border: '1px solid color-mix(in srgb, var(--ink) 12%, transparent)',
         borderRadius: 12,
         padding: 4,
         marginBottom: 18,
@@ -352,8 +345,8 @@ export default function PublicLeague() {
                 border: 'none',
                 borderRadius: 8,
                 padding: '8px 14px',
-                background: selected ? 'rgba(167,139,250,0.2)' : 'transparent',
-                color: selected ? '#c4b5fd' : 'var(--muted)',
+                background: selected ? 'color-mix(in srgb, var(--oil-violet) 14%, transparent)' : 'transparent',
+                color: selected ? 'var(--oil-violet)' : 'var(--muted)',
                 fontWeight: 700,
                 fontSize: 13,
                 cursor: 'pointer',
@@ -369,10 +362,10 @@ export default function PublicLeague() {
         <>
           {/* Stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 20 }}>
-            <StatCard label="Avg Score" value={league.stats?.average ?? '—'} accent="#a78bfa" />
-            <StatCard label="W — L" value={`${league.stats?.gamesWon ?? 0} — ${league.stats?.gamesLost ?? 0}`} accent="#34d399" />
-            <StatCard label="Weeks Played" value={league.stats?.totalWeeks ?? 0} accent="#f59e0b" />
-            <StatCard label="High Game" value={league.stats?.high ?? '—'} accent="#fbbf24" />
+            <StatCard label="Avg Score" value={league.stats?.average ?? '—'} accent="var(--ink)" />
+            <StatCard label="W — L" value={`${league.stats?.gamesWon ?? 0} — ${league.stats?.gamesLost ?? 0}`} accent="var(--spare-green)" />
+            <StatCard label="Weeks Played" value={league.stats?.totalWeeks ?? 0} accent="var(--strike-gold)" />
+            <StatCard label="High Game" value={league.stats?.high ?? '—'} accent="var(--strike-gold)" />
           </div>
 
           {/* Weekly trend */}
@@ -415,21 +408,21 @@ export default function PublicLeague() {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                       {weekGames.length > 0 && avg > 0 && (
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#a78bfa' }}>{avg}</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)' }}>{avg}</div>
                       )}
                       <div style={{
                         background: week.gamesWon > week.gamesLost
-                          ? 'rgba(52,211,153,0.15)' : week.gamesLost > week.gamesWon
-                            ? 'rgba(252,129,129,0.15)' : 'rgba(255,255,255,0.06)',
+                          ? 'color-mix(in srgb, var(--spare-green) 15%, transparent)' : week.gamesLost > week.gamesWon
+                            ? 'color-mix(in srgb, var(--danger) 15%, transparent)' : 'color-mix(in srgb, var(--ink) 6%, transparent)',
                         border: `1px solid ${week.gamesWon > week.gamesLost
-                          ? 'rgba(52,211,153,0.35)' : week.gamesLost > week.gamesWon
-                            ? 'rgba(252,129,129,0.35)' : 'rgba(255,255,255,0.12)'}`,
+                          ? 'color-mix(in srgb, var(--spare-green) 35%, transparent)' : week.gamesLost > week.gamesWon
+                            ? 'color-mix(in srgb, var(--danger) 35%, transparent)' : 'color-mix(in srgb, var(--ink) 12%, transparent)'}`,
                         borderRadius: 999, padding: '4px 12px', textAlign: 'center',
                       }}>
                         <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>W-L</div>
                         <div style={{
                           fontWeight: 800, fontSize: 16,
-                          color: week.gamesWon > week.gamesLost ? '#34d399' : week.gamesLost > week.gamesWon ? '#fc8181' : 'var(--text)',
+                          color: week.gamesWon > week.gamesLost ? 'var(--spare-green)' : week.gamesLost > week.gamesWon ? 'var(--danger)' : 'var(--text)',
                         }}>
                           {week.gamesWon}—{week.gamesLost}
                         </div>
@@ -444,25 +437,25 @@ export default function PublicLeague() {
                         const isHigh = g.score === stats?.high
                         return (
                           <div key={g.id} style={{
-                            minWidth: 72, background: isHigh ? 'rgba(251,191,36,0.12)' : '#0f0f1e',
-                            border: `1px solid ${isHigh ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                            minWidth: 72, background: isHigh ? 'color-mix(in srgb, var(--strike-gold) 12%, transparent)' : 'var(--surface)',
+                            border: `1px solid ${isHigh ? 'color-mix(in srgb, var(--strike-gold) 40%, transparent)' : 'color-mix(in srgb, var(--ink) 10%, transparent)'}`,
                             borderRadius: 12, padding: '10px 8px', textAlign: 'center', flexShrink: 0,
                           }}>
                             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>G{g.gameNumber}</div>
-                            <div style={{ fontSize: 26, fontWeight: 900, color: isHigh ? '#fbbf24' : '#ffffff', lineHeight: 1 }}>
+                            <div style={{ fontSize: 26, fontWeight: 900, color: isHigh ? 'var(--strike-gold)' : 'var(--ink)', lineHeight: 1 }}>
                               {g.score ?? '-'}
                             </div>
-                            {isHigh && <div style={{ fontSize: 10, color: '#fbbf24', fontWeight: 700, marginTop: 2 }}>BEST</div>}
+                            {isHigh && <div style={{ fontSize: 10, color: 'var(--strike-gold)', fontWeight: 700, marginTop: 2 }}>BEST</div>}
                           </div>
                         )
                       })}
                       {/* Series total */}
                       <div style={{
-                        minWidth: 72, background: 'rgba(167,139,250,0.12)',
-                        border: '1px solid rgba(167,139,250,0.3)', borderRadius: 12, padding: '10px 8px', textAlign: 'center', flexShrink: 0,
+                        minWidth: 72, background: 'color-mix(in srgb, var(--ink) 6%, transparent)',
+                        border: '1px solid var(--separator)', borderRadius: 12, padding: '10px 8px', textAlign: 'center', flexShrink: 0,
                       }}>
                         <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Series</div>
-                        <div style={{ fontSize: 22, fontWeight: 900, color: '#a78bfa', lineHeight: 1 }}>{series}</div>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--ink)', lineHeight: 1 }}>{series}</div>
                       </div>
                     </div>
                   )}
@@ -484,9 +477,9 @@ export default function PublicLeague() {
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8 }}>🏁 Season Record</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ color: '#34d399', fontWeight: 800 }}>W {standings?.seasonRecord.wins ?? 0}</span>
-                  <span style={{ color: '#fc8181', fontWeight: 800 }}>L {standings?.seasonRecord.losses ?? 0}</span>
-                  <span style={{ color: '#fbbf24', fontWeight: 800 }}>T {standings?.seasonRecord.ties ?? 0}</span>
+                  <span style={{ color: 'var(--spare-green)', fontWeight: 800 }}>W {standings?.seasonRecord.wins ?? 0}</span>
+                  <span style={{ color: 'var(--danger)', fontWeight: 800 }}>L {standings?.seasonRecord.losses ?? 0}</span>
+                  <span style={{ color: 'var(--strike-gold)', fontWeight: 800 }}>T {standings?.seasonRecord.ties ?? 0}</span>
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 8 }}>
                   Total Pins: <b style={{ color: 'var(--text)' }}>{standings?.seasonRecord.totalPins ?? 0}</b> · Games: <b style={{ color: 'var(--text)' }}>{standings?.seasonRecord.totalGames ?? 0}</b>
@@ -494,11 +487,12 @@ export default function PublicLeague() {
               </div>
               <button
                 onClick={shareStandings}
+                className="public-action-target"
                 style={{
-                  border: '1px solid rgba(167,139,250,0.45)',
+                  border: '1px solid var(--separator)',
                   borderRadius: 12,
-                  background: 'rgba(167,139,250,0.16)',
-                  color: '#c4b5fd',
+                  background: 'color-mix(in srgb, var(--ink) 6%, transparent)',
+                  color: 'var(--ink-secondary)',
                   fontWeight: 700,
                   fontSize: 13,
                   padding: '9px 14px',
@@ -513,7 +507,7 @@ export default function PublicLeague() {
           <div className="card" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <table style={{ width: '100%', minWidth: 620, borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+                <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--ink) 12%, transparent)' }}>
                   {['Week #', 'Your Avg', 'Opponent Avg', 'Result', 'Margin', 'Best Game', 'Cumulative'].map((h) => (
                     <th key={h} style={{ textAlign: 'left', padding: '10px 8px', fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>{h}</th>
                   ))}
@@ -521,18 +515,18 @@ export default function PublicLeague() {
               </thead>
               <tbody>
                 {(standings?.weeks || []).map((week) => {
-                  const resultColor = week.result === 'W' ? '#34d399' : week.result === 'L' ? '#fc8181' : '#fbbf24'
-                  const rowBg = week.result === 'W' ? 'rgba(52,211,153,0.06)' : week.result === 'L' ? 'rgba(252,129,129,0.06)' : 'rgba(251,191,36,0.06)'
+                  const resultColor = week.result === 'W' ? 'var(--spare-green)' : week.result === 'L' ? 'var(--danger)' : 'var(--strike-gold)'
+                  const rowBg = week.result === 'W' ? 'color-mix(in srgb, var(--spare-green) 6%, transparent)' : week.result === 'L' ? 'color-mix(in srgb, var(--danger) 6%, transparent)' : 'color-mix(in srgb, var(--strike-gold) 6%, transparent)'
                   return (
-                    <tr key={week.weekId} style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: rowBg }}>
+                    <tr key={week.weekId} style={{ borderBottom: '1px solid color-mix(in srgb, var(--ink) 8%, transparent)', background: rowBg }}>
                       <td style={{ padding: '11px 8px', fontWeight: 700 }}>Week {week.weekNumber}</td>
                       <td style={{ padding: '11px 8px' }}>{week.yourAvg || '—'}</td>
                       <td style={{ padding: '11px 8px' }}>{week.opponentAvg || '—'}</td>
                       <td style={{ padding: '11px 8px', fontWeight: 800, color: resultColor }}>{week.result}</td>
-                      <td style={{ padding: '11px 8px', color: week.margin > 0 ? '#34d399' : week.margin < 0 ? '#fc8181' : '#fbbf24', fontWeight: 700 }}>
+                      <td style={{ padding: '11px 8px', color: week.margin > 0 ? 'var(--spare-green)' : week.margin < 0 ? 'var(--danger)' : 'var(--strike-gold)', fontWeight: 700 }}>
                         {week.margin > 0 ? '+' : ''}{week.margin.toFixed(1)}
                       </td>
-                      <td style={{ padding: '11px 8px', color: '#fbbf24', fontWeight: 700 }}>{week.bestGame || '—'}</td>
+                      <td style={{ padding: '11px 8px', color: 'var(--strike-gold)', fontWeight: 700 }}>{week.bestGame || '—'}</td>
                       <td style={{ padding: '11px 8px', fontSize: 12, color: 'var(--muted)' }}>
                         {week.cumulative.wins}-{week.cumulative.losses}-{week.cumulative.ties} ({week.cumulative.average})
                       </td>
@@ -556,9 +550,9 @@ export default function PublicLeague() {
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8 }}>🏆 League Leaderboard</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ color: '#34d399', fontWeight: 800 }}>W {leaderboard.record.wins}</span>
-                  <span style={{ color: '#fc8181', fontWeight: 800 }}>L {leaderboard.record.losses}</span>
-                  <span style={{ color: '#fbbf24', fontWeight: 800 }}>T {leaderboard.record.ties}</span>
+                  <span style={{ color: 'var(--spare-green)', fontWeight: 800 }}>W {leaderboard.record.wins}</span>
+                  <span style={{ color: 'var(--danger)', fontWeight: 800 }}>L {leaderboard.record.losses}</span>
+                  <span style={{ color: 'var(--strike-gold)', fontWeight: 800 }}>T {leaderboard.record.ties}</span>
                   <span className="muted" style={{ fontSize: 13 }}>vs league avg {leaderboard.leagueAverage}</span>
                 </div>
               </div>
@@ -571,8 +565,8 @@ export default function PublicLeague() {
                 {leaderboard.rankedOpponents.map((opp) => {
                   const isMatt = opp.name === 'Matt' || opp.name === 'Me' || opp.name === 'You'
                   return (
-                    <div key={opp.rank} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: isMatt ? 'rgba(167,139,250,0.12)' : undefined, borderRadius: 10, border: isMatt ? '1px solid rgba(167,139,250,0.4)' : '1px solid var(--border)' }}>
-                      <div style={{ minWidth: 28, fontWeight: 800, fontSize: 14, color: opp.rank === 1 ? '#fbbf24' : 'var(--muted)' }}>#{opp.rank}</div>
+                    <div key={opp.rank} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: isMatt ? 'color-mix(in srgb, var(--ink) 6%, transparent)' : undefined, borderRadius: 10, border: isMatt ? '1px solid var(--separator)' : '1px solid var(--border)' }}>
+                      <div style={{ minWidth: 28, fontWeight: 800, fontSize: 14, color: opp.rank === 1 ? 'var(--strike-gold)' : 'var(--muted)' }}>#{opp.rank}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{opp.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{opp.games} games · High {opp.highGame}</div>
@@ -591,12 +585,12 @@ export default function PublicLeague() {
       )}
 
       <div style={{ textAlign: 'center', marginTop: 32, marginBottom: 48 }}>
-        <Link to="/" style={{ color: 'rgba(167,139,250,0.6)', fontSize: 13, textDecoration: 'none' }}>
+        <Link to="/" style={{ color: 'var(--ink-secondary)', fontSize: 13, textDecoration: 'none' }}>
           BowlSense home
         </Link>
         <div style={{ marginTop: 8 }}>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>Tracked with </span>
-          <span style={{ fontSize: 12, color: 'rgba(167,139,250,0.4)', fontWeight: 700 }}>BowlSense</span>
+          <span style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 25%, transparent)' }}>Tracked with </span>
+          <span style={{ fontSize: 12, color: 'var(--separator)', fontWeight: 700 }}>BowlSense</span>
         </div>
       </div>
     </div>

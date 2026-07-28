@@ -697,6 +697,32 @@ a.bs-list-row:hover {
   border-right: 0;
 }
 
+.bs-frame-ribbon__frame.is-selectable {
+  display: block;
+}
+
+.bs-frame-ribbon__action {
+  display: grid;
+  width: 100%;
+  min-width: 44px;
+  min-height: 4.5rem;
+  padding: 0;
+  grid-template-rows: auto 1fr auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.bs-frame-ribbon__action:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
 .bs-frame-ribbon__number {
   padding: 0.1875rem 0.125rem;
   border-bottom: var(--hairline) solid color-mix(in srgb, var(--foul-line) 30%, transparent);
@@ -757,6 +783,10 @@ a.bs-list-row:hover {
 }
 
 .bs-frame-ribbon--compact .bs-frame-ribbon__frame {
+  min-height: 3.5rem;
+}
+
+.bs-frame-ribbon--compact .bs-frame-ribbon__action {
   min-height: 3.5rem;
 }
 

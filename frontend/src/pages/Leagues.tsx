@@ -93,6 +93,16 @@ function frameMarks(frameData?: string | null): string | null {
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
+async function requestJson<T = unknown>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init)
+  if (!response.ok) {
+    const message = await response.json().then((body) => body?.error).catch(() => null)
+    throw new Error(message || `Request failed (${response.status})`)
+  }
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
+}
+
 export default function LeaguesPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -114,9 +124,9 @@ export default function LeaguesPage() {
 }
 
 function LeagueList() {
-  const { data: leagues, isLoading } = useQuery<League[]>({
+  const { data: leagues, isLoading, isError, refetch } = useQuery<League[]>({
     queryKey: ['leagues'],
-    queryFn: () => fetch('/api/leagues').then((r) => r.json()),
+    queryFn: () => requestJson('/api/leagues'),
   })
 
   return (
@@ -130,7 +140,14 @@ function LeagueList() {
 
       {isLoading && <div className="muted">Loading leagues...</div>}
 
-      {!isLoading && !leagues?.length && (
+      {isError && (
+        <div className="card" role="alert">
+          <p>Leagues could not be loaded. Check your connection or sign-in, then try again.</p>
+          <button className="btn btn-primary" type="button" onClick={() => void refetch()}>Retry</button>
+        </div>
+      )}
+
+      {!isLoading && !isError && !leagues?.length && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="muted">No leagues yet.</div>
           <Link to="/leagues/new" style={{ color: 'var(--accent)' }}>Create your first league</Link>
@@ -165,11 +182,11 @@ function LeagueCreate({ onDone }: { onDone: (id: number) => void }) {
   const [form, setForm] = useState({ name: '', location: '', season: '', dayOfWeek: '', gamesPerWeek: '3', startDate: '', endDate: '', notes: '' })
 
   const createLeague = useMutation({
-    mutationFn: (payload: object) => fetch('/api/leagues', {
+    mutationFn: (payload: object) => requestJson<{ id: number }>('/api/leagues', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).then((r) => r.json()),
+    }),
     onSuccess: (newLeague) => {
       qc.invalidateQueries({ queryKey: ['leagues'] })
       onDone(newLeague.id)
@@ -208,6 +225,7 @@ function LeagueCreate({ onDone }: { onDone: (id: number) => void }) {
         >
           {createLeague.isPending ? 'Creating…' : 'Create league'}
         </button>
+        {createLeague.isError && <p className="scoring-error" role="alert">The league was not created. Check your connection or sign-in and try again.</p>}
       </div>
     </div>
   )
@@ -228,19 +246,19 @@ function LeagueDetail({ id }: { id: string }) {
   const [leagueForm, setLeagueForm] = useState({ name: '', location: '', season: '', dayOfWeek: '', gamesPerWeek: '', startDate: '', endDate: '', notes: '' })
   const [weekForm, setWeekForm] = useState({ date: '', opponent: '', gamesWon: '', gamesLost: '', notes: '' })
 
-  const { data: league, isLoading } = useQuery<League>({
+  const { data: league, isLoading, isError, refetch } = useQuery<League>({
     queryKey: ['league', id],
-    queryFn: () => fetch(`/api/leagues/${id}`).then((r) => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${id}`),
   })
 
   const { data: balls } = useQuery<Ball[]>({
     queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then((r) => r.json()),
+    queryFn: () => requestJson('/api/balls'),
   })
 
   const updateWeek = useMutation({
     mutationFn: ({ weekId, data }: { weekId: number; data: object }) =>
-      fetch(`/api/leagues/weeks/${weekId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+      requestJson(`/api/leagues/weeks/${weekId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
     onSuccess: () => {
       setEditingWeekId(null)
       qc.invalidateQueries({ queryKey: ['league', id] })
@@ -250,16 +268,15 @@ function LeagueDetail({ id }: { id: string }) {
 
   const updateGame = useMutation({
     mutationFn: ({ gameId, data }: { gameId: number; data: object }) =>
-      fetch(`/api/leagues/games/${gameId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+      requestJson(`/api/leagues/games/${gameId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
     onSuccess: () => {
-      setRescoringGameId(null)
       qc.invalidateQueries({ queryKey: ['league', id] })
       qc.invalidateQueries({ queryKey: ['leagues'] })
     },
   })
 
   const deleteWeek = useMutation({
-    mutationFn: (weekId: number) => fetch(`/api/leagues/weeks/${weekId}`, { method: 'DELETE' }),
+    mutationFn: (weekId: number) => requestJson(`/api/leagues/weeks/${weekId}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['league', id] })
       qc.invalidateQueries({ queryKey: ['leagues'] })
@@ -267,7 +284,7 @@ function LeagueDetail({ id }: { id: string }) {
   })
 
   const deleteLeague = useMutation({
-    mutationFn: () => fetch(`/api/leagues/${id}`, { method: 'DELETE' }),
+    mutationFn: () => requestJson(`/api/leagues/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leagues'] })
       navigate('/leagues')
@@ -275,7 +292,7 @@ function LeagueDetail({ id }: { id: string }) {
   })
 
   const updateLeague = useMutation({
-    mutationFn: (data: object) => fetch(`/api/leagues/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
+    mutationFn: (data: object) => requestJson(`/api/leagues/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['league', id] })
       qc.invalidateQueries({ queryKey: ['leagues'] })
@@ -286,6 +303,7 @@ function LeagueDetail({ id }: { id: string }) {
   const nextWeekNumber = useMemo(() => ((league?.weeks?.length || 0) + 1), [league?.weeks?.length])
 
   if (isLoading) return <div className="muted">Loading league...</div>
+  if (isError) return <div className="card" role="alert"><p>The league could not be loaded. Check your connection or sign-in.</p><button className="btn btn-primary" type="button" onClick={() => void refetch()}>Retry</button></div>
   if (!league) return <div className="muted">League not found.</div>
 
   return (
@@ -299,7 +317,7 @@ function LeagueDetail({ id }: { id: string }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button
             className="btn btn-ghost"
-            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13, borderColor: 'rgba(167,139,250,0.4)', color: '#c4b5fd' }}
+            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13, borderColor: 'var(--separator)', color: 'var(--oil-violet)' }}
             onClick={() => navigate(`/leagues/${league.id}/leaderboard`)}
           >
             Leaderboard
@@ -315,7 +333,7 @@ function LeagueDetail({ id }: { id: string }) {
 
           <button
             className="btn btn-ghost"
-            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13, borderColor: 'rgba(251,191,36,0.4)' }}
+            style={{ minHeight: 44, padding: '6px 12px', fontSize: 13, borderColor: 'color-mix(in srgb, var(--strike-gold) 40%, transparent)' }}
             onClick={() => navigate(`/leagues/${league.id}/recap`)}
           >
             Share recap
@@ -453,7 +471,7 @@ function LeagueDetail({ id }: { id: string }) {
 
               {editingWeekId === week.id && (
                 <CompetitionSheet title={`Edit week ${week.weekNumber}`} closeTo={`/leagues/${id}`} onClose={() => setEditingWeekId(null)}>
-                <div style={{ marginTop: 10, border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: '#131326' }}>
+                <div style={{ marginTop: 10, border: '1px solid var(--border)', borderRadius: 10, padding: 10, background: 'var(--surface-raised)' }}>
                   <div style={{ display: 'grid', gap: 8 }}>
                     <label>Date<input type="date" value={weekForm.date} onChange={(e) => setWeekForm((f) => ({ ...f, date: e.target.value }))} /></label>
                     <label>Opponent<input value={weekForm.opponent} onChange={(e) => setWeekForm((f) => ({ ...f, opponent: e.target.value }))} /></label>
@@ -478,7 +496,7 @@ function LeagueDetail({ id }: { id: string }) {
                       const ballName = balls?.find((b) => b.id === g.ballId)?.name
                       const marks = frameMarks(g.frameData)
                       return (
-                        <div key={g.id} style={{ background: '#101022', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
+                        <div key={g.id} style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                             <div>
                               <div style={{ fontWeight: 650 }}>Game {g.gameNumber}: {g.score ?? '-'}</div>
@@ -505,7 +523,10 @@ function LeagueDetail({ id }: { id: string }) {
                                 gameNumber={g.gameNumber}
                                 balls={balls || []}
                                 defaultBallId={g.ballId ? String(g.ballId) : undefined}
-                                onSave={(result) => updateGame.mutate({ gameId: g.id, data: result })}
+                                initialFrameData={g.frameData}
+                                onSave={async (result) => {
+                                  await updateGame.mutateAsync({ gameId: g.id, data: result })
+                                }}
                                 onCancel={() => setRescoringGameId(null)}
                               />
                             </div>
@@ -547,7 +568,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
 
   const submitWeek = useMutation({
     mutationFn: async () => {
-      const weekRes = await fetch(`/api/leagues/${leagueId}/weeks`, {
+      const week = await requestJson<{ id: number }>(`/api/leagues/${leagueId}/weeks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -559,11 +580,10 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
           notes,
         }),
       })
-      const week = await weekRes.json()
 
       const sortedGames = [...weekGames].sort((a, b) => a.gameNumber - b.gameNumber)
       for (const game of sortedGames) {
-        await fetch(`/api/leagues/weeks/${week.id}/games`, {
+        await requestJson(`/api/leagues/weeks/${week.id}/games`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(game),
@@ -582,14 +602,14 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
       <label>Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       <label>Opponent<input value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
 
-      <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 10, background: '#0f0f1c', display: 'grid', gap: 10 }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 10, background: 'var(--surface-raised)', display: 'grid', gap: 10 }}>
         <div style={{ fontWeight: 650 }}>Games ({weekGames.length}/{gamesPerWeek})</div>
 
         {weekGames.map((game) => {
           const ballName = balls.find((b) => b.id === game.ballId)?.name
           const marks = frameMarks(game.frameData)
           return (
-            <div key={game.gameNumber} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: '#101022' }}>
+            <div key={game.gameNumber} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--surface)' }}>
               <div style={{ fontWeight: 650 }}>Game {game.gameNumber}: {game.score ?? '-'}</div>
               {marks ? (
                 <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 11, marginTop: 2 }}>{marks}</div>
@@ -639,7 +659,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
 
 function MiniPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ border: '1px solid var(--border)', background: '#101023', borderRadius: 999, padding: '6px 10px', fontSize: 12 }}>
+    <div style={{ border: '1px solid var(--border)', background: 'var(--surface-raised)', borderRadius: 999, padding: '6px 10px', fontSize: 12 }}>
       <span className="muted">{label}: </span>
       <strong style={{ color: 'var(--accent)' }}>{value}</strong>
     </div>
@@ -648,7 +668,7 @@ function MiniPill({ label, value }: { label: string; value: string | number }) {
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ minWidth: 104, background: '#121228', border: '1px solid var(--border)', borderRadius: 999, padding: '10px 14px', textAlign: 'center' }}>
+    <div style={{ minWidth: 104, background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 999, padding: '10px 14px', textAlign: 'center' }}>
       <div className="muted" style={{ fontSize: 11 }}>{label}</div>
       <div style={{ fontSize: 20, lineHeight: 1.1, fontWeight: 800, color: 'var(--accent)' }}>{value}</div>
     </div>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { copyText } from '../features/scoring/copyText'
 import ScoringIcon from '../features/scoring/ScoringIcon'
+import ScoringSheet from '../features/scoring/ScoringSheet'
 import '../features/scoring/scoring.css'
 
 interface Session {
@@ -129,7 +130,7 @@ export default function Sessions() {
   }
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">History</p>
@@ -210,39 +211,34 @@ export default function Sessions() {
       )}
 
       {actionSession && (
-        <div className="scoring-sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActionSession(null) }}>
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="session-actions-title">
-            <div className="scoring-sheet-handle" />
-            <p className="scoring-eyebrow">Session actions</p>
-            <h2 id="session-actions-title">{actionSession.location}</h2>
-            <div className="scoring-fields">
-              <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => navigate(`/sessions/${actionSession.id}?edit=1`)}>
-                <span className="scoring-row-copy">Edit session</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => handleShare(actionSession)}>
-                <ScoringIcon name="share" /><span className="scoring-row-copy">Share session</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDelete(true)}>
-                <ScoringIcon name="trash" /><span className="scoring-row-copy">Delete session</span><ScoringIcon name="chevron" />
-              </button>
-            </div>
-            {shareError && <p className="scoring-error" role="alert">The share link could not be copied. Open the session and copy its share-page address instead.</p>}
-            {confirmDelete && (
-              <div role="alert">
-                <p className="scoring-subtitle">Delete this session and every game in it? This cannot be undone.</p>
-                {deleteSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
-                <div className="scoring-sheet-actions">
-                  <button type="button" className="scoring-button secondary" onClick={() => setConfirmDelete(false)}>Keep session</button>
-                  <button type="button" className="scoring-button danger" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(actionSession.id)}>
-                    {deleteSession.isPending ? 'Deleting…' : 'Delete session'}
-                  </button>
-                </div>
+        <ScoringSheet open title={actionSession.location} description="Session actions" onClose={() => setActionSession(null)}>
+          <div className="scoring-fields">
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => navigate(`/sessions/${actionSession.id}?edit=1`)}>
+              <span className="scoring-row-copy">Edit session</span><ScoringIcon name="chevron" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => handleShare(actionSession)}>
+              <ScoringIcon name="share" /><span className="scoring-row-copy">Share session</span><ScoringIcon name="chevron" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDelete(true)}>
+              <ScoringIcon name="trash" /><span className="scoring-row-copy">Delete session</span><ScoringIcon name="chevron" />
+            </button>
+          </div>
+          {shareError && <p className="scoring-error" role="alert">The share link could not be copied. Open the session and copy its share-page address instead.</p>}
+          {confirmDelete && (
+            <div role="alert">
+              <p className="scoring-subtitle">Delete this session and every game in it? This cannot be undone.</p>
+              {deleteSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={() => setConfirmDelete(false)}>Keep session</button>
+                <button type="button" className="scoring-button danger" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(actionSession.id)}>
+                  {deleteSession.isPending ? 'Deleting…' : 'Delete session'}
+                </button>
               </div>
-            )}
-            {!confirmDelete && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionSession(null)}>Done</button>}
-          </section>
-        </div>
+            </div>
+          )}
+          {!confirmDelete && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionSession(null)}>Done</button>}
+        </ScoringSheet>
       )}
-    </main>
+    </div>
   )
 }

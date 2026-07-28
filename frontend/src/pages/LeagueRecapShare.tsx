@@ -87,20 +87,20 @@ export default function LeagueRecapShare() {
 
   if (invalidId) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <div style={{ textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
+      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 16, padding: 32 }}>
           <h2>League not found</h2>
-          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none' }}>BowlSense home</Link>
+          <Link to="/" style={{ color: 'var(--oil-violet)', textDecoration: 'none' }}>BowlSense home</Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{
+    <div className="public-competition-page" style={{
       minHeight: '100vh',
-      background: '#0d0d1a',
-      color: '#fff',
+      background: 'var(--canvas)',
+      color: 'var(--ink)',
       fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
       padding: '32px 16px 60px',
     }}>
@@ -109,25 +109,26 @@ export default function LeagueRecapShare() {
         {/* Header bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <div style={{ display: 'inline-flex', padding: '5px 12px', borderRadius: 999, background: 'rgba(167,139,250,0.18)', color: '#c4b5fd', fontWeight: 700, fontSize: 11, letterSpacing: 0.5, marginBottom: 8 }}>
+            <div style={{ display: 'inline-flex', padding: '5px 12px', borderRadius: 999, background: 'color-mix(in srgb, var(--ink) 6%, transparent)', color: 'var(--ink-secondary)', fontWeight: 700, fontSize: 11, letterSpacing: 0.5, marginBottom: 8 }}>
               🏆 LEAGUE NIGHT RECAP
             </div>
             {loading ? (
-              <div style={{ height: 32, background: 'rgba(255,255,255,0.06)', borderRadius: 8, width: 240 }} />
+              <div style={{ height: 32, background: 'color-mix(in srgb, var(--ink) 6%, transparent)', borderRadius: 8, width: 240 }} />
             ) : (
               <h1 style={{ margin: 0, fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 900 }}>
                 {data?.league.name}
               </h1>
             )}
             {data && (
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 4 }}>
+              <div style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)', fontSize: 14, marginTop: 4 }}>
                 Week {data.week.weekNumber} · {data.week.date} · vs {data.week.opponent}
               </div>
             )}
           </div>
           <Link
             to="/"
-            style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}
+            className="public-link-target"
+            style={{ color: 'var(--oil-violet)', textDecoration: 'none', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}
           >
             BowlSense home
           </Link>
@@ -136,9 +137,9 @@ export default function LeagueRecapShare() {
         {/* Card preview */}
         <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 24, boxShadow: '0 12px 48px rgba(0,0,0,0.6)' }}>
           {loading ? (
-            <div style={{ height: 315, background: '#121228', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)' }}>Loading card...</div>
+            <div style={{ height: 315, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'color-mix(in srgb, var(--ink) 40%, transparent)' }}>Loading card...</div>
           ) : error ? (
-            <div style={{ height: 315, background: '#121228', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fc8181' }}>{error}</div>
+            <div style={{ height: 315, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger)' }}>{error}</div>
           ) : (
             <img src={ogImageUrl} alt="League recap card" style={{ width: '100%', display: 'block' }} />
           )}
@@ -150,9 +151,9 @@ export default function LeagueRecapShare() {
             onClick={downloadPng}
             disabled={loading || !!error}
             style={{
-              background: downloading ? '#34d399' : '#a78bfa',
+              background: downloading ? 'var(--spare-green)' : 'var(--oil-violet)',
               border: 'none', borderRadius: 14, padding: '16px 24px',
-              color: '#0d0d1a', fontWeight: 800, fontSize: 16, cursor: downloading ? 'default' : 'pointer',
+              color: 'var(--on-tint)', fontWeight: 800, fontSize: 16, cursor: downloading ? 'default' : 'pointer',
               transition: 'background 0.2s', width: '100%', minHeight: 56,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
@@ -162,25 +163,26 @@ export default function LeagueRecapShare() {
 
           <a
             href={twitterIntent}
+            className="public-action-target"
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 14, padding: '16px 24px', color: '#fff',
+              background: 'color-mix(in srgb, var(--ink) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--ink) 20%, transparent)',
+              borderRadius: 14, padding: '16px 24px', color: 'var(--ink)',
               fontWeight: 800, fontSize: 16, textDecoration: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            𝕏 Share on X
+            Share on X
           </a>
 
           <button
             onClick={copyLink}
             style={{
-              background: copied ? '#34d399' : 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.2)',
+              background: copied ? 'var(--spare-green)' : 'color-mix(in srgb, var(--ink) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--ink) 20%, transparent)',
               borderRadius: 14, padding: '16px 24px',
-              color: copied ? '#0d0d1a' : '#fff',
+              color: copied ? 'var(--canvas)' : 'var(--ink)',
               fontWeight: 800, fontSize: 16, cursor: 'pointer',
               transition: 'background 0.2s', width: '100%', minHeight: 56,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -191,7 +193,7 @@ export default function LeagueRecapShare() {
         </div>
 
         {/* Footer */}
-        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13, marginTop: 32 }}>
+        <div style={{ textAlign: 'center', color: 'color-mix(in srgb, var(--ink) 30%, transparent)', fontSize: 13, marginTop: 32 }}>
           Made with 🎳 BowlSense
         </div>
       </div>

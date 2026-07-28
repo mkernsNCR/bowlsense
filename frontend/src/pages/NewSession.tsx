@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSettings } from '../hooks/useSettings'
 import ScoringIcon from '../features/scoring/ScoringIcon'
+import ScoringSheet from '../features/scoring/ScoringSheet'
 import '../features/scoring/scoring.css'
 
 interface SessionDraft {
@@ -57,7 +58,7 @@ export default function NewSession() {
   }
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">Start</p>
@@ -69,61 +70,68 @@ export default function NewSession() {
         </Link>
       </div>
 
-      <section className="scoring-group" aria-label="Session setup">
-        <div className="scoring-field">
-          <label htmlFor="session-date">Date</label>
-          <input id="session-date" type="date" value={form.date} onChange={(event) => updateField('date', event.target.value)} />
-        </div>
-        <div className="scoring-field">
-          <label htmlFor="session-location">Center</label>
-          <input
-            id="session-location"
-            type="text"
-            autoComplete="organization"
-            placeholder="Home Lanes"
-            value={form.location}
-            onChange={(event) => updateField('location', event.target.value)}
-          />
-        </div>
-        <div className="scoring-field">
-          <label htmlFor="session-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
-          <input id="session-lanes" type="text" inputMode="numeric" placeholder="5–6" value={form.lanes} onChange={(event) => updateField('lanes', event.target.value)} />
-        </div>
-      </section>
-
-      <div className="scoring-disclosure">
-        <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
-          {showDetails ? 'Hide details' : 'Add details'}
-          <ScoringIcon name="chevron" size={16} />
-        </button>
-      </div>
-
-      {showDetails && (
-        <section className="scoring-group" aria-label="Optional session details">
+      <ScoringSheet
+        open
+        title="Session setup"
+        description="Confirm the essentials. You can add conditions if you need them."
+        onClose={() => navigate('/sessions')}
+      >
+        <section className="scoring-group" aria-label="Session setup">
           <div className="scoring-field">
-            <label htmlFor="session-notes">Notes or conditions</label>
-            <textarea
-              id="session-notes"
-              placeholder="Oil pattern, transition, or what you are working on"
-              value={form.notes}
-              onChange={(event) => updateField('notes', event.target.value)}
+            <label htmlFor="session-date">Date</label>
+            <input id="session-date" type="date" value={form.date} onChange={(event) => updateField('date', event.target.value)} />
+          </div>
+          <div className="scoring-field">
+            <label htmlFor="session-location">Center</label>
+            <input
+              id="session-location"
+              type="text"
+              autoComplete="organization"
+              placeholder="Home Lanes"
+              value={form.location}
+              onChange={(event) => updateField('location', event.target.value)}
             />
           </div>
+          <div className="scoring-field">
+            <label htmlFor="session-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
+            <input id="session-lanes" type="text" inputMode="numeric" placeholder="5–6" value={form.lanes} onChange={(event) => updateField('lanes', event.target.value)} />
+          </div>
         </section>
-      )}
 
-      {createSession.isError && (
-        <p className="scoring-error" role="alert">The session was not created. Check your connection and try again.</p>
-      )}
+        <div className="scoring-disclosure">
+          <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
+            {showDetails ? 'Hide details' : 'Add details'}
+            <ScoringIcon name="chevron" size={16} />
+          </button>
+        </div>
 
-      <button
-        type="button"
-        className="scoring-button primary wide"
-        disabled={!form.date || !form.location.trim() || createSession.isPending}
-        onClick={() => createSession.mutate({ ...form, location: form.location.trim() })}
-      >
-        {createSession.isPending ? 'Starting…' : 'Start bowling'}
-      </button>
-    </main>
+        {showDetails && (
+          <section className="scoring-group" aria-label="Optional session details">
+            <div className="scoring-field">
+              <label htmlFor="session-notes">Notes or conditions</label>
+              <textarea
+                id="session-notes"
+                placeholder="Oil pattern, transition, or what you are working on"
+                value={form.notes}
+                onChange={(event) => updateField('notes', event.target.value)}
+              />
+            </div>
+          </section>
+        )}
+
+        {createSession.isError && (
+          <p className="scoring-error" role="alert">The session was not created. Check your connection and try again.</p>
+        )}
+
+        <button
+          type="button"
+          className="scoring-button primary wide"
+          disabled={!form.date || !form.location.trim() || createSession.isPending}
+          onClick={() => createSession.mutate({ ...form, location: form.location.trim() })}
+        >
+          {createSession.isPending ? 'Starting…' : 'Start bowling'}
+        </button>
+      </ScoringSheet>
+    </div>
   )
 }

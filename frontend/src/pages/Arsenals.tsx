@@ -106,7 +106,7 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
   })
 
   return (
-    <main className="gear-workspace">
+    <div className="gear-workspace">
       <GearHeader title="Arsenals" description="Build purpose-made bags and see the role every ball plays before you get to the lanes." action={<button className="btn btn-primary" type="button" onClick={() => setCreateOpen(true)}>Build an arsenal</button>} />
       <GearNavigation />
 
@@ -147,7 +147,7 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
           <div className="gear-form__actions"><button className="btn btn-primary" type="button" disabled={!form.name.trim() || Number(form.maxSize) < 1 || Number(form.maxSize) > 12 || createArsenal.isPending} onClick={() => createArsenal.mutate({ name: form.name.trim(), description: form.description || null, useCase: form.useCase, maxSize: Number(form.maxSize), notes: form.notes || null })}>{createArsenal.isPending ? 'Building…' : 'Build arsenal'}</button></div>
         </div>
       </GearSheet>
-    </main>
+    </div>
   )
 }
 
@@ -251,7 +251,7 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
   }
 
   return (
-    <main className="gear-workspace">
+    <div className="gear-workspace">
       <GearBackLink to="/arsenals">All arsenals</GearBackLink>
       <GearHeader title={arsenal.name} description={arsenal.description || 'A purpose-built equipment plan.'} />
       <GearNavigation />
@@ -328,14 +328,14 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
           <div className="gear-danger-row"><button className="btn btn-danger" type="button" disabled={removeEntry.isPending} onClick={() => removeEntry.mutate(selectedEntry.id)}>{removeEntry.isPending ? 'Removing…' : 'Remove from bag'}</button><button className="btn btn-primary" type="button" disabled={updateEntry.isPending} onClick={() => updateEntry.mutate({ entryId: selectedEntry.id, payload: { role: editEntry.role, slotOrder: Number(editEntry.slotOrder), notes: editEntry.notes || null } })}>{updateEntry.isPending ? 'Saving…' : 'Save changes'}</button></div>
         </div>}
       </GearSheet>
-    </main>
+    </div>
   )
 }
 
 function ArsenalDetailView({ id }: { id: number }) {
   const arsenalQuery = useQuery<ArsenalDetail>({ queryKey: ['arsenal', id], queryFn: () => arsenalJson<ArsenalDetail>(`/${id}`) })
-  if (arsenalQuery.isLoading) return <main className="gear-workspace"><GearNavigation /><GearState kind="loading" title="Opening this bag" detail="Loading ball roles and performance." /></main>
-  if (arsenalQuery.isError || !arsenalQuery.data) return <main className="gear-workspace"><GearNavigation /><GearState kind="error" title="Arsenal unavailable" detail="This bag could not be loaded. It may have been removed, or the connection failed." action={<button className="btn btn-ghost" type="button" onClick={() => void arsenalQuery.refetch()}>Try again</button>} /></main>
+  if (arsenalQuery.isLoading) return <div className="gear-workspace"><GearNavigation /><GearState kind="loading" title="Opening this bag" detail="Loading ball roles and performance." /></div>
+  if (arsenalQuery.isError || !arsenalQuery.data) return <div className="gear-workspace"><GearNavigation /><GearState kind="error" title="Arsenal unavailable" detail="This bag could not be loaded. It may have been removed, or the connection failed." action={<button className="btn btn-ghost" type="button" onClick={() => void arsenalQuery.refetch()}>Try again</button>} /></div>
   return <ArsenalDetailContent arsenal={arsenalQuery.data} />
 }
 

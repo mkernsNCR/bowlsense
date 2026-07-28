@@ -111,6 +111,16 @@ const emptyForm = {
   notes: '',
 }
 
+async function requestJson<T = unknown>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, init)
+  if (!response.ok) {
+    const message = await response.json().then((body) => body?.error).catch(() => null)
+    throw new Error(message || `Request failed (${response.status})`)
+  }
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
+}
+
 export default function TournamentsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -135,9 +145,9 @@ export default function TournamentsPage() {
 }
 
 function TournamentList() {
-  const { data: tournaments, isLoading } = useQuery<Tournament[]>({
+  const { data: tournaments, isLoading, isError, refetch } = useQuery<Tournament[]>({
     queryKey: ['tournaments'],
-    queryFn: () => fetch('/api/tournaments').then((r) => r.json()),
+    queryFn: () => requestJson('/api/tournaments'),
   })
 
   return (
@@ -151,7 +161,14 @@ function TournamentList() {
 
       {isLoading && <div className="muted">Loading tournaments...</div>}
 
-      {!isLoading && !tournaments?.length && (
+      {isError && (
+        <div className="card" role="alert">
+          <p>Tournaments could not be loaded. Check your connection or sign-in, then try again.</p>
+          <button className="btn btn-primary" type="button" onClick={() => void refetch()}>Retry</button>
+        </div>
+      )}
+
+      {!isLoading && !isError && !tournaments?.length && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="muted">No tournaments yet.</div>
           <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create your first tournament</Link>
@@ -225,6 +242,7 @@ function TournamentForm({ title, submitText, initial, tournamentId, onSubmitDone
         <button className="btn btn-primary" disabled={mutation.isPending || !form.name.trim() || !form.date} onClick={() => mutation.mutate()}>
           {mutation.isPending ? 'Saving…' : submitText}
         </button>
+        {mutation.isError && <p className="scoring-error" role="alert">The tournament was not saved. Check your connection or sign-in and try again.</p>}
       </div>
     </div>
   )
@@ -233,20 +251,20 @@ function TournamentForm({ title, submitText, initial, tournamentId, onSubmitDone
 function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: boolean; onEdit: () => void }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const { data: tournament, isLoading } = useQuery<Tournament>({
+  const { data: tournament, isLoading, isError, refetch } = useQuery<Tournament>({
     queryKey: ['tournament', id],
-    queryFn: () => fetch(`/api/tournaments/${id}`).then((r) => r.json()),
+    queryFn: () => requestJson(`/api/tournaments/${id}`),
   })
   const { data: balls } = useQuery<Ball[]>({
     queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then((r) => r.json()),
+    queryFn: () => requestJson('/api/balls'),
   })
 
   const [rescoringGameId, setRescoringGameId] = useState<number | null>(null)
 
   const updateGame = useMutation({
     mutationFn: ({ gameId, data }: { gameId: number; data: object }) =>
-      fetch(`/api/tournaments/games/${gameId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+      requestJson(`/api/tournaments/games/${gameId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tournament', id] })
       qc.invalidateQueries({ queryKey: ['tournaments'] })
@@ -254,7 +272,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   })
 
   const deleteTournament = useMutation({
-    mutationFn: () => fetch(`/api/tournaments/${id}`, { method: 'DELETE' }),
+    mutationFn: () => requestJson(`/api/tournaments/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tournaments'] })
       navigate('/tournaments')
@@ -262,7 +280,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   })
 
   const addGame = useMutation({
-    mutationFn: (payload: object) => fetch(`/api/tournaments/${id}/games`, {
+    mutationFn: (payload: object) => requestJson(`/api/tournaments/${id}/games`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     }),
     onSuccess: () => {
@@ -272,7 +290,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   })
 
   const deleteGame = useMutation({
-    mutationFn: (gameId: number) => fetch(`/api/tournaments/games/${gameId}`, { method: 'DELETE' }),
+    mutationFn: (gameId: number) => requestJson(`/api/tournaments/games/${gameId}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tournament', id] })
       qc.invalidateQueries({ queryKey: ['tournaments'] })
@@ -289,11 +307,12 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
 
   const { data: bracket, isLoading: isBracketLoading } = useQuery<TournamentBracket>({
     queryKey: ['tournament-bracket', id],
-    queryFn: () => fetch(`/api/tournaments/${id}/bracket`).then((r) => r.json()),
+    queryFn: () => requestJson(`/api/tournaments/${id}/bracket`),
     enabled: view === 'standings',
   })
 
   if (isLoading) return <div className="muted">Loading tournament...</div>
+  if (isError) return <div className="card" role="alert"><p>The tournament could not be loaded. Check your connection or sign-in.</p><button className="btn btn-primary" type="button" onClick={() => void refetch()}>Retry</button></div>
   if (!tournament) return <div className="muted">Tournament not found.</div>
 
   if (isEditing) {
@@ -374,32 +393,35 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
             className="btn btn-primary"
             onClick={() => setShareMenuOpen((v) => !v)}
             aria-expanded={shareMenuOpen}
-            aria-haspopup="menu"
             style={{ minHeight: 44, padding: '6px 14px', fontWeight: 700 }}
           >
             <ActionIcon name="share" /> {copiedLink ? 'Copied' : sharing ? 'Sharing…' : 'Share'}
           </button>
           {shareMenuOpen && (
             <div
-              role="menu"
               aria-label="Tournament sharing options"
               style={{
                 position: 'absolute',
                 right: 0,
                 top: '100%',
                 marginTop: 4,
-                background: '#1a1a2e',
-                border: '1px solid rgba(167,139,250,0.3)',
+                background: 'var(--surface-raised)',
+                border: '1px solid var(--separator)',
                 borderRadius: 12,
                 padding: 6,
                 zIndex: 200,
                 minWidth: 200,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                boxShadow: 'var(--shadow)',
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setShareMenuOpen(false)
+                }
               }}
               onMouseLeave={() => setShareMenuOpen(false)}
             >
               <button
-                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleShare}
@@ -407,7 +429,6 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 Share card
               </button>
               <button
-                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleCopyLink}
@@ -415,7 +436,6 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 Copy link
               </button>
               <button
-                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleDownloadCard}
@@ -423,7 +443,6 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 Download image
               </button>
               <button
-                role="menuitem"
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13 }}
                 onClick={handleXShare}
@@ -494,9 +513,9 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                         gameNumber={g.gameNumber}
                         balls={balls || []}
                         defaultBallId={g.ballId ? String(g.ballId) : undefined}
-                        onSave={(result) => {
-                          updateGame.mutate({ gameId: g.id, data: { ...result, squad: g.squad } })
-                          setRescoringGameId(null)
+                        initialFrameData={g.frameData}
+                        onSave={async (result) => {
+                          await updateGame.mutateAsync({ gameId: g.id, data: { ...result, squad: g.squad } })
                         }}
                         onCancel={() => setRescoringGameId(null)}
                       />
@@ -527,12 +546,10 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 gameNumber={nextGameNumber}
                 balls={balls || []}
                 defaultBallId={undefined}
-                onSave={(game) => addGame.mutate({ ...game, squad }, {
-                  onSuccess: () => {
-                    setSquad('')
-                    setShowScorer(false)
-                  },
-                })}
+                onSave={async (game) => {
+                  await addGame.mutateAsync({ ...game, squad })
+                  setSquad('')
+                }}
                 onCancel={() => setShowScorer(false)}
               />
             </div>
@@ -591,11 +608,11 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                     <tbody>
                       {(bracket?.standings || []).map((standing) => {
                         const rankColor = standing.rank === 1
-                          ? 'color-mix(in srgb, var(--accent) 100%, #f7d774 0%)'
+                          ? 'var(--warning)'
                           : standing.rank === 2
-                            ? 'color-mix(in srgb, var(--accent) 68%, #cfd4dd 32%)'
+                            ? 'var(--ink-secondary)'
                             : standing.rank === 3
-                              ? 'color-mix(in srgb, var(--accent) 56%, #cd7f32 44%)'
+                              ? 'color-mix(in srgb, var(--warning) 65%, var(--ink) 35%)'
                               : 'var(--text)'
 
                         return (
@@ -632,7 +649,7 @@ function placementBadge(placement?: number | null) {
 
 function MiniPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ border: '1px solid var(--border)', background: '#101023', borderRadius: 999, padding: '6px 10px', fontSize: 12 }}>
+    <div style={{ border: '1px solid var(--border)', background: 'var(--surface-raised)', borderRadius: 999, padding: '6px 10px', fontSize: 12 }}>
       <span className="muted">{label}: </span>
       <strong style={{ color: 'var(--accent)' }}>{value}</strong>
     </div>
@@ -641,7 +658,7 @@ function MiniPill({ label, value }: { label: string; value: string | number }) {
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ minWidth: 104, background: '#121228', border: '1px solid var(--border)', borderRadius: 999, padding: '10px 14px', textAlign: 'center' }}>
+    <div style={{ minWidth: 104, background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 999, padding: '10px 14px', textAlign: 'center' }}>
       <div className="muted" style={{ fontSize: 11 }}>{label}</div>
       <div style={{ fontSize: 20, lineHeight: 1.1, fontWeight: 800, color: 'var(--accent)' }}>{value}</div>
     </div>

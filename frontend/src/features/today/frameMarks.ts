@@ -9,7 +9,6 @@ export interface ParsedRibbonFrame {
   rolls: readonly string[]
   score: number | null
   state: 'pending' | 'complete' | 'strike' | 'spare' | 'open'
-  label: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,11 +71,10 @@ function frameState(frame: FrameRecord | null, index: number): ParsedRibbonFrame
 }
 
 function emptyFrames(): ParsedRibbonFrame[] {
-  return Array.from({ length: 10 }, (_, index) => ({
+  return Array.from({ length: 10 }, () => ({
     rolls: [],
     score: null,
     state: 'pending',
-    label: String(index + 1),
   }))
 }
 
@@ -94,7 +92,6 @@ export function parseFrameRibbonFrames(frameData: string | null | undefined): Pa
         rolls: frame ? frameRolls(frame, index) : [],
         score: frame?.cumulative ?? null,
         state: frameState(frame, index),
-        label: String(index + 1),
       }
     })
   } catch {

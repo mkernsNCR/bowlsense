@@ -116,7 +116,7 @@ export default function PerfectGameShare() {
 
   if (!Number.isFinite(gameId) || (loading === false && notFound)) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center', padding: 24 }}>
+      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', display: 'grid', placeItems: 'center', padding: 24 }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 64, marginBottom: 14 }}>🎳</div>
           <h1 style={{ marginBottom: 10 }}>Perfect game not found</h1>
@@ -128,7 +128,7 @@ export default function PerfectGameShare() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', display: 'grid', placeItems: 'center' }}>
         <div className="muted">Loading your perfect game...</div>
       </div>
     )
@@ -137,14 +137,14 @@ export default function PerfectGameShare() {
   if (!data) return null
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', padding: '32px 16px 48px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div className="public-competition-page" style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', padding: '32px 16px 48px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {/* Hero */}
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <div style={{
           display: 'inline-block',
-          background: 'rgba(251,191,36,0.15)',
-          border: '1px solid rgba(251,191,36,0.4)',
-          color: '#fbbf24',
+          background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--strike-gold) 40%, transparent)',
+          color: 'var(--strike-gold)',
           borderRadius: 999,
           fontSize: 11,
           fontWeight: 800,
@@ -159,12 +159,11 @@ export default function PerfectGameShare() {
           fontSize: 'clamp(2.5rem, 10vw, 5rem)',
           fontWeight: 900,
           lineHeight: 1,
-          color: '#fbbf24',
-          textShadow: '0 0 40px rgba(251,191,36,0.35)',
+          color: 'var(--strike-gold)',
         }}>
           {data.game.score}
         </h1>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16 }}>
+        <div style={{ color: 'color-mix(in srgb, var(--ink) 70%, transparent)', fontSize: 16 }}>
           {data.session.location || 'Unknown Alley'} · {data.session.date}
         </div>
       </div>
@@ -191,16 +190,16 @@ export default function PerfectGameShare() {
           style={{
             flex: 1,
             minHeight: 50,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 40%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 800,
             fontSize: 15,
             borderRadius: 12,
             cursor: 'pointer',
           }}
         >
-          𝕏 Share on X
+          Share on X
         </button>
         <button
           type="button"
@@ -209,9 +208,9 @@ export default function PerfectGameShare() {
           style={{
             flex: 1,
             minHeight: 50,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 40%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 800,
             fontSize: 15,
             borderRadius: 12,
@@ -228,9 +227,9 @@ export default function PerfectGameShare() {
           style={{
             flex: 1,
             minHeight: 50,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 40%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 800,
             fontSize: 15,
             borderRadius: 12,
@@ -247,8 +246,8 @@ export default function PerfectGameShare() {
             flex: 1,
             minHeight: 50,
             background: 'transparent',
-            border: '1px solid rgba(251,191,36,0.3)',
-            color: 'rgba(255,255,255,0.8)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 30%, transparent)',
+            color: 'color-mix(in srgb, var(--ink) 80%, transparent)',
             fontWeight: 700,
             fontSize: 15,
             borderRadius: 12,
@@ -267,7 +266,7 @@ export default function PerfectGameShare() {
           onClick={() => setShowShareCard(true)}
           style={{ width: '100%', minHeight: 44, fontSize: 14, justifyContent: 'center', opacity: 0.8 }}
         >
-          🎨 Customize &amp; Download
+          Customize &amp; download
         </button>
       </div>
 
@@ -282,12 +281,12 @@ export default function PerfectGameShare() {
           zIndex: 100,
           padding: 16,
         }}>
-          <div style={{ background: '#12122a', borderRadius: 20, padding: 24, maxWidth: 480, width: '100%', border: '1px solid rgba(167,139,250,0.2)' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 24, maxWidth: 480, width: '100%', border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
               <span style={{ fontWeight: 700, fontSize: 16 }}>Customize Share Card</span>
               <button
                 onClick={() => setShowShareCard(false)}
-                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 20 }}
+                style={{ background: 'none', border: 'none', color: 'color-mix(in srgb, var(--ink) 60%, transparent)', cursor: 'pointer', fontSize: 20 }}
               >
                 ×
               </button>
@@ -315,7 +314,7 @@ export default function PerfectGameShare() {
 
       {/* Back link */}
       <div style={{ maxWidth: 860, margin: '28px auto 0', textAlign: 'center' }}>
-        <Link to="/" style={{ color: 'rgba(167,139,250,0.8)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+        <Link to="/" style={{ color: 'var(--ink-secondary)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
           BowlSense home
         </Link>
       </div>

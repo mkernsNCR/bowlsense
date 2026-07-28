@@ -9,7 +9,7 @@ export default function QuickAdd() {
 
   if (savedGameId) {
     return (
-      <main className="scoring-flow scoring-page">
+      <div className="scoring-flow scoring-page">
         <div className="scoring-status" role="status">
           <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
           <h1 className="scoring-large-title">Game saved</h1>
@@ -19,12 +19,12 @@ export default function QuickAdd() {
             <Link to="/sessions" className="scoring-button secondary">View sessions</Link>
           </div>
         </div>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">Quick add</p>
@@ -34,6 +34,6 @@ export default function QuickAdd() {
         <Link to="/" className="scoring-button quiet"><ScoringIcon name="arrow-left" size={18} /> Today</Link>
       </div>
       <QuickAddGame onDone={setSavedGameId} />
-    </main>
+    </div>
   )
 }

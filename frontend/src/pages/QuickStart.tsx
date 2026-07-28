@@ -35,7 +35,7 @@ export default function QuickStart() {
   })
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">Lane ready</p>
@@ -85,6 +85,6 @@ export default function QuickStart() {
         <Link to="/sessions" className="scoring-button secondary">All sessions</Link>
         <Link to="/stats" className="scoring-button quiet">View insights</Link>
       </div>
-    </main>
+    </div>
   )
 }

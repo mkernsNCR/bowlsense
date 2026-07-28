@@ -40,14 +40,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div
       style={{
-        background: '#121228',
+        background: 'var(--surface)',
         borderRadius: 16,
         padding: '14px 16px',
-        border: '1px solid rgba(167,139,250,0.2)',
+        border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
       }}
     >
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: '#a78bfa', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 70%, transparent)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--ink)', lineHeight: 1.1 }}>{value}</div>
     </div>
   )
 }
@@ -120,8 +120,8 @@ export default function PublicLeagueLeaderboard() {
 
   if (invalidId) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: 24 }}>
-        <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: '#121228' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: 24 }}>
+        <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: 'var(--surface)' }}>
           <h2 style={{ marginBottom: 8 }}>League not found</h2>
           <p className="muted">The league link looks invalid.</p>
           <Link to="/" className="btn btn-ghost">BowlSense home</Link>
@@ -131,7 +131,7 @@ export default function PublicLeagueLeaderboard() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: '24px 16px 40px' }}>
+    <div className="public-competition-page" style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: '24px 16px 40px' }}>
       <div style={{ maxWidth: 1040, margin: '0 auto' }}>
         <style>{`
           .pllb-mobile-cards {
@@ -149,7 +149,7 @@ export default function PublicLeagueLeaderboard() {
             }
           }
         `}</style>
-        <div style={{ display: 'inline-flex', padding: '6px 12px', borderRadius: 999, background: 'rgba(167,139,250,0.18)', color: '#c4b5fd', fontWeight: 700, fontSize: 12, letterSpacing: 0.5, marginBottom: 14 }}>
+        <div style={{ display: 'inline-flex', padding: '6px 12px', borderRadius: 999, background: 'color-mix(in srgb, var(--ink) 6%, transparent)', color: 'var(--ink-secondary)', fontWeight: 700, fontSize: 12, letterSpacing: 0.5, marginBottom: 14 }}>
           🏆 PUBLIC LEAGUE LEADERBOARD
         </div>
 
@@ -158,14 +158,14 @@ export default function PublicLeagueLeaderboard() {
             <h1 style={{ margin: 0, fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900 }}>
               {league?.name || 'League Leaderboard'}
             </h1>
-            <div style={{ color: 'rgba(255,255,255,0.75)', marginTop: 8 }}>{subtitle}</div>
+            <div style={{ color: 'color-mix(in srgb, var(--ink) 75%, transparent)', marginTop: 8 }}>{subtitle}</div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <button
               onClick={shareCopy}
               className="btn btn-primary"
-              style={{ background: '#a78bfa', borderColor: '#a78bfa', color: '#140f2b' }}
+              style={{ background: 'var(--oil-violet)', borderColor: 'var(--oil-violet)', color: 'var(--on-tint)' }}
             >
               {copied ? 'Link copied' : 'Share'}
             </button>
@@ -174,15 +174,15 @@ export default function PublicLeagueLeaderboard() {
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none' }}
+              style={{ borderColor: 'color-mix(in srgb, var(--ink) 20%, transparent)', color: 'var(--ink)', textDecoration: 'none' }}
             >
               Share on X
             </a>
           </div>
         </div>
 
-        {isLoading && <div className="card" style={{ background: '#121228' }}>Loading leaderboard...</div>}
-        {isError && <div className="card" style={{ background: '#121228', color: '#fc8181' }}>Could not load leaderboard right now.</div>}
+        {isLoading && <div className="card" style={{ background: 'var(--surface)' }}>Loading leaderboard...</div>}
+        {isError && <div className="card" style={{ background: 'var(--surface)', color: 'var(--danger)' }}>Could not load leaderboard right now.</div>}
 
         {!isLoading && !isError && data && (
           <>
@@ -193,9 +193,9 @@ export default function PublicLeagueLeaderboard() {
               <StatCard label="League Avg" value={data.leagueAverage != null ? String(data.leagueAverage) : '—'} />
             </div>
 
-            <div style={{ background: '#121228', borderRadius: 16, border: '1px solid rgba(167,139,250,0.2)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)', overflow: 'hidden' }}>
               {!data.rankedOpponents?.length ? (
-                <div style={{ padding: 28, textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>
+                <div style={{ padding: 28, textAlign: 'center', color: 'color-mix(in srgb, var(--ink) 80%, transparent)' }}>
                   No league games logged yet — check back after your next league night! 🎳
                 </div>
               ) : (
@@ -203,9 +203,9 @@ export default function PublicLeagueLeaderboard() {
                   <div className="pllb-table-wrap" style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <tr style={{ background: 'color-mix(in srgb, var(--ink) 3%, transparent)' }}>
                           {['Rank', 'Name', 'Avg', 'Games', 'Total Pins', 'High Game'].map((h) => (
-                            <th key={h} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 12, letterSpacing: 0.4, color: 'rgba(255,255,255,0.72)' }}>{h}</th>
+                            <th key={h} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 12, letterSpacing: 0.4, color: 'color-mix(in srgb, var(--ink) 72%, transparent)' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -213,13 +213,13 @@ export default function PublicLeagueLeaderboard() {
                         {data.rankedOpponents.map((op) => {
                           const isYou = /\b(matt|you|me)\b/i.test(op.name)
                           return (
-                            <tr key={`${op.rank}-${op.name}`} style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: isYou ? 'rgba(167,139,250,0.14)' : 'transparent' }}>
-                              <td style={{ padding: '12px 14px', fontWeight: 800, color: op.rank === 1 ? '#fbbf24' : '#fff' }}>#{op.rank}</td>
+                            <tr key={`${op.rank}-${op.name}`} style={{ borderTop: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)', background: isYou ? 'color-mix(in srgb, var(--ink) 6%, transparent)' : 'transparent' }}>
+                              <td style={{ padding: '12px 14px', fontWeight: 800, color: op.rank === 1 ? 'var(--strike-gold)' : 'var(--ink)' }}>#{op.rank}</td>
                               <td style={{ padding: '12px 14px' }}>{op.name}</td>
                               <td style={{ padding: '12px 14px', fontWeight: 800 }}>{op.avg}</td>
                               <td style={{ padding: '12px 14px' }}>{op.games}</td>
                               <td style={{ padding: '12px 14px' }}>{op.totalPins}</td>
-                              <td style={{ padding: '12px 14px', color: op.highGame === 300 ? '#fbbf24' : '#fff', fontWeight: op.highGame === 300 ? 800 : 500 }}>{op.highGame}</td>
+                              <td style={{ padding: '12px 14px', color: op.highGame === 300 ? 'var(--strike-gold)' : 'var(--ink)', fontWeight: op.highGame === 300 ? 800 : 500 }}>{op.highGame}</td>
                             </tr>
                           )
                         })}
@@ -234,20 +234,20 @@ export default function PublicLeagueLeaderboard() {
                         <div
                           key={`mobile-${op.rank}-${op.name}`}
                           style={{
-                            border: `1px solid ${isYou ? 'rgba(167,139,250,0.45)' : 'rgba(255,255,255,0.12)'}`,
-                            background: isYou ? 'rgba(167,139,250,0.14)' : '#0f1020',
+                            border: `1px solid ${isYou ? 'var(--separator)' : 'color-mix(in srgb, var(--ink) 12%, transparent)'}`,
+                            background: isYou ? 'color-mix(in srgb, var(--ink) 6%, transparent)' : 'var(--surface)',
                             borderRadius: 12,
                             padding: '10px 12px',
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                            <div style={{ fontWeight: 800, color: op.rank === 1 ? '#fbbf24' : '#fff' }}>#{op.rank} {op.name}</div>
-                            <div style={{ fontSize: 20, fontWeight: 900, color: '#a78bfa' }}>{op.avg}</div>
+                            <div style={{ fontWeight: 800, color: op.rank === 1 ? 'var(--strike-gold)' : 'var(--ink)' }}>#{op.rank} {op.name}</div>
+                            <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--ink)' }}>{op.avg}</div>
                           </div>
-                          <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.78)' }}>
+                          <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, fontSize: 12, color: 'color-mix(in srgb, var(--ink) 78%, transparent)' }}>
                             <div>Games: <b>{op.games}</b></div>
                             <div>Pins: <b>{op.totalPins}</b></div>
-                            <div>High: <b style={{ color: op.highGame === 300 ? '#fbbf24' : '#fff' }}>{op.highGame}</b></div>
+                            <div>High: <b style={{ color: op.highGame === 300 ? 'var(--strike-gold)' : 'var(--ink)' }}>{op.highGame}</b></div>
                           </div>
                         </div>
                       )
@@ -259,9 +259,9 @@ export default function PublicLeagueLeaderboard() {
           </>
         )}
 
-        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'rgba(255,255,255,0.65)' }}>
+        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'color-mix(in srgb, var(--ink) 65%, transparent)' }}>
           <div>Tracked with BowlSense</div>
-          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>BowlSense home</Link>
+          <Link to="/" style={{ color: 'var(--oil-violet)', textDecoration: 'none', fontWeight: 700 }}>BowlSense home</Link>
         </div>
       </div>
     </div>

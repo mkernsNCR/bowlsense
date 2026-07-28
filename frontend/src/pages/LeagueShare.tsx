@@ -25,29 +25,29 @@ interface ShareResponse {
 function StatCard({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
   return (
     <div style={{
-      background: '#121228', borderRadius: 16,
-      padding: '14px 16px', border: '1px solid rgba(167,139,250,0.2)',
+      background: 'var(--surface)', borderRadius: 16,
+      padding: '14px 16px', border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
     }}>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 70%, transparent)', marginBottom: 8 }}>{label}</div>
       <div style={{
         fontSize: 28, fontWeight: 800,
-        color: gold ? '#fbbf24' : '#a78bfa', lineHeight: 1.1,
+        color: gold ? 'var(--strike-gold)' : 'var(--ink)', lineHeight: 1.1,
       }}>{value}</div>
     </div>
   )
 }
 
 function GameDot({ score }: { score: number | null }) {
-  if (score == null) return <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>—</span>
-  const color = score === 300 ? '#fbbf24' : score >= 200 ? '#a78bfa' : score < 170 ? '#fc8181' : '#fff'
+  if (score == null) return <span style={{ color: 'color-mix(in srgb, var(--ink) 30%, transparent)', fontSize: 13 }}>—</span>
+  const color = score === 300 ? 'var(--strike-gold)' : score >= 200 ? 'var(--ink)' : score < 170 ? 'var(--danger)' : 'var(--ink)'
   return <span style={{ color, fontWeight: 700, fontSize: 13 }}>{score}</span>
 }
 
 function ResultBadge({ won, lost, tied }: { won: number; lost: number; tied?: number }) {
   if (won === 0 && lost === 0 && (tied ?? 0) === 0) return null
   const won_ = won > lost ? 'W' : won < lost ? 'L' : 'T'
-  const bg = won_ === 'W' ? 'rgba(52,211,153,0.15)' : won_ === 'L' ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.1)'
-  const color = won_ === 'W' ? '#34d399' : won_ === 'L' ? '#fc8181' : 'rgba(255,255,255,0.7)'
+  const bg = won_ === 'W' ? 'color-mix(in srgb, var(--spare-green) 15%, transparent)' : won_ === 'L' ? 'color-mix(in srgb, var(--danger) 15%, transparent)' : 'color-mix(in srgb, var(--ink) 10%, transparent)'
+  const color = won_ === 'W' ? 'var(--spare-green)' : won_ === 'L' ? 'var(--danger)' : 'color-mix(in srgb, var(--ink) 70%, transparent)'
   const record = tied != null && tied > 0 ? ` (${won}-${lost}-${tied})` : ` (${won}-${lost})`
   return (
     <span style={{ background: bg, color, padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800 }}>
@@ -126,18 +126,18 @@ export default function LeagueShare() {
 
   if (invalid) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui', padding: 24 }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
+      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', fontFamily: 'system-ui', padding: 24 }}>
+        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: 'var(--surface)', borderRadius: 16, padding: 32 }}>
           <h2>League not found</h2>
-          <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
+          <Link to="/" style={{ color: 'var(--oil-violet)' }}>BowlSense home</Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{
-      minHeight: '100vh', background: '#0d0d1a', color: '#fff',
+    <div className="public-competition-page" style={{
+      minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)',
       fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
       paddingBottom: 40,
     }}>
@@ -148,9 +148,9 @@ export default function LeagueShare() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '5px 14px', borderRadius: 999,
-            background: 'linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.3))',
-            color: '#c4b5fd', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-            marginBottom: 14, border: '1px solid rgba(167,139,250,0.4)',
+            background: 'var(--surface-raised)',
+            color: 'var(--ink-secondary)', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+            marginBottom: 14, border: '1px solid var(--separator)',
           }}>
             🏆 League Share
           </div>
@@ -160,17 +160,18 @@ export default function LeagueShare() {
           }}>
             {data?.league?.name || 'League'}
           </h1>
-          {subtitle && <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15 }}>{subtitle}</div>}
+          {subtitle && <div style={{ color: 'color-mix(in srgb, var(--ink) 72%, transparent)', fontSize: 15 }}>{subtitle}</div>}
         </div>
 
         {/* Share buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
           <button
             onClick={handleCopy}
+            className="public-action-target"
             style={{
-              background: copied ? '#34d399' : '#a78bfa',
+              background: copied ? 'var(--spare-green)' : 'var(--oil-violet)',
               border: 'none', borderRadius: 12, padding: '10px 20px',
-              color: '#0d0d1a', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              color: 'var(--on-tint)', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               transition: 'background 0.2s',
             }}
           >
@@ -178,21 +179,22 @@ export default function LeagueShare() {
           </button>
           <a
             href={twitterUrl}
+            className="public-action-target"
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 12, padding: '10px 20px', color: '#fff',
+              background: 'color-mix(in srgb, var(--ink) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--ink) 20%, transparent)',
+              borderRadius: 12, padding: '10px 20px', color: 'var(--ink)',
               fontWeight: 700, fontSize: 14, textDecoration: 'none',
             }}
           >
-            𝕏 Share on X
+            Share on X
           </a>
         </div>
 
         {/* Stats */}
-        {isLoading && <div style={{ color: 'rgba(255,255,255,0.6)', padding: 20 }}>Loading...</div>}
-        {isError && <div style={{ color: '#fc8181', padding: 20 }}>Could not load league data.</div>}
+        {isLoading && <div style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)', padding: 20 }}>Loading...</div>}
+        {isError && <div style={{ color: 'var(--danger)', padding: 20 }}>Could not load league data.</div>}
 
         {data && (
           <>
@@ -217,9 +219,9 @@ export default function LeagueShare() {
             {/* Weeks list */}
             {!data.weeks.length ? (
               <div style={{
-                background: '#121228', borderRadius: 16,
-                border: '1px solid rgba(167,139,250,0.2)',
-                padding: 32, textAlign: 'center', color: 'rgba(255,255,255,0.7)',
+                background: 'var(--surface)', borderRadius: 16,
+                border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
+                padding: 32, textAlign: 'center', color: 'color-mix(in srgb, var(--ink) 70%, transparent)',
               }}>
                 No weeks logged yet — check back after your next league night! 🎳
               </div>
@@ -231,8 +233,8 @@ export default function LeagueShare() {
                     <div
                       key={week.weekNumber}
                       style={{
-                        background: '#121228', borderRadius: 16,
-                        border: '1px solid rgba(167,139,250,0.2)',
+                        background: 'var(--surface)', borderRadius: 16,
+                        border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
                         padding: '16px 18px',
                       }}
                     >
@@ -243,20 +245,20 @@ export default function LeagueShare() {
                       }}>
                         <div>
                           <span style={{
-                            background: 'rgba(167,139,250,0.2)', color: '#c4b5fd',
+                            background: 'color-mix(in srgb, var(--ink) 6%, transparent)', color: 'var(--ink-secondary)',
                             borderRadius: 8, padding: '2px 10px', fontSize: 12, fontWeight: 700,
                             marginRight: 8,
                           }}>
                             Week {week.weekNumber}
                           </span>
-                          <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
+                          <span style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)', fontSize: 13 }}>
                             {week.date}
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           {week.series && (
-                            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
-                              Series: <strong style={{ color: '#a78bfa' }}>{week.series}</strong>
+                            <span style={{ fontSize: 13, color: 'color-mix(in srgb, var(--ink) 70%, transparent)' }}>
+                              Series: <strong style={{ color: 'var(--ink)' }}>{week.series}</strong>
                             </span>
                           )}
                           <ResultBadge won={week.gamesWon} lost={week.gamesLost} tied={week.gamesTied} />
@@ -264,7 +266,7 @@ export default function LeagueShare() {
                       </div>
 
                       {/* Opponent */}
-                      <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 10 }}>
+                      <div style={{ fontSize: 14, color: 'color-mix(in srgb, var(--ink) 85%, transparent)', marginBottom: 10 }}>
                         vs <strong>{week.opponent}</strong>
                       </div>
 
@@ -275,16 +277,16 @@ export default function LeagueShare() {
                             <div
                               key={g.gameNumber}
                               style={{
-                                background: '#0f1020', border: '1px solid rgba(255,255,255,0.1)',
+                                background: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--ink) 10%, transparent)',
                                 borderRadius: 10, padding: '8px 14px', textAlign: 'center', minWidth: 64,
                               }}
                             >
-                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
+                              <div style={{ fontSize: 11, color: 'color-mix(in srgb, var(--ink) 50%, transparent)', marginBottom: 4 }}>
                                 G{g.gameNumber}
                               </div>
                               <GameDot score={g.score} />
                               {g.score != null && (
-                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                                <div style={{ fontSize: 10, color: 'color-mix(in srgb, var(--ink) 40%, transparent)', marginTop: 2 }}>
                                   {g.strikes ?? 0} strike{g.strikes !== 1 ? 's' : ''} · {g.spares ?? 0} spare{g.spares !== 1 ? 's' : ''}
                                 </div>
                               )}
@@ -303,12 +305,12 @@ export default function LeagueShare() {
         {/* Footer */}
         <div style={{
           marginTop: 36, paddingTop: 20,
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: '1px solid color-mix(in srgb, var(--ink) 10%, transparent)',
           display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
-          color: 'rgba(255,255,255,0.5)', fontSize: 13,
+          color: 'color-mix(in srgb, var(--ink) 50%, transparent)', fontSize: 13,
         }}>
           <span>Tracked with BowlSense 🧠</span>
-          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>
+          <Link to="/" style={{ color: 'var(--oil-violet)', textDecoration: 'none', fontWeight: 700 }}>
             BowlSense home
           </Link>
         </div>

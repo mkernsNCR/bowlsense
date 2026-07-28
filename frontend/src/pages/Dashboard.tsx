@@ -218,7 +218,7 @@ export default function Dashboard() {
   return (
     <div className="today-page">
       <div className="today-layout">
-        <main className="today-primary">
+        <div className="today-primary">
           <header className="today-header">
             <div className="today-kicker">{settings.name ? `For ${settings.name}` : 'BowlSense'}</div>
             <h1>Today</h1>
@@ -322,7 +322,7 @@ export default function Dashboard() {
             </div>
             <RecentSessions sessions={sessions} />
           </section>
-        </main>
+        </div>
 
         <aside className="today-inspector" aria-label="Tonight and recent context">
           {contextLeague ? (

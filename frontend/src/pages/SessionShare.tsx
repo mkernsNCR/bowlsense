@@ -13,7 +13,6 @@ interface PublicSessionPayload {
     date: string
     location: string
     lanes?: string | null
-    notes?: string | null
   }
   summary: {
     totalGames: number

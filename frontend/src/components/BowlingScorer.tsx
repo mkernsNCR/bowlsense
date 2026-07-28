@@ -9,6 +9,7 @@ import {
 } from '../utils/bowlingScore'
 import FrameRibbon from '../features/scoring/FrameRibbon'
 import ScoringIcon from '../features/scoring/ScoringIcon'
+import ScoringSheet from '../features/scoring/ScoringSheet'
 import '../features/scoring/scoring.css'
 
 interface Ball {
@@ -302,101 +303,96 @@ export default function BowlingScorer({
       )}
 
       {state.isComplete && !reviewingSavedGame && state.totalScore !== 300 && (
-        <div className="scoring-sheet-backdrop" role="presentation">
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="game-complete-title">
-            <div className="scoring-sheet-handle" />
-            {saveStatus === 'saved' ? (
-              <div className="scoring-status" role="status">
-                <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
-                <h2 id="game-complete-title">Game saved</h2>
-                <p>Your {state.totalScore} is in this session.</p>
+        <ScoringSheet open title={saveStatus === 'saved' ? 'Game saved' : 'Game complete'} dismissible={false}>
+          {saveStatus === 'saved' ? (
+            <div className="scoring-status" role="status">
+              <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
+              <p>Your {state.totalScore} is in this session.</p>
+              <button type="button" className="scoring-button primary wide" onClick={onCancel}>Done</button>
+            </div>
+          ) : (
+            <>
+              <div className="scoring-complete-score">{state.totalScore}</div>
+              <p className="scoring-subtitle">{strikes} strikes · {spares} spares{selectedBall ? ` · ${selectedBall.name}` : ''}</p>
+              {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
+              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={handleUndo}>
+                  <ScoringIcon name="undo" size={18} /> Undo last roll
+                </button>
+                <button type="button" className="scoring-button secondary" onClick={handleRetake}>
+                  {confirmRetake ? 'Confirm retake' : 'Retake'}
+                </button>
+                <button type="button" className="scoring-button primary" disabled={saveStatus === 'saving'} onClick={handleSave}>
+                  {saveStatus === 'saving' ? 'Saving…' : 'Save game'}
+                </button>
               </div>
-            ) : (
-              <>
-                <p className="scoring-eyebrow">Game complete</p>
-                <h2 id="game-complete-title">{state.totalScore}</h2>
-                <p className="scoring-subtitle">{strikes} strikes · {spares} spares{selectedBall ? ` · ${selectedBall.name}` : ''}</p>
-                {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
-                {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
-                <div className="scoring-sheet-actions">
-                  <button type="button" className="scoring-button secondary" onClick={handleUndo}>
-                    <ScoringIcon name="undo" size={18} /> Undo last roll
-                  </button>
-                  <button type="button" className="scoring-button secondary" onClick={handleRetake}>
-                    {confirmRetake ? 'Confirm retake' : 'Retake'}
-                  </button>
-                  <button type="button" className="scoring-button primary" autoFocus disabled={saveStatus === 'saving'} onClick={handleSave}>
-                    {saveStatus === 'saving' ? 'Saving…' : 'Save game'}
-                  </button>
-                </div>
-                {confirmRetake && <p className="scoring-subtitle">Retaking clears every recorded roll. Tap “Confirm retake” to continue.</p>}
-              </>
-            )}
-          </section>
-        </div>
+              {confirmRetake && <p className="scoring-subtitle">Retaking clears every recorded roll. Tap “Confirm retake” to continue.</p>}
+            </>
+          )}
+        </ScoringSheet>
       )}
 
       {editCandidate != null && (
-        <div className="scoring-sheet-backdrop" role="presentation">
-          <section className="scoring-sheet" role="alertdialog" aria-modal="true" aria-labelledby="edit-frame-title">
-            <div className="scoring-sheet-handle" />
-            <p className="scoring-eyebrow">Re-score safely</p>
-            <h2 id="edit-frame-title">Edit from frame {editCandidate + 1}?</h2>
-            <p className="scoring-subtitle">
-              This temporarily removes frame {editCandidate + 1} and every later roll so bonuses stay correct. You can restore the original game at any time.
-            </p>
-            <div className="scoring-sheet-actions">
-              <button type="button" className="scoring-button secondary" autoFocus onClick={() => setEditCandidate(null)}>Keep score</button>
-              <button type="button" className="scoring-button primary" onClick={beginFrameEdit}>Edit from here</button>
-            </div>
-          </section>
-        </div>
+        <ScoringSheet
+          open
+          role="alertdialog"
+          title={`Edit from frame ${editCandidate + 1}?`}
+          description={`This temporarily removes frame ${editCandidate + 1} and every later roll so bonuses stay correct. You can restore the original game at any time.`}
+          onClose={() => setEditCandidate(null)}
+        >
+          <div className="scoring-sheet-actions">
+            <button type="button" className="scoring-button secondary" onClick={() => setEditCandidate(null)}>Keep score</button>
+            <button type="button" className="scoring-button primary" onClick={beginFrameEdit}>Edit from here</button>
+          </div>
+        </ScoringSheet>
       )}
 
       {confirmCancel && (
-        <div className="scoring-sheet-backdrop" role="presentation">
-          <section className="scoring-sheet" role="alertdialog" aria-modal="true" aria-labelledby="cancel-game-title">
-            <div className="scoring-sheet-handle" />
-            <h2 id="cancel-game-title">{initialFrameData ? 'Discard changes?' : 'Discard this game?'}</h2>
-            <p className="scoring-subtitle">
-              {initialFrameData
-                ? 'The saved game stays unchanged.'
-                : `All ${state.rolls.length} recorded ${state.rolls.length === 1 ? 'roll' : 'rolls'} will be lost.`}
-            </p>
-            <div className="scoring-sheet-actions">
-              <button type="button" className="scoring-button secondary" autoFocus onClick={() => setConfirmCancel(false)}>Keep scoring</button>
-              <button type="button" className="scoring-button danger" onClick={onCancel}>{initialFrameData ? 'Discard changes' : 'Discard game'}</button>
-            </div>
-          </section>
-        </div>
+        <ScoringSheet
+          open
+          role="alertdialog"
+          title={initialFrameData ? 'Discard changes?' : 'Discard this game?'}
+          description={initialFrameData
+            ? 'The saved game stays unchanged.'
+            : `All ${state.rolls.length} recorded ${state.rolls.length === 1 ? 'roll' : 'rolls'} will be lost.`}
+          onClose={() => setConfirmCancel(false)}
+        >
+          <div className="scoring-sheet-actions">
+            <button type="button" className="scoring-button secondary" onClick={() => setConfirmCancel(false)}>Keep scoring</button>
+            <button type="button" className="scoring-button danger" onClick={onCancel}>{initialFrameData ? 'Discard changes' : 'Discard game'}</button>
+          </div>
+        </ScoringSheet>
       )}
 
       {state.isComplete && !reviewingSavedGame && state.totalScore === 300 && (
-        <div className="scoring-sheet-backdrop perfect-lane-backdrop" role="presentation">
-          <section className="scoring-sheet perfect-lane" role="dialog" aria-modal="true" aria-labelledby="perfect-game-title">
-            {saveStatus === 'saved' ? (
-              <div className="scoring-status" role="status">
-                <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
-                <h2 id="perfect-game-title">Perfect game saved</h2>
+        <ScoringSheet
+          open
+          title={saveStatus === 'saved' ? 'Perfect game saved' : 'Perfect game'}
+          dismissible={false}
+          className="perfect-lane"
+          backdropClassName="perfect-lane-backdrop"
+        >
+          {saveStatus === 'saved' ? (
+            <div className="scoring-status" role="status">
+              <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
+            </div>
+          ) : (
+            <>
+              <p className="scoring-eyebrow">Twelve strikes</p>
+              <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
+              <p className="scoring-subtitle">Every frame held. This one belongs in your history.</p>
+              {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
+              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={handleUndo}><ScoringIcon name="undo" size={18} /> Undo last roll</button>
+                <button type="button" className="scoring-button secondary" onClick={handleRetake}>{confirmRetake ? 'Confirm retake' : 'Retake'}</button>
+                <button type="button" className="scoring-button primary" disabled={saveStatus === 'saving'} onClick={handleSave}>{saveStatus === 'saving' ? 'Saving…' : 'Save 300'}</button>
               </div>
-            ) : (
-              <>
-                <p className="scoring-eyebrow">Twelve strikes</p>
-                <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
-                <h2 id="perfect-game-title">Perfect game</h2>
-                <p className="scoring-subtitle">Every frame held. This one belongs in your history.</p>
-                {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
-                {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
-                <div className="scoring-sheet-actions">
-                  <button type="button" className="scoring-button secondary" onClick={handleUndo}><ScoringIcon name="undo" size={18} /> Undo last roll</button>
-                  <button type="button" className="scoring-button secondary" onClick={handleRetake}>{confirmRetake ? 'Confirm retake' : 'Retake'}</button>
-                  <button type="button" className="scoring-button primary" autoFocus disabled={saveStatus === 'saving'} onClick={handleSave}>{saveStatus === 'saving' ? 'Saving…' : 'Save 300'}</button>
-                </div>
-                {confirmRetake && <p className="scoring-subtitle">Retaking clears the perfect game. Tap “Confirm retake” to continue.</p>}
-              </>
-            )}
-          </section>
-        </div>
+              {confirmRetake && <p className="scoring-subtitle">Retaking clears the perfect game. Tap “Confirm retake” to continue.</p>}
+            </>
+          )}
+        </ScoringSheet>
       )}
     </div>
   )

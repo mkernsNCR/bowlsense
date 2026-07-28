@@ -44,13 +44,13 @@ interface ShareResponse {
 function StatCard({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
   return (
     <div style={{
-      background: '#121228', borderRadius: 16,
-      padding: '14px 16px', border: '1px solid rgba(167,139,250,0.2)',
+      background: 'var(--surface)', borderRadius: 16,
+      padding: '14px 16px', border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
     }}>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 70%, transparent)', marginBottom: 8 }}>{label}</div>
       <div style={{
         fontSize: 28, fontWeight: 800,
-        color: gold ? '#fbbf24' : '#a78bfa', lineHeight: 1.1,
+        color: gold ? 'var(--strike-gold)' : 'var(--ink)', lineHeight: 1.1,
       }}>{value}</div>
     </div>
   )
@@ -58,30 +58,30 @@ function StatCard({ label, value, gold }: { label: string; value: string; gold?:
 
 function GameCard({ game }: { game: ShareGame }) {
   const scoreColor = game.score === 300
-    ? '#fbbf24'
+    ? 'var(--strike-gold)'
     : game.score != null && game.score >= 200
-      ? '#a78bfa'
+      ? 'var(--ink)'
       : game.score != null && game.score < 170
-        ? '#fc8181'
-        : '#fff'
+        ? 'var(--danger)'
+        : 'var(--ink)'
 
   return (
     <div style={{
-      background: '#121228', borderRadius: 16,
-      border: '1px solid rgba(167,139,250,0.2)',
+      background: 'var(--surface)', borderRadius: 16,
+      border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
       padding: '16px 18px',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
         <div>
           <span style={{
-            background: 'rgba(167,139,250,0.2)', color: '#c4b5fd',
+            background: 'color-mix(in srgb, var(--ink) 6%, transparent)', color: 'var(--ink-secondary)',
             borderRadius: 8, padding: '2px 10px', fontSize: 12, fontWeight: 700,
             marginRight: 8,
           }}>
             Game {game.gameNumber}
           </span>
           {game.squad && (
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginLeft: 6 }}>
+            <span style={{ color: 'color-mix(in srgb, var(--ink) 50%, transparent)', fontSize: 13, marginLeft: 6 }}>
               {game.squad}
             </span>
           )}
@@ -96,24 +96,24 @@ function GameCard({ game }: { game: ShareGame }) {
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: game.ballName ? 8 : 0 }}>
         {game.strikes != null && game.strikes > 0 && (
-          <span style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+          <span style={{ background: 'color-mix(in srgb, var(--strike-gold) 12%, transparent)', color: 'var(--strike-gold)', border: '1px solid color-mix(in srgb, var(--strike-gold) 25%, transparent)', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
             {game.strikes} Strike{game.strikes !== 1 ? 's' : ''}
           </span>
         )}
         {game.spares != null && game.spares > 0 && (
-          <span style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+          <span style={{ background: 'color-mix(in srgb, var(--spare-green) 12%, transparent)', color: 'var(--spare-green)', border: '1px solid color-mix(in srgb, var(--spare-green) 25%, transparent)', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
             {game.spares} Spare{game.spares !== 1 ? 's' : ''}
           </span>
         )}
         {game.splits != null && game.splits > 0 && (
-          <span style={{ background: 'rgba(239,68,68,0.12)', color: '#fc8181', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+          <span style={{ background: 'color-mix(in srgb, var(--danger) 12%, transparent)', color: 'var(--danger)', border: '1px solid color-mix(in srgb, var(--danger) 25%, transparent)', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
             {game.splits} Split{game.splits !== 1 ? 's' : ''}
           </span>
         )}
       </div>
 
       {game.ballName && (
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+        <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 45%, transparent)' }}>
           🎳 {game.ballName}
         </div>
       )}
@@ -205,18 +205,18 @@ export default function TournamentShare() {
 
   if (invalid) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui', padding: 24 }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
+      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', fontFamily: 'system-ui', padding: 24 }}>
+        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: 'var(--surface)', borderRadius: 16, padding: 32 }}>
           <h2>Tournament not found</h2>
-          <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
+          <Link to="/" style={{ color: 'var(--oil-violet)' }}>BowlSense home</Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{
-      minHeight: '100vh', background: '#0d0d1a', color: '#fff',
+    <div className="public-competition-page" style={{
+      minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)',
       fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
       paddingBottom: 40,
     }}>
@@ -227,9 +227,9 @@ export default function TournamentShare() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '5px 14px', borderRadius: 999,
-            background: 'linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.3))',
-            color: '#c4b5fd', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-            marginBottom: 14, border: '1px solid rgba(167,139,250,0.4)',
+            background: 'var(--surface-raised)',
+            color: 'var(--ink-secondary)', fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
+            marginBottom: 14, border: '1px solid var(--separator)',
           }}>
             🎯 Tournament Share
           </div>
@@ -239,17 +239,18 @@ export default function TournamentShare() {
           }}>
             {data?.tournament?.name || 'Tournament'}
           </h1>
-          {subtitle && <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15 }}>{subtitle}</div>}
+          {subtitle && <div style={{ color: 'color-mix(in srgb, var(--ink) 72%, transparent)', fontSize: 15 }}>{subtitle}</div>}
         </div>
 
         {/* Share buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
           <button
             onClick={handleCopy}
+            className="public-action-target"
             style={{
-              background: copied ? '#34d399' : '#a78bfa',
+              background: copied ? 'var(--spare-green)' : 'var(--oil-violet)',
               border: 'none', borderRadius: 12, padding: '10px 20px',
-              color: '#0d0d1a', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              color: 'var(--on-tint)', fontWeight: 700, fontSize: 14, cursor: 'pointer',
               transition: 'background 0.2s',
             }}
           >
@@ -257,11 +258,12 @@ export default function TournamentShare() {
           </button>
           <button
             onClick={handleDownload}
+            className="public-action-target"
             style={{
-              background: downloaded ? '#34d399' : 'rgba(167,139,250,0.2)',
-              border: '1px solid rgba(167,139,250,0.4)',
+              background: downloaded ? 'var(--spare-green)' : 'color-mix(in srgb, var(--ink) 6%, transparent)',
+              border: '1px solid var(--separator)',
               borderRadius: 12, padding: '10px 20px',
-              color: downloaded ? '#0d0d1a' : '#c4b5fd',
+              color: downloaded ? 'var(--canvas)' : 'var(--ink-secondary)',
               fontWeight: 700, fontSize: 14, cursor: 'pointer',
               transition: 'background 0.2s',
             }}
@@ -270,21 +272,22 @@ export default function TournamentShare() {
           </button>
           <a
             href={twitterUrl}
+            className="public-action-target"
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 12, padding: '10px 20px', color: '#fff',
+              background: 'color-mix(in srgb, var(--ink) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--ink) 20%, transparent)',
+              borderRadius: 12, padding: '10px 20px', color: 'var(--ink)',
               fontWeight: 700, fontSize: 14, textDecoration: 'none',
             }}
           >
-            𝕏 Share on X
+            Share on X
           </a>
         </div>
 
         {/* Stats */}
-        {isLoading && <div style={{ color: 'rgba(255,255,255,0.6)', padding: 20 }}>Loading...</div>}
-        {isError && <div style={{ color: '#fc8181', padding: 20 }}>Could not load tournament data.</div>}
+        {isLoading && <div style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)', padding: 20 }}>Loading...</div>}
+        {isError && <div style={{ color: 'var(--danger)', padding: 20 }}>Could not load tournament data.</div>}
 
         {data && (
           <>
@@ -323,15 +326,15 @@ export default function TournamentShare() {
                 display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20,
               }}>
                 {data.tournament.entryFee != null && (
-                  <span style={{ background: '#121228', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 12, padding: '8px 14px', fontSize: 13 }}>
+                  <span style={{ background: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)', borderRadius: 12, padding: '8px 14px', fontSize: 13 }}>
                     <span className="muted">Entry Fee: </span>
-                    <strong style={{ color: '#a78bfa' }}>${data.tournament.entryFee}</strong>
+                    <strong style={{ color: 'var(--ink)' }}>${data.tournament.entryFee}</strong>
                   </span>
                 )}
                 {data.tournament.prizeFund != null && (
-                  <span style={{ background: '#121228', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 12, padding: '8px 14px', fontSize: 13 }}>
+                  <span style={{ background: 'var(--surface)', border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)', borderRadius: 12, padding: '8px 14px', fontSize: 13 }}>
                     <span className="muted">Prize Fund: </span>
-                    <strong style={{ color: '#a78bfa' }}>${data.tournament.prizeFund}</strong>
+                    <strong style={{ color: 'var(--ink)' }}>${data.tournament.prizeFund}</strong>
                   </span>
                 )}
               </div>
@@ -340,9 +343,9 @@ export default function TournamentShare() {
             {/* Games */}
             {!data.games.length ? (
               <div style={{
-                background: '#121228', borderRadius: 16,
-                border: '1px solid rgba(167,139,250,0.2)',
-                padding: 32, textAlign: 'center', color: 'rgba(255,255,255,0.7)',
+                background: 'var(--surface)', borderRadius: 16,
+                border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
+                padding: 32, textAlign: 'center', color: 'color-mix(in srgb, var(--ink) 70%, transparent)',
               }}>
                 No games logged yet — check back after your next tournament! 🎳
               </div>
@@ -359,12 +362,12 @@ export default function TournamentShare() {
         {/* Footer */}
         <div style={{
           marginTop: 36, paddingTop: 20,
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: '1px solid color-mix(in srgb, var(--ink) 10%, transparent)',
           display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
-          color: 'rgba(255,255,255,0.5)', fontSize: 13,
+          color: 'color-mix(in srgb, var(--ink) 50%, transparent)', fontSize: 13,
         }}>
           <span>Tracked with BowlSense 🧠</span>
-          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>
+          <Link to="/" style={{ color: 'var(--oil-violet)', textDecoration: 'none', fontWeight: 700 }}>
             BowlSense home
           </Link>
         </div>

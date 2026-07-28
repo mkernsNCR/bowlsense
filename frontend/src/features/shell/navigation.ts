@@ -127,7 +127,7 @@ export function isMoreTabActive(pathname: string) {
 export function isPublicRoute(pathname: string) {
   pathname = normalizePath(pathname)
   return pathname === '/bowl'
-    || pathname.startsWith('/score/')
+    || /^\/score\/[^/]+\/?$/.test(pathname)
     || /^\/sessions\/[^/]+\/share\/?$/.test(pathname)
     || /^\/perfect-games\/[^/]+\/?$/.test(pathname)
     || /^\/leagues\/[^/]+\/(public|leaderboard|share)\/?$/.test(pathname)

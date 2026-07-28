@@ -1,4 +1,5 @@
-.scoring-flow {
+.scoring-flow,
+.scoring-sheet-theme {
   --score-canvas: var(--canvas, #f6f3ed);
   --score-surface: var(--surface, #fff);
   --score-raised: var(--surface-raised, #fcfbf8);
@@ -10,12 +11,17 @@
   --score-line: var(--separator, var(--border, rgba(22, 24, 28, 0.12)));
   color: var(--score-ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+}
+.scoring-flow {
   width: 100%;
 }
 
 .scoring-flow *,
 .scoring-flow *::before,
-.scoring-flow *::after { box-sizing: border-box; }
+.scoring-flow *::after,
+.scoring-sheet-theme *,
+.scoring-sheet-theme *::before,
+.scoring-sheet-theme *::after { box-sizing: border-box; }
 
 .scoring-page { max-width: 760px; margin: 0 auto; padding-bottom: 88px; }
 .scoring-page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
@@ -28,8 +34,7 @@
 .scoring-icon-button,
 .scoring-row-action,
 .scoring-segment,
-.pin-control,
-.frame-ribbon-frame.is-editable {
+.pin-control {
   -webkit-tap-highlight-color: transparent;
   align-items: center;
   border: 0;
@@ -55,7 +60,6 @@
 .scoring-row-action:focus-visible,
 .scoring-segment:focus-visible,
 .pin-control:focus-visible,
-.frame-ribbon-frame.is-editable:focus-visible,
 .scoring-field input:focus-visible,
 .scoring-field textarea:focus-visible,
 .scoring-field select:focus-visible {
@@ -67,7 +71,7 @@
 .scoring-group + .scoring-group { margin-top: 16px; }
 .scoring-row { align-items: center; display: flex; gap: 12px; min-height: 64px; padding: 10px 16px; position: relative; }
 .scoring-row + .scoring-row::before { background: var(--score-line); content: ""; height: 1px; left: 16px; position: absolute; right: 0; top: 0; }
-.scoring-row-main { color: inherit; display: flex; flex: 1; gap: 12px; min-width: 0; text-decoration: none; }
+.scoring-row-main { align-items: center; color: inherit; display: flex; flex: 1; gap: 12px; min-height: 44px; min-width: 0; text-decoration: none; }
 .scoring-row-copy { flex: 1; min-width: 0; }
 .scoring-row-title { font-size: 1rem; font-weight: 650; line-height: 1.25; margin: 0; }
 .scoring-row-meta { color: var(--score-secondary); font-size: .8125rem; line-height: 1.35; margin: 3px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -90,10 +94,13 @@
 .scoring-empty strong { color: var(--score-ink); display: block; font-size: 1.0625rem; margin-bottom: 4px; }
 .scoring-error { color: #b42323; }
 
-.scoring-sheet-backdrop { align-items: end; background: rgba(5, 7, 10, .42); display: flex; inset: 0; justify-content: center; padding: 12px; position: fixed; z-index: 80; }
-.scoring-sheet { background: var(--score-raised); border-radius: 22px 22px 18px 18px; box-shadow: 0 14px 44px rgba(0,0,0,.22); max-height: min(88vh, 720px); max-width: 520px; overflow: auto; padding: 20px; width: 100%; }
-.scoring-sheet-handle { background: var(--score-line); border-radius: 99px; height: 5px; margin: -8px auto 18px; width: 36px; }
-.scoring-sheet h2 { font: 750 1.375rem/1.15 ui-rounded, "SF Pro Rounded", system-ui; margin: 0; }
+.bs-sheet.scoring-sheet-panel { max-width: 520px; max-height: min(88dvh, 720px); color: var(--score-ink); background: var(--score-raised); border-color: var(--score-line); }
+.bs-sheet.scoring-sheet-panel--wide { max-width: 780px; }
+.scoring-sheet-panel .bs-sheet__header { border-color: var(--score-line); }
+.scoring-sheet-panel .bs-sheet__header h2 { font: 750 1.375rem/1.15 ui-rounded, "SF Pro Rounded", system-ui; }
+.scoring-sheet-panel .bs-sheet__header p { color: var(--score-secondary); }
+.scoring-sheet-panel .bs-sheet__body { padding: 20px; }
+.scoring-complete-score { font: 800 clamp(3.5rem, 16vw, 6rem)/.9 ui-rounded, "SF Pro Rounded", system-ui; letter-spacing: -.06em; }
 .scoring-sheet-actions { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-top: 20px; }
 .scoring-fields { background: var(--score-surface); border-radius: 16px; margin-top: 16px; overflow: hidden; }
 .scoring-field { display: grid; gap: 4px; padding: 10px 14px; position: relative; }
@@ -114,17 +121,6 @@
 .live-score-total span { color: var(--score-secondary); display: block; font-size: .6875rem; font-weight: 650; text-transform: uppercase; }
 .live-score-total strong { font: 800 2.25rem/.95 ui-rounded, "SF Pro Rounded", system-ui; letter-spacing: -.04em; }
 .live-score-header .scoring-icon-button { justify-self: end; }
-
-.frame-ribbon-wrap { overflow-x: auto; overscroll-behavior-inline: contain; padding: 2px 0 6px; scrollbar-width: none; }
-.frame-ribbon-wrap::-webkit-scrollbar { display: none; }
-.frame-ribbon { background: linear-gradient(90deg, color-mix(in srgb, var(--score-violet) 9%, var(--score-surface)), var(--score-surface)); border: 1px solid var(--score-line); border-radius: 16px; display: grid; grid-template-columns: repeat(9, minmax(46px, 1fr)) minmax(62px, 1.3fr); min-width: 540px; overflow: hidden; }
-.frame-ribbon-frame { background: transparent; border: 0; color: var(--score-ink); display: grid; grid-template-rows: 17px 22px 24px; min-height: 66px; padding: 4px; position: relative; }
-.frame-ribbon-frame.is-editable { display: grid; }
-.frame-ribbon-frame + .frame-ribbon-frame::before { background: var(--score-line); bottom: 0; content: ""; left: 0; position: absolute; top: 0; width: 1px; }
-.frame-ribbon-frame[data-current] { background: color-mix(in srgb, var(--score-violet) 14%, transparent); box-shadow: inset 0 -3px var(--score-violet); }
-.frame-ribbon-number { color: var(--score-secondary); font-size: .6875rem; font-weight: 650; }
-.frame-ribbon-marks { align-items: center; display: grid; font: 650 .75rem/1 ui-monospace, "SFMono-Regular", monospace; grid-auto-columns: 1fr; grid-auto-flow: column; }
-.frame-ribbon-score { align-self: end; font: 750 1rem/1 ui-rounded, "SF Pro Rounded", system-ui; }
 
 .scoring-mode { margin: 12px auto; max-width: 360px; }
 .pin-deck { background: linear-gradient(180deg, #2b2a31, #111318 74%); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; box-shadow: inset 0 1px rgba(255,255,255,.1); margin: 12px auto; max-width: 390px; padding: 20px 18px 16px; position: relative; }

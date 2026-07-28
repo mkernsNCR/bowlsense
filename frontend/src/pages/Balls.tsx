@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BallImage, GearHeader, GearNavigation, GearSheet, GearState } from '../features/gear/GearWorkspace'
+import { Icon } from '../design'
 
 interface Ball {
   id: number
@@ -145,7 +146,7 @@ export default function Balls() {
 
   const performanceQuery = useQuery<BallPerformance[]>({
     queryKey: ['ball-performance'],
-    queryFn: () => requestJson<BallPerformance[]>('/stats/by-ball'),
+    queryFn: () => requestJson<BallPerformance[]>('/api/stats/by-ball'),
   })
 
   const catalogSearch = useQuery<BowwwlBall[]>({
@@ -253,7 +254,7 @@ export default function Balls() {
   }
 
   return (
-    <main className="gear-workspace">
+    <div className="gear-workspace">
       <GearHeader
         title="Ball library"
         description="Your equipment bench—specs, surfaces, and the pieces available for every bag."
@@ -264,7 +265,7 @@ export default function Balls() {
       <div className="gear-toolbar">
         <label className="gear-search">
           <span className="sr-only">Search your ball library</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 5 5" /></svg>
+          <Icon name="search" size={18} />
           <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="Search name, brand, or cover" />
         </label>
         <label className="gear-filter">
@@ -315,7 +316,7 @@ export default function Balls() {
                       {!ball.coverstockType && !ball.coreType && !ball.coreRg && <span className="gear-chip gear-chip--missing">Specs incomplete</span>}
                     </span>
                   </span>
-                  <span className="gear-chevron" aria-hidden="true">›</span>
+                  <Icon className="gear-chevron" name="chevron-right" size={18} />
                 </button>
               ))}
             </section>
@@ -353,7 +354,7 @@ export default function Balls() {
                   <button key={ball.ball_id} className="gear-ball-card" type="button" onClick={() => setSelectedCatalogBall(ball)}>
                     <BallImage path={ball.thumbnail_image} name={ball.ball_name} size="small" />
                     <span className="gear-ball-card__copy"><strong>{ball.ball_name}</strong><span>{ball.brand_name}</span></span>
-                    <span className="gear-chevron" aria-hidden="true">›</span>
+                    <Icon className="gear-chevron" name="chevron-right" size={18} />
                   </button>
                 ))}
               </section>
@@ -405,6 +406,6 @@ export default function Balls() {
           </div>
         ))}
       </GearSheet>
-    </main>
+    </div>
   )
 }

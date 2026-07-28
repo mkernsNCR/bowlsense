@@ -111,7 +111,6 @@ const tips = [
 
 export default function HelpPage() {
   const [openIndexes, setOpenIndexes] = useState<number[]>([])
-  let runningIndex = 0
 
   function toggle(index: number) {
     setOpenIndexes((prev) => (prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]))
@@ -119,75 +118,78 @@ export default function HelpPage() {
 
   return (
     <div style={{ maxWidth: 760 }}>
-      <h1 style={{ marginBottom: 18 }}>❓ Help & FAQ</h1>
+      <h1 style={{ marginBottom: 18 }}>Help &amp; FAQ</h1>
       <p className="muted" style={{ marginBottom: 20 }}>
         Quick answers and how-to steps for sessions, stats, leagues, tournaments, and backups.
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {sections.map((section) => (
-          <section key={section.title}>
-            <h2 style={{ marginBottom: 10 }}>{section.title}</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {section.items.map((item) => {
-                const index = runningIndex
-                runningIndex += 1
-                const isOpen = openIndexes.includes(index)
+        {sections.map((section, sectionIndex) => {
+          const sectionStartIndex = sections
+            .slice(0, sectionIndex)
+            .reduce((count, previousSection) => count + previousSection.items.length, 0)
 
-                return (
-                  <div className="card" key={item.question} style={{ padding: 0, overflow: 'hidden' }}>
-                    <button
-                      type="button"
-                      onClick={() => toggle(index)}
-                      style={{
-                        width: '100%',
-                        minHeight: 48,
-                        background: 'transparent',
-                        border: 'none',
-                        color: isOpen ? 'var(--accent)' : 'var(--muted)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        textAlign: 'left',
-                        gap: 12,
-                        cursor: 'pointer',
-                        padding: '14px 16px',
-                        fontWeight: 700,
-                      }}
-                      aria-expanded={isOpen}
-                    >
-                      <span>{item.question}</span>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          fontSize: 14,
-                          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.2s ease',
-                          flexShrink: 0,
-                        }}
-                      >
-                        ▼
-                      </span>
-                    </button>
+          return (
+            <section key={section.title}>
+              <h2 style={{ marginBottom: 10 }}>{section.title}</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {section.items.map((item, itemIndex) => {
+                  const index = sectionStartIndex + itemIndex
+                  const isOpen = openIndexes.includes(index)
 
-                    {isOpen && (
-                      <div
+                  return (
+                    <div className="card" key={item.question} style={{ padding: 0, overflow: 'hidden' }}>
+                      <button
+                        type="button"
+                        onClick={() => toggle(index)}
                         style={{
-                          padding: '0 16px 16px',
-                          color: 'var(--text)',
-                          borderTop: '1px solid rgba(167, 139, 250, 0.2)',
-                          lineHeight: 1.5,
+                          width: '100%',
+                          minHeight: 48,
+                          background: 'transparent',
+                          border: 'none',
+                          color: isOpen ? 'var(--accent)' : 'var(--muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          textAlign: 'left',
+                          gap: 12,
+                          cursor: 'pointer',
+                          padding: '14px 16px',
+                          fontWeight: 700,
                         }}
+                        aria-expanded={isOpen}
                       >
-                        {item.answer}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        ))}
+                        <span>{item.question}</span>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            fontSize: 14,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {isOpen ? 'Hide' : 'Show'}
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div
+                          style={{
+                            padding: '0 16px 16px',
+                            color: 'var(--text)',
+                            borderTop: '1px solid rgba(167, 139, 250, 0.2)',
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {item.answer}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )
+        })}
 
         <section>
           <h2 style={{ marginBottom: 10 }}>Tips</h2>

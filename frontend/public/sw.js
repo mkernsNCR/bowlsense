@@ -1,7 +1,7 @@
 // BowlSense PWA Service Worker
 // Cache-first for app shell, network-first for API
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v5-sites';
 const SHELL_CACHE = `bowlsense-shell-${CACHE_VERSION}`;
 
 // App shell assets to cache on install
@@ -55,26 +55,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (HTML pages) → cache-first with network fallback
-  // This is what makes the app work offline
+  // Navigation requests (HTML pages) → network-first with cached app-shell fallback.
+  // This keeps a newly deployed app from being pinned behind stale cached HTML.
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request)
-          .then((networkResponse) => {
-            // Cache the new page for next time
-            if (networkResponse.ok) {
-              const clone = networkResponse.clone();
-              caches.open(SHELL_CACHE).then((cache) => cache.put(request, clone));
-            }
-            return networkResponse;
-          })
-          .catch(() => {
-            // Offline + no cache → serve index.html (SPA shell)
-            return caches.match('/index.html');
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse.ok) {
+            const clone = networkResponse.clone();
+            event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put('/index.html', clone)));
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          const cachedShell = await caches.match('/index.html');
+          return cachedShell || new Response('BowlSense is offline.', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
           });
-      })
+        })
     );
     return;
   }
@@ -109,5 +108,5 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Everything else → network with no caching
-  event.respondWith(fetch(request).catch(() => cached || new Response('', { status: 200 })));
+  event.respondWith(fetch(request).catch(() => new Response('', { status: 503 })));
 });

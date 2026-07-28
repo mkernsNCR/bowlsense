@@ -3,18 +3,117 @@ import FastifyMultipart from '@fastify/multipart';
 import Database from 'better-sqlite3';
 import sharp from 'sharp';
 import fastifyStatic from '@fastify/static';
-import { readFile, readFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, statSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { sessions, games, balls } from './schema.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
+
 const sqlite = new Database('bowling.db');
 const db = drizzle(sqlite);
 
 const fastify = Fastify({ logger: true });
+const internalRelayToken = randomBytes(32).toString('hex');
+const configuredAuthToken = process.env.BOWLSENSE_AUTH_TOKEN || '';
+const configuredProxySecret = process.env.BOWLSENSE_TRUSTED_PROXY_SECRET || '';
+const allowedEmails = new Set(
+  (process.env.BOWLSENSE_ALLOWED_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+function internalRequest(options: any) {
+  return fastify.inject({
+    ...options,
+    headers: { ...options.headers, 'x-bowlsense-internal': internalRelayToken },
+  });
+}
+
+function secretsMatch(candidate: string, expected: string) {
+  const candidateBuffer = Buffer.from(candidate);
+  const expectedBuffer = Buffer.from(expected);
+  return candidateBuffer.length === expectedBuffer.length && timingSafeEqual(candidateBuffer, expectedBuffer);
+}
+
+function isPublicDataRequest(method: string, pathname: string) {
+  if (method !== 'GET') return false;
+  return pathname === '/health'
+    || pathname === '/api/stats'
+    || pathname === '/stats'
+    || /^\/(?:api\/)?games\/\d+\/(?:public|og-image|perfect-og-image)$/.test(pathname)
+    || /^\/(?:api\/)?games\/perfect\/\d+$/.test(pathname)
+    || /^\/(?:api\/)?sessions\/\d+\/(?:public|share-card|og-image)$/.test(pathname)
+    || /^\/(?:api\/)?profile\/og-image$/.test(pathname)
+    || /^\/(?:api\/)?leagues\/\d+\/(?:share|leaderboard|recap)(?:\/og-image)?$/.test(pathname)
+    || /^\/(?:api\/)?leagues\/\d+\/(?:stats|standings)$/.test(pathname)
+    || /^\/(?:api\/)?leagues\/\d+\/weeks\/\d+(?:\/og-image)?$/.test(pathname)
+    || /^\/(?:api\/)?tournaments\/\d+\/(?:share|og-image|standings(?:\/og-image)?)$/.test(pathname);
+}
+
+function isPrivateDataRequest(pathname: string) {
+  return pathname.startsWith('/api/')
+    || /^\/(?:sessions|games|games-recent|balls|stats|dashboard|leagues|tournaments|arsenals)(?:\/|$)/.test(pathname)
+    || /^\/(?:api\/)?(?:backup|backups|backup-log|restore|import|export|data-health)(?:\/|$)/.test(pathname);
+}
+
+fastify.addHook('onRequest', async (request, reply) => {
+  const pathname = request.url.split('?')[0];
+
+  // Browser navigations belong to React Router, even when a legacy JSON route
+  // uses the same pathname. Programmatic API calls do not send text/html.
+  if (request.method === 'GET' && String(request.headers.accept || '').includes('text/html')) {
+    const isAssetOrExternalProxy = /\.[a-z0-9]+$/i.test(pathname)
+      || pathname.startsWith('/api/')
+      || ['/League', '/Bowler', '/Home', '/Bowl'].some((prefix) => pathname.startsWith(prefix));
+    if (!isAssetOrExternalProxy && existsSync(join(FRONTEND_DIST, 'index.html'))) {
+      return reply.type('text/html').send(readFileSync(join(FRONTEND_DIST, 'index.html')));
+    }
+  }
+
+  if (!isPrivateDataRequest(pathname) || isPublicDataRequest(request.method, pathname)) return;
+
+  const internalHeader = String(request.headers['x-bowlsense-internal'] || '');
+  if (secretsMatch(internalHeader, internalRelayToken)) return;
+
+  const remoteAddress = request.ip;
+  const requestHost = String(request.headers.host || '').toLowerCase();
+  const hasLoopbackHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(requestHost);
+  const isLocalDevelopment = process.env.NODE_ENV !== 'production'
+    && hasLoopbackHost
+    && (remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1');
+  if (isLocalDevelopment) return;
+
+  const authenticatedEmail = String(request.headers['oai-authenticated-user-email'] || '').trim().toLowerCase();
+  const suppliedProxySecret = String(request.headers['x-bowlsense-proxy-secret'] || '');
+  const trustedProxy = configuredProxySecret && secretsMatch(suppliedProxySecret, configuredProxySecret);
+  if (trustedProxy && authenticatedEmail && (allowedEmails.size === 0 || allowedEmails.has(authenticatedEmail))) return;
+
+  const authorization = String(request.headers.authorization || '');
+  const bearerToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (configuredAuthToken && secretsMatch(bearerToken, configuredAuthToken)) return;
+
+  return reply.status(401).send({ error: 'Authentication required' });
+});
+
+function relayInjectedResponse(reply: any, response: any) {
+  const contentType = response.headers['content-type'] || '';
+  reply.status(response.statusCode);
+  if (contentType) reply.header('Content-Type', contentType);
+  if (response.headers['cache-control']) reply.header('Cache-Control', response.headers['cache-control']);
+  if (response.statusCode === 204) return reply.send();
+  if (contentType.includes('application/json')) return reply.send(response.json());
+  return reply.send(response.rawPayload);
+}
+
+fastify.get('/health', async () => ({ status: 'ok', service: 'bowlsense-api' }));
 
 // Register multipart for file uploads (CSV import)
 await fastify.register(FastifyMultipart, {
@@ -126,13 +225,16 @@ fastify.get('/api/stats/weekly', async () => {
   };
 });
 
-fastify.get('/api/stats/trend', async () => {
+const getStatsTrend = async () => {
   const games = sqlite.prepare(`
-    SELECT g.id, g.score, g.game_number, g.session_id, s.date, s.location
-    FROM games g
-    JOIN sessions s ON s.id = g.session_id
-    ORDER BY s.date ASC, g.id ASC
-    LIMIT 30
+    SELECT * FROM (
+      SELECT g.id, g.score, g.game_number, g.session_id, s.date, s.location
+      FROM games g
+      JOIN sessions s ON s.id = g.session_id
+      ORDER BY s.date DESC, g.id DESC
+      LIMIT 30
+    ) recent
+    ORDER BY date ASC, id ASC
   `).all() as any[];
 
   if (!games.length) return { games: [], rolling5: [], rolling10: [], rolling20: [] };
@@ -156,7 +258,11 @@ fastify.get('/api/stats/trend', async () => {
     rolling10: rolling(10),
     rolling20: rolling(20),
   };
-});
+};
+
+fastify.get('/api/stats/trend', getStatsTrend);
+// Vite's development proxy removes the /api prefix before forwarding.
+fastify.get('/stats/trend', getStatsTrend);
 
 fastify.get('/api/analytics/pin-leaves', async () => {
   const rows = sqlite.prepare(`
@@ -324,16 +430,28 @@ fastify.delete('/api/balls/:id', async (request, reply) => {
 // for clipboard writes (CORS would otherwise block a direct cross-origin fetch).
 fastify.get('/api/balls/image-proxy', async (request, reply) => {
   const { path: imgPath } = (request.query as any) || {};
-  if (!imgPath || typeof imgPath !== 'string' || !imgPath.startsWith('/')) {
-    return reply.status(400).send({ error: 'path query param required (must start with /)' });
+  if (!imgPath || typeof imgPath !== 'string' || !imgPath.startsWith('/sites/default/files/')) {
+    return reply.status(400).send({ error: 'Only bowwwl.com media paths are allowed' });
   }
   try {
-    const upstream = await fetch(`https://www.bowwwl.com${imgPath}`);
+    const upstreamUrl = new URL(imgPath, 'https://www.bowwwl.com');
+    if (upstreamUrl.origin !== 'https://www.bowwwl.com') {
+      return reply.status(400).send({ error: 'Invalid media path' });
+    }
+    const upstream = await fetch(upstreamUrl, { signal: AbortSignal.timeout(8_000) });
     if (!upstream.ok) {
       return reply.status(upstream.status).send({ error: `upstream ${upstream.status}` });
     }
-    const contentType = upstream.headers.get('content-type') || 'image/jpeg';
+    const contentType = (upstream.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+    if (!allowedTypes.has(contentType)) {
+      return reply.status(415).send({ error: 'Upstream response is not a supported image' });
+    }
+    const maxBytes = 5 * 1024 * 1024;
+    const declaredBytes = Number(upstream.headers.get('content-length') || 0);
+    if (declaredBytes > maxBytes) return reply.status(413).send({ error: 'Image is too large' });
     const buffer = Buffer.from(await upstream.arrayBuffer());
+    if (buffer.byteLength > maxBytes) return reply.status(413).send({ error: 'Image is too large' });
     reply.header('Content-Type', contentType);
     reply.header('Cache-Control', 'public, max-age=86400');
     return reply.send(buffer);
@@ -342,9 +460,6 @@ fastify.get('/api/balls/image-proxy', async (request, reply) => {
   }
 });
 
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 function escapeXml(value: string) {
   return value
@@ -708,7 +823,6 @@ const getPublicSessionPayload = (sessionId: number) => {
       date: session.date,
       location: session.location,
       lanes: session.lanes,
-      notes: session.notes,
     },
     summary: {
       totalGames,
@@ -843,11 +957,8 @@ fastify.get('/sessions/:id/share-card', async (request, reply) => {
 
 fastify.get('/api/sessions/:id/share-card', async (request, reply) => {
   const { id } = request.params as any;
-  return fastify.inject({ method: 'GET', url: `/sessions/${id}/share-card` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png');
-    reply.header('Cache-Control', res.headers['cache-control'] || 'no-store');
-    return reply.send(res.rawPayload);
-  });
+  const response = await internalRequest({ method: 'GET', url: `/sessions/${id}/share-card` });
+  return relayInjectedResponse(reply, response);
 });
 
 // Session OG image (1200x630 PNG for social sharing) — mirrors /sessions/:id/share-card logic
@@ -947,7 +1058,7 @@ fastify.get('/api/sessions/:id/og-image', async (request, reply) => {
 // Static OG share image (PNG rendered from SVG)
 fastify.get('/sessions/share-og.png', async (_request, reply) => {
   const svgPath = join(__dirname, 'assets', 'share-og.svg');
-  const svg = await readFile(svgPath, 'utf8');
+  const svg = readFileSync(svgPath, 'utf8');
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
 
   reply.header('Content-Type', 'image/png');
@@ -1172,11 +1283,8 @@ fastify.get('/games/:id/public', async (request, reply) => {
 
 fastify.get('/api/games/:id/public', async (request, reply) => {
   const { id } = request.params as any;
-  return fastify.inject({ method: 'GET', url: `/games/${id}/public` }).then((res) => {
-    reply.code(res.statusCode);
-    if (res.headers['content-type']) reply.header('Content-Type', res.headers['content-type']);
-    return reply.send(res.json());
-  });
+  const response = await internalRequest({ method: 'GET', url: `/games/${id}/public` });
+  return relayInjectedResponse(reply, response);
 });
 
 // OG Image generator for game share cards
@@ -1892,7 +2000,7 @@ function buildLeagueLeaderboardOgSvg(opts: {
   leagueAverage: number
   record: { wins: number; losses: number; ties: number }
   totalWeeks: number
-  rankedOpponents: { rank: number; name: string; avg: number; games: number; highGame: number }[]
+  rankedOpponents: { rank: number; name: string; avg: number; games: number; totalPins: number; highGame: number }[]
 }): string {
   const { leagueName, season, location, leagueAverage, record, totalWeeks, rankedOpponents } = opts
   const accent = '#a78bfa'
@@ -2018,11 +2126,8 @@ fastify.get('/leagues/:id/leaderboard/og-image', async (request, reply) => {
 
 fastify.get('/api/leagues/:id/leaderboard/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/leaderboard/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/leaderboard/og-image` })
+  return relayInjectedResponse(reply, response)
 })
 
 // ── League Recap: most recent week data ─────────────────────────
@@ -2065,10 +2170,8 @@ fastify.get('/api/leagues/:id/recap', async (request, reply) => {
 
 fastify.get('/leagues/:id/recap', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/api/leagues/${id}/recap` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'application/json')
-    return reply.send(res.body)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/api/leagues/${id}/recap` })
+  return relayInjectedResponse(reply, response)
 })
 
 // ── League Recap OG image ───────────────────────────────────────
@@ -2151,11 +2254,8 @@ function buildLeagueRecapOgSvg(opts: {
 
 fastify.get('/api/leagues/:id/recap/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/recap/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/recap/og-image` })
+  return relayInjectedResponse(reply, response)
 })
 
 fastify.get('/leagues/:id/recap/og-image', async (request, reply) => {
@@ -2221,7 +2321,7 @@ fastify.get('/leagues/:id/recap/og-image', async (request, reply) => {
 })
 
 // ── League Week Share Page ──────────────────────────────────────
-fastify.get('/api/leagues/:id/weeks/:weekId', async (request, reply) => {
+const getLeagueWeekShare = async (request: any, reply: any) => {
   const { id, weekId } = request.params as any
   const leagueId = parseInt(id, 10)
   const wId = parseInt(weekId, 10)
@@ -2256,15 +2356,16 @@ fastify.get('/api/leagues/:id/weeks/:weekId', async (request, reply) => {
     games: scores,
     stats: { average, highGame, totalGames: scores.length, series },
   }
-})
+}
+
+fastify.get('/api/leagues/:id/weeks/:weekId', getLeagueWeekShare)
+// Vite's development proxy removes the /api prefix before forwarding.
+fastify.get('/leagues/:id/weeks/:weekId', getLeagueWeekShare)
 
 fastify.get('/api/leagues/:id/weeks/:weekId/og-image', async (request, reply) => {
   const { id, weekId } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/weeks/${weekId}/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/weeks/${weekId}/og-image` })
+  return relayInjectedResponse(reply, response)
 })
 
 fastify.get('/leagues/:id/weeks/:weekId/og-image', async (request, reply) => {
@@ -2352,7 +2453,7 @@ fastify.get('/leagues/:id', async (request, reply) => {
     ORDER BY lw.week_number ASC
   `).all(leagueId) as any[];
 
-  const stats = await fastify.inject({ method: 'GET', url: `/leagues/${leagueId}/stats` });
+  const stats = await internalRequest({ method: 'GET', url: `/leagues/${leagueId}/stats` });
   const statsJson = stats.statusCode === 200 ? stats.json() : {};
 
   return {
@@ -2600,13 +2701,16 @@ fastify.post('/leagues/weeks/:weekId/games', async (request, reply) => {
   };
 });
 
-fastify.put('/leagues/games/:gameId', async (request) => {
+fastify.put('/leagues/games/:gameId', async (request, reply) => {
   const { gameId } = request.params as any;
+  const parsedGameId = parseInt(gameId);
+  const existing = sqlite.prepare('SELECT id FROM league_games WHERE id = ?').get(parsedGameId);
+  if (!existing) return reply.status(404).send({ error: 'League game not found' });
   const { score, strikes, spares, splits, ballId, frameData } = request.body as any;
   sqlite.prepare(
     'UPDATE league_games SET score=?, strikes=?, spares=?, splits=?, ball_id=?, frame_data=? WHERE id=?'
-  ).run(score, strikes ?? 0, spares ?? 0, splits ?? 0, ballId ?? null, frameData ?? null, parseInt(gameId));
-  return sqlite.prepare('SELECT * FROM league_games WHERE id=?').get(parseInt(gameId));
+  ).run(score, strikes ?? 0, spares ?? 0, splits ?? 0, ballId ?? null, frameData ?? null, parsedGameId);
+  return sqlite.prepare('SELECT * FROM league_games WHERE id=?').get(parsedGameId);
 });
 
 fastify.delete('/leagues/games/:gameId', async (request, reply) => {
@@ -2757,7 +2861,7 @@ fastify.get('/tournaments/:id', async (request, reply) => {
   if (!tournament) return reply.status(404).send({ error: 'Tournament not found' });
 
   const gamesRows = sqlite.prepare('SELECT * FROM tournament_games WHERE tournament_id = ? ORDER BY game_number ASC, id ASC').all(tournamentId) as any[];
-  const statsRes = await fastify.inject({ method: 'GET', url: `/tournaments/${tournamentId}/stats` });
+  const statsRes = await internalRequest({ method: 'GET', url: `/tournaments/${tournamentId}/stats` });
   const stats = statsRes.statusCode === 200 ? statsRes.json() : { totalGames: 0, series: 0, average: 0, high: 0, placement: tournament.placement ?? null };
 
   return {
@@ -2851,10 +2955,8 @@ fastify.get('/tournaments/:id/share', async (request, reply) => {
 
 fastify.get('/api/tournaments/:id/share', async (request, reply) => {
   const { id } = request.params as any;
-  return fastify.inject({ method: 'GET', url: `/tournaments/${id}/share` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'application/json');
-    return reply.send(res.payload);
-  });
+  const response = await internalRequest({ method: 'GET', url: `/tournaments/${id}/share` });
+  return relayInjectedResponse(reply, response);
 });
 
 // ── Tournament OG Image ──────────────────────────────────────────
@@ -2975,19 +3077,14 @@ fastify.get('/tournaments/:id/og-image', async (request, reply) => {
 
 fastify.get('/api/tournaments/:id/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/tournaments/${id}/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.rawPayload)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/tournaments/${id}/og-image` })
+  return relayInjectedResponse(reply, response)
 })
 
 fastify.get('/api/tournaments/:id/standings', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/tournaments/${id}/standings` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'application/json')
-    return reply.send(res.payload)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/tournaments/${id}/standings` })
+  return relayInjectedResponse(reply, response)
 })
 
 fastify.get('/tournaments/:id/bracket', async (request, reply) => {
@@ -3121,11 +3218,8 @@ fastify.get('/tournaments/:id/standings/og-image', async (request, reply) => {
 
 fastify.get('/api/tournaments/:id/standings/og-image', async (request, reply) => {
   const { id } = request.params as any;
-  return fastify.inject({ method: 'GET', url: `/tournaments/${id}/standings/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png');
-    reply.header('Cache-Control', 'public, max-age=86400');
-    return reply.send(res.rawPayload);
-  });
+  const response = await internalRequest({ method: 'GET', url: `/tournaments/${id}/standings/og-image` });
+  return relayInjectedResponse(reply, response);
 });
 
 function buildTournamentStandingsOgSvg(opts: {
@@ -3348,13 +3442,16 @@ fastify.post('/tournaments/:id/games', async (request, reply) => {
   };
 });
 
-fastify.put('/tournaments/games/:gameId', async (request) => {
+fastify.put('/tournaments/games/:gameId', async (request, reply) => {
   const { gameId } = request.params as any;
+  const parsedGameId = parseInt(gameId);
+  const existing = sqlite.prepare('SELECT id FROM tournament_games WHERE id = ?').get(parsedGameId);
+  if (!existing) return reply.status(404).send({ error: 'Tournament game not found' });
   const { score, strikes, spares, splits, ballId, squad, frameData } = request.body as any;
   sqlite.prepare(
     'UPDATE tournament_games SET score=?, strikes=?, spares=?, splits=?, ball_id=?, squad=?, frame_data=? WHERE id=?'
-  ).run(score, strikes ?? 0, spares ?? 0, splits ?? 0, ballId ?? null, squad ?? null, frameData ?? null, parseInt(gameId));
-  return sqlite.prepare('SELECT * FROM tournament_games WHERE id=?').get(parseInt(gameId));
+  ).run(score, strikes ?? 0, spares ?? 0, splits ?? 0, ballId ?? null, squad ?? null, frameData ?? null, parsedGameId);
+  return sqlite.prepare('SELECT * FROM tournament_games WHERE id=?').get(parsedGameId);
 });
 
 fastify.delete('/tournaments/games/:gameId', async (request, reply) => {
@@ -4394,7 +4491,7 @@ fastify.get('/api/backups', async () => {
   const backups = listBackups();
   return {
     backups,
-    latestMtime: backups[0]?.mtimeMs || null,
+    latestMtime: backups[0]?.mtime || null,
     backupCount: backups.length,
     cloudRemote: process.env.CLOUD_REMOTE || null,
   };
@@ -4498,17 +4595,16 @@ fastify.post('/api/restore', async (request, reply) => {
   const src = join(BACKUP_DIR, filename);
   if (!existsSync(src)) return reply.status(404).send({ error: 'Backup not found' });
   const restore = sqlite.transaction(() => {
-    const backupDb = new (require('better-sqlite3')(src));
+    const backupDb = new Database(src, { readonly: true });
     // Copy all tables
     const tables = ['sessions', 'games', 'balls', 'leagues', 'league_weeks', 'league_games'];
     for (const table of tables) {
       sqlite.exec(`DELETE FROM ${table}`);
       const rows = backupDb.prepare(`SELECT * FROM ${table}`).all();
       if (rows.length > 0) {
-        const cols = Object.keys(rows[0]).join(', ');
-        const placeholders = rows.map(() => `(${Object.keys(rows[0]).map(() => '?').join(', ')})`).join(', ');
-        const values = rows.flatMap(r => Object.values(r));
-        sqlite.exec(`INSERT INTO ${table} (${cols}) VALUES ${placeholders}`, values);
+        const columns = Object.keys(rows[0]);
+        const insert = sqlite.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`);
+        for (const row of rows) insert.run(...Object.values(row));
       }
     }
     backupDb.close();
@@ -4943,80 +5039,57 @@ fastify.get('/api/profile/og-image', async (request, reply) => {
   const url = name
     ? `/profile/og-image?name=${encodeURIComponent(name)}`
     : '/profile/og-image';
-  return fastify.inject({ method: 'GET', url }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png');
-    reply.header('Cache-Control', res.headers['cache-control'] || 'no-store');
-    return reply.send(res.rawPayload);
-  });
+  const response = await internalRequest({ method: 'GET', url });
+  return relayInjectedResponse(reply, response);
 });
 
 // GET /api/leagues/:id — mirrors /leagues/:id
 fastify.get('/api/leagues/:id', async (request, reply) => {
   const { id } = request.params as any;
-  const numId = Number(id);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid league ID' });
-  const row = sqlite.prepare('SELECT * FROM leagues WHERE id = ?').get(numId) as any;
-  if (!row) return reply.status(404).send({ error: 'League not found' });
-  return { id: row.id, name: row.name, location: row.location, season: row.season, dayOfWeek: row.day_of_week, gamesPerWeek: row.games_per_week, startDate: row.start_date, endDate: row.end_date, notes: row.notes, active: row.active, createdAt: row.created_at };
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}` });
+  return relayInjectedResponse(reply, response);
 });
 
 // GET /api/leagues/weeks/:weekId — mirrors /leagues/weeks/:weekId
 fastify.get('/api/leagues/weeks/:weekId', async (request, reply) => {
   const { weekId } = request.params as any;
-  const numId = Number(weekId);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid week ID' });
-  const row = sqlite.prepare('SELECT * FROM league_weeks WHERE id = ?').get(numId) as any;
-  if (!row) return reply.status(404).send({ error: 'Week not found' });
-  return { id: row.id, leagueId: row.league_id, weekNumber: row.week_number, date: row.date, gamesWon: row.games_won, gamesLost: row.games_lost, createdAt: row.created_at };
+  const response = await internalRequest({ method: 'GET', url: `/leagues/weeks/${weekId}` });
+  return relayInjectedResponse(reply, response);
 });
 
 // PUT /api/leagues/weeks/:weekId
 fastify.put('/api/leagues/weeks/:weekId', async (request, reply) => {
   const { weekId } = request.params as any;
-  const { date, gamesWon, gamesLost } = request.body as any;
-  const numId = Number(weekId);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid week ID' });
-  sqlite.prepare('UPDATE league_weeks SET date=?, games_won=?, games_lost=? WHERE id=?').run(date || null, gamesWon ?? null, gamesLost ?? null, numId);
-  const row = sqlite.prepare('SELECT * FROM league_weeks WHERE id = ?').get(numId) as any;
-  return { ok: true, week: row };
+  const response = await internalRequest({ method: 'PUT', url: `/leagues/weeks/${weekId}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
 });
 
 // DELETE /api/leagues/weeks/:weekId
 fastify.delete('/api/leagues/weeks/:weekId', async (request, reply) => {
   const { weekId } = request.params as any;
-  const numId = Number(weekId);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid week ID' });
-  sqlite.prepare('DELETE FROM league_weeks WHERE id = ?').run(numId);
-  return { ok: true };
+  const response = await internalRequest({ method: 'DELETE', url: `/leagues/weeks/${weekId}` });
+  return relayInjectedResponse(reply, response);
 });
 
 // POST /api/leagues/weeks/:weekId/games
 fastify.post('/api/leagues/weeks/:weekId/games', async (request, reply) => {
   const { weekId } = request.params as any;
-  const { gameId, won } = request.body as any;
-  const numId = Number(weekId);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid week ID' });
-  const result = sqlite.prepare('INSERT INTO league_games (league_week_id, game_id, won, created_at) VALUES (?, ?, ?, ?)').run(numId, gameId, won ? 1 : 0, Date.now());
-  return { ok: true, id: result.lastInsertRowid };
+  const response = await internalRequest({ method: 'POST', url: `/leagues/weeks/${weekId}/games`, payload: request.body });
+  return relayInjectedResponse(reply, response);
 });
 
 // PUT /api/leagues/games/:gameId
 fastify.put('/api/leagues/games/:gameId', async (request, reply) => {
   const { gameId } = request.params as any;
-  const { won } = request.body as any;
-  const numId = Number(gameId);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid game ID' });
-  sqlite.prepare('UPDATE league_games SET won=? WHERE id=?').run(won ? 1 : 0, numId);
-  return { ok: true };
+  const response = await internalRequest({ method: 'PUT', url: `/leagues/games/${gameId}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
 });
 
 // DELETE /api/leagues/games/:gameId
 fastify.delete('/api/leagues/games/:gameId', async (request, reply) => {
   const { gameId } = request.params as any;
-  const numId = Number(gameId);
-  if (!Number.isFinite(numId) || numId < 1) return reply.status(404).send({ error: 'Invalid game ID' });
-  sqlite.prepare('DELETE FROM league_games WHERE id = ?').run(numId);
-  return { ok: true };
+  const response = await internalRequest({ method: 'DELETE', url: `/leagues/games/${gameId}` });
+  return relayInjectedResponse(reply, response);
 });
 
 // GET /leagues/:id/share — share-safe league summary with all weeks and stats
@@ -5092,9 +5165,8 @@ fastify.get('/leagues/:id/share', async (request, reply) => {
 // API-prefixed mirror
 fastify.get('/api/leagues/:id/share', async (request, reply) => {
   const { id } = request.params as any;
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/share` }).then((res) => {
-    reply.status(res.statusCode).send(res.payload);
-  });
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/share` });
+  return relayInjectedResponse(reply, response);
 });
 
 function buildLeagueShareOgSvg(opts: {
@@ -5158,7 +5230,7 @@ function buildLeagueShareOgSvg(opts: {
   ${subtitle ? `<text x="600" y="192" font-size="20" fill="rgba(255,255,255,0.6)" font-family="Arial, sans-serif" text-anchor="middle">${escapeXml(subtitle)}</text>` : ''}
   <g transform="translate(460, 218)">
     <rect x="0" y="0" width="280" height="56" rx="28" fill="${gamesWon > gamesLost ? 'rgba(52,211,153,0.2)' : gamesLost > gamesWon ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)'}" stroke="${gamesWon > gamesLost ? 'rgba(52,211,153,0.5)' : gamesLost > gamesWon ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.2)'}" stroke-width="1.5"/>
-    <text x="140" y="35" font-size="22" font-weight="800" fill="${gamesWon > gamesLost ? '#34d399' : gamesLost > gamesWon ? '#fc8181' : '#ffffff'}' font-family="Arial, sans-serif" text-anchor="middle">${escapeXml(recordLabel)}</text>
+    <text x="140" y="35" font-size="22" font-weight="800" fill="${gamesWon > gamesLost ? '#34d399' : gamesLost > gamesWon ? '#fc8181' : '#ffffff'}" font-family="Arial, sans-serif" text-anchor="middle">${escapeXml(recordLabel)}</text>
   </g>
   <text x="600" y="296" font-size="13" fill="rgba(255,255,255,0.4)" font-family="Arial, sans-serif" text-anchor="middle">${gamesWon + gamesLost + gamesTied} games tracked</text>
   ${statsRow}
@@ -5224,15 +5296,187 @@ fastify.get('/leagues/:id/share/og-image', async (request, reply) => {
 
 fastify.get('/api/leagues/:id/share/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/share/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/share/og-image` })
+  return relayInjectedResponse(reply, response)
 })
 
+// Same-origin SPA aliases. Keep these as thin relays so development and the
+// production server exercise the exact same route contracts.
+fastify.post('/api/sessions', async (request, reply) => {
+  const response = await internalRequest({ method: 'POST', url: '/sessions', payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/sessions/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/sessions/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/sessions/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/sessions/${id}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/sessions/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/sessions/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/games', async (request, reply) => {
+  const response = await internalRequest({ method: 'POST', url: '/games', payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/games/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/games/${id}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/games/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/games/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/arsenals', async (request, reply) => {
+  const response = await internalRequest({ method: 'POST', url: '/arsenals', payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/arsenals/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/arsenals/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/arsenals/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/arsenals/${id}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/arsenals/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/arsenals/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/arsenals/:id/balls', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'POST', url: `/arsenals/${id}/balls`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/arsenals/balls/:entryId', async (request, reply) => {
+  const { entryId } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/arsenals/balls/${entryId}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/arsenals/balls/:entryId', async (request, reply) => {
+  const { entryId } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/arsenals/balls/${entryId}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/leagues/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/leagues/${id}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/leagues/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/leagues/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/leagues/:id/weeks', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'POST', url: `/leagues/${id}/weeks`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/leagues/:id/stats', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/stats` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/leagues/:id/standings', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/leagues/${id}/standings` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/tournaments', async (request, reply) => {
+  const response = await internalRequest({ method: 'POST', url: '/tournaments', payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/tournaments/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/tournaments/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/tournaments/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/tournaments/${id}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/tournaments/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/tournaments/${id}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/tournaments/:id/games', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'POST', url: `/tournaments/${id}/games`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/tournaments/:id/bracket', async (request, reply) => {
+  const { id } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/tournaments/${id}/bracket` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.put('/api/tournaments/games/:gameId', async (request, reply) => {
+  const { gameId } = request.params as any;
+  const response = await internalRequest({ method: 'PUT', url: `/tournaments/games/${gameId}`, payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.delete('/api/tournaments/games/:gameId', async (request, reply) => {
+  const { gameId } = request.params as any;
+  const response = await internalRequest({ method: 'DELETE', url: `/tournaments/games/${gameId}` });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/export', async (_request, reply) => {
+  const response = await internalRequest({ method: 'GET', url: '/backup' });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.post('/api/import', async (request, reply) => {
+  const response = await internalRequest({ method: 'POST', url: '/restore', payload: request.body });
+  return relayInjectedResponse(reply, response);
+});
+
+fastify.get('/api/backups/:filename', async (request, reply) => {
+  const { filename } = request.params as any;
+  const response = await internalRequest({ method: 'GET', url: `/backups/${encodeURIComponent(filename)}` });
+  return relayInjectedResponse(reply, response);
+});
+
 // ── Serve frontend build (SPA — all from one origin for OG images) ──
-const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
 if (existsSync(FRONTEND_DIST)) {
   // Serve the SPA from the frontend build.
   // @fastify/static with prefix: '/' serves exact files, and when no file
@@ -5277,7 +5521,14 @@ fastify.get('/backup-log', async () => {
   }
 });
 
-fastify.listen({ port: 3003, host: '0.0.0.0' }, (err) => {
+const listenHost = process.env.BOWLSENSE_HOST || '127.0.0.1';
+const exposesNetwork = listenHost !== '127.0.0.1' && listenHost !== '::1' && listenHost !== 'localhost';
+if (exposesNetwork && !configuredAuthToken && !configuredProxySecret) {
+  throw new Error('Refusing network exposure without BowlSense authentication configuration.');
+}
+
+const listenPort = Number(process.env.BOWLSENSE_PORT || 3003);
+fastify.listen({ port: listenPort, host: listenHost }, (err) => {
   if (err) throw err;
-  console.log('BowlSense API running on http://localhost:3003');
+  console.log(`BowlSense API running on http://localhost:${listenPort}`);
 });

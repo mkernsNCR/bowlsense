@@ -1,7 +1,7 @@
 # BowlSense 2.0 integration QA
 
-Date: 2026-07-21  
-Branch: `agent/integration-qa`  
+Date: 2026-07-21
+Branch: `agent/integration-qa`
 Issue: #8
 
 ## Result
@@ -13,13 +13,13 @@ In progress. The final browser matrix completed 106 route/viewport checks with n
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Frontend lint | Pass | `npm run lint` |
-| Scoring regressions | Pass | `npm test`: 8 Node tests, including the six detailed physical-pin scenarios |
+| Scoring regressions | Pass | `npm test`: 10 Node tests plus six detailed physical-pin scenarios |
 | Production build | Pass | `npm run build`; only Vite's non-blocking 500 kB chunk advisory remains |
 | Backend type-check | Pass | `npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts` |
 | Service-worker syntax | Pass | `node --check public/sw.js` |
 | Patch integrity | Pass | `git diff --check` |
 | Backend runtime | Pass | `npm start` launches `tsx src/server.ts` on port 3003; `/health` returns `{ status: "ok", service: "bowlsense-api" }` |
-| Dependency audit | Pass | `npm audit` reports 0 vulnerabilities in both frontend and backend after the React Router, Vite, Fastify, Drizzle, Sharp, and tsx updates |
+| Dependency audit | Pending PR CI | Local `npm audit --offline` reports 0 vulnerabilities for the root, frontend, and backend lockfiles. The authoritative online check is enforced after `npm ci` by all three GitHub Actions jobs and must pass before merge. |
 | Sites build and D1 integration | Pass | Root `npm test` builds `dist/server/index.js`, initializes an in-memory D1-compatible schema, verifies fail-closed auth/public boundaries, atomically imports all ten tables, rejects destructive partial restores and invalid CSV/CRUD data, exercises private CRUD plus public share payloads, validates real PNG signatures and crawler metadata, and confirms missing resources return 404 |
 | Sites package contract | Pass | The Sites packaging helper accepts the built worker, client assets, D1 declaration, and migration archive |
 

@@ -376,6 +376,8 @@ export default function BowlingScorer({
           {saveStatus === 'saved' ? (
             <div className="scoring-status" role="status">
               <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
+              <p>Your perfect game is in this session.</p>
+              <button type="button" className="scoring-button primary wide" onClick={onCancel}>Done</button>
             </div>
           ) : (
             <>

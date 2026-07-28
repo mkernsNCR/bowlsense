@@ -113,7 +113,10 @@ export function isSessionsTabActive(pathname: string) {
 
 export function isInsightsTabActive(pathname: string) {
   pathname = normalizePath(pathname)
-  return pathname === '/stats' || pathname.startsWith('/stats/') || pathname === '/pin-leaves'
+  return pathname === '/stats'
+    || pathname.startsWith('/stats/')
+    || pathname === '/pin-leaves'
+    || pathname === '/score-calculator'
 }
 
 export function isMoreTabActive(pathname: string) {

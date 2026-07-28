@@ -493,7 +493,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                     <div>
                       <div style={{ fontWeight: 700 }}>Game {g.gameNumber} {g.squad ? `· ${g.squad}` : ''}</div>
                       <div className="muted" style={{ fontSize: 13 }}>{`Score ${g.score ?? '-'} · ⚡ ${g.strikes ?? 0} · ✅ ${g.spares ?? 0} · 🔀 ${g.splits ?? 0}`}{ballName ? ` · 🎳 ${ballName}` : ''}</div>
-                      {marks && <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 11, marginTop: 3 }}>{marks}</div>}
+                      {marks && <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 12, marginTop: 3 }}>{marks}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button

@@ -115,6 +115,26 @@ function relayInjectedResponse(reply: any, response: any) {
 
 fastify.get('/health', async () => ({ status: 'ok', service: 'bowlsense-api' }));
 
+async function buildPublicStats() {
+  const allGames = await db.select().from(games);
+  const totalGames = allGames.length;
+  const totalScore = allGames.reduce((sum, game) => sum + (game.score || 0), 0);
+  const totalStrikes = allGames.reduce((sum, game) => sum + (game.strikes || 0), 0);
+  const totalSpares = allGames.reduce((sum, game) => sum + (game.spares || 0), 0);
+  const profileName = (process.env.BOWLSENSE_PUBLIC_PROFILE_NAME || '').trim().slice(0, 80) || null;
+  return {
+    average: totalGames ? Math.round(totalScore / totalGames) : 0,
+    strikeRate: totalGames ? Math.round((totalStrikes / (totalGames * 12)) * 100) : 0,
+    spareRate: totalGames ? Math.round((totalSpares / (totalGames * 12)) * 100) : 0,
+    totalGames,
+    totalScore,
+    totalStrikes,
+    totalSpares,
+    profileName,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // Register multipart for file uploads (CSV import)
 await fastify.register(FastifyMultipart, {
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -123,23 +143,7 @@ await fastify.register(FastifyMultipart, {
 // ── API prefix routes (mirror non-prefixed routes for SPA /api/* calls) ──
 // The React frontend calls /api/stats, /api/games-recent, etc.
 // We add explicit /api/* aliases so the SPA on port 3003 works without a proxy.
-fastify.get('/api/stats', async (request) => {
-  const allGames = await db.select().from(games);
-  const totalGames = allGames.length;
-  if (totalGames === 0) return { average: 0, strikeRate: 0, spareRate: 0, totalGames: 0 };
-  const totalScore = allGames.reduce((sum, g) => sum + (g.score || 0), 0);
-  const totalStrikes = allGames.reduce((sum, g) => sum + (g.strikes || 0), 0);
-  const totalSpares = allGames.reduce((sum, g) => sum + (g.spares || 0), 0);
-  return {
-    average: Math.round(totalScore / totalGames),
-    strikeRate: Math.round((totalStrikes / (totalGames * 12)) * 100),
-    spareRate: Math.round((totalSpares / (totalGames * 12)) * 100),
-    totalGames,
-    totalScore,
-    totalStrikes,
-    totalSpares,
-  };
-});
+fastify.get('/api/stats', buildPublicStats);
 
 fastify.get('/api/games-recent', async () => {
   const recent = sqlite.prepare(`
@@ -1110,23 +1114,7 @@ fastify.get('/stats', async (request, reply) => {
     return reply.callNotFound();
   }
 
-  const allGames = await db.select().from(games);
-  const totalGames = allGames.length;
-  if (totalGames === 0) return { average: 0, strikeRate: 0, spareRate: 0, totalGames: 0 };
-
-  const totalScore = allGames.reduce((sum, g) => sum + (g.score || 0), 0);
-  const totalStrikes = allGames.reduce((sum, g) => sum + (g.strikes || 0), 0);
-  const totalSpares = allGames.reduce((sum, g) => sum + (g.spares || 0), 0);
-
-  return {
-    average: Math.round(totalScore / totalGames),
-    strikeRate: Math.round((totalStrikes / (totalGames * 12)) * 100),
-    spareRate: Math.round((totalSpares / (totalGames * 12)) * 100),
-    totalGames,
-    totalScore,
-    totalStrikes,
-    totalSpares,
-  };
+  return buildPublicStats();
 });
 
 // Balls CRUD

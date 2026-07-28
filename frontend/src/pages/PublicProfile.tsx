@@ -4,6 +4,8 @@ import { ActionIcon, PublicShell } from '../features/competition/CompetitionUI'
 
 interface PublicStats {
   average: number
+  generatedAt?: string
+  profileName?: string | null
   strikeRate: number
   spareRate: number
   totalGames: number
@@ -32,7 +34,7 @@ export default function PublicProfile() {
     return () => { mounted = false }
   }, [])
 
-  const profileName = (settings?.name || '').trim()
+  const profileName = (stats?.profileName || settings?.name || '').trim()
   const profileTitle = profileName ? `${profileName}'s BowlSense` : 'BowlSense profile'
   const profileDescription = stats
     ? `${stats.totalGames} games · ${Math.round(stats.average)} average`
@@ -40,6 +42,9 @@ export default function PublicProfile() {
   const profileOgImageUrl = profileName
     ? `/api/profile/og-image?name=${encodeURIComponent(profileName)}`
     : '/api/profile/og-image'
+  const generatedAt = stats?.generatedAt && !Number.isNaN(Date.parse(stats.generatedAt))
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(stats.generatedAt))
+    : null
 
   useEffect(() => {
     document.title = profileTitle
@@ -75,7 +80,7 @@ export default function PublicProfile() {
     <PublicShell
       eyebrow="Public profile"
       title={profileTitle}
-      detail={`${stats.totalGames} games tracked`}
+      detail={`${stats.totalGames} games tracked${generatedAt ? ` · Stats current as of ${generatedAt}` : ''}`}
       action={<button onClick={copyShareLink} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share profile'}</button>}
     >
       <div className="share-result">

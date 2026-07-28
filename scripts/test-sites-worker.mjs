@@ -33,9 +33,16 @@ class D1Statement {
 }
 
 class D1Mock {
-  constructor(database) { this.database = database; }
+  constructor(database) {
+    this.database = database;
+    this.batchSizes = [];
+    this.batchSql = [];
+  }
   prepare(sql) { return new D1Statement(this.database, sql); }
   async batch(statements) {
+    this.batchSizes.push(statements.length);
+    this.batchSql.push(statements.map((statement) => statement.sql));
+    assert.ok(statements.length <= 50, `D1 batch exceeded the 50-statement budget: ${statements.length}`);
     this.database.exec("BEGIN");
     try {
       const results = [];
@@ -51,10 +58,26 @@ class D1Mock {
 
 const database = new DatabaseSync(":memory:");
 const indexHtml = `<!doctype html><html><head><title>BowlSense</title><meta name="description" content="generic"><meta property="og:title" content="generic"><meta property="og:description" content="generic"><meta property="og:image" content="generic"><meta name="twitter:title" content="generic"><meta name="twitter:description" content="generic"><meta name="twitter:image" content="generic"></head><body><div id="root"></div></body></html>`;
+const assetRequests = [];
 const env = {
   DB: new D1Mock(database),
-  ASSETS: { fetch: async (request) => new URL(request.url).pathname === "/index.html" ? new Response(indexHtml, { headers: { "content-type": "text/html" } }) : new Response("not found", { status: 404 }) },
+  ASSETS: {
+    fetch: async (request) => {
+      assetRequests.push(request);
+      return new URL(request.url).pathname === "/index.html"
+        ? new Response(indexHtml, {
+            headers: {
+              "content-type": "text/html",
+              "content-length": String(Buffer.byteLength(indexHtml)),
+              etag: '"static-index"',
+              "last-modified": "Mon, 27 Jul 2026 12:00:00 GMT",
+            },
+          })
+        : new Response("not found", { status: 404 });
+    },
+  },
   BOWLSENSE_ALLOWED_EMAILS: "mkerns5@student.umgc.edu",
+  BOWLSENSE_PUBLIC_PROFILE_NAME: "Matt Kerns",
   BOWLSENSE_TIME_ZONE: "America/New_York",
 };
 
@@ -97,6 +120,7 @@ let response = await request("/api/restore", {
   body: JSON.stringify(backup),
 });
 assert.equal(response.status, 200);
+assert.ok(env.DB.batchSizes[0] + env.DB.batchSizes[1] <= 50, "schema setup and restore must fit the D1 request budget");
 
 response = await request("/api/data-health");
 const health = await response.json();
@@ -133,6 +157,16 @@ assert.equal(response.status, 200);
 const stats = await response.json();
 assert.equal(stats.overall.totalGames, backup.games.length);
 
+response = await publicRequest("/api/stats");
+assert.equal(response.status, 200);
+const publicStats = await response.json();
+assert.equal(publicStats.profileName, "Matt Kerns");
+assert.ok(!Number.isNaN(Date.parse(publicStats.generatedAt)));
+
+response = await publicRequest("/bowl");
+assert.equal(response.status, 200);
+assert.match(await response.text(), /Matt Kerns's BowlSense/);
+
 response = await request("/api/leagues");
 assert.equal(response.status, 200);
 assert.equal((await response.json()).length, backup.leagues.length);
@@ -154,7 +188,24 @@ if (backup.sessions.length > 0) {
   const shareHtml = await response.text();
   assert.match(shareHtml, new RegExp(`${backup.sessions[0].location}.*averaging`, "i"));
   assert.match(shareHtml, new RegExp(`/api/sessions/${backup.sessions[0].id}/og-image`));
+
+  response = await publicRequest(`/sessions/${backup.sessions[0].id}/share/`, {
+    headers: {
+      "if-none-match": '"static-index"',
+      "if-modified-since": "Mon, 27 Jul 2026 12:00:00 GMT",
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(assetRequests.at(-1).headers.get("if-none-match"), null);
+  assert.equal(assetRequests.at(-1).headers.get("if-modified-since"), null);
+  assert.equal(response.headers.get("etag"), null);
+  assert.equal(response.headers.get("last-modified"), null);
+  assert.equal(response.headers.get("content-length"), null);
 }
+
+response = await publicRequest("/sessions/999999/share");
+assert.equal(response.status, 404);
+assert.match(await response.text(), /<meta name="robots" content="noindex, nofollow"\s*\/?>/i);
 
 response = await request("/api/analytics/pin-leaves");
 assert.equal(response.status, 200);
@@ -166,6 +217,29 @@ if (!exportPath) {
   assert.equal(leaves.leaves[0].conversionRate, 100);
   assert.equal(leaves.byMonth[0].month, "2026-07");
 }
+
+response = await request("/api/sessions", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ date: "2026-07-21", location: "Legacy Leave Test" }),
+});
+assert.equal(response.status, 201);
+const legacyLeaveSession = await response.json();
+response = await request("/api/games", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    sessionId: legacyLeaveSession.id,
+    gameNumber: 1,
+    score: 180,
+    pinLeaves: JSON.stringify([{ pins: [7], converted: true }, { pins: [10], converted: false }]),
+  }),
+});
+assert.equal(response.status, 201);
+response = await request("/api/analytics/pin-leaves");
+assert.equal(response.status, 200);
+const normalizedLegacyLeaves = await response.json();
+assert.ok(normalizedLegacyLeaves.leaves.some((leave) => leave.pins === "7" && leave.conversions >= 1));
 
 if (backup.leagues.length > 0) {
   response = await publicRequest(`/api/leagues/${backup.leagues[0].id}/share`);
@@ -224,6 +298,22 @@ assert.equal(response.status, 201);
 const emptyLeague = await response.json();
 response = await publicRequest(`/api/leagues/${emptyLeague.id}/recap`);
 assert.equal(response.status, 404);
+response = await publicRequest(`/leagues/${emptyLeague.id}/recap/share`);
+assert.equal(response.status, 404);
+assert.match(await response.text(), /<meta name="robots" content="noindex, nofollow"\s*\/?>/i);
+
+response = await request("/api/tournaments", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ name: "Missing Date Open" }),
+});
+assert.equal(response.status, 422);
+response = await request("/api/tournaments", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ name: "Dated Open", date: "2026-08-01" }),
+});
+assert.equal(response.status, 201);
 
 response = await request("/api/arsenals");
 assert.equal(response.status, 200);
@@ -253,18 +343,66 @@ response = await request("/api/games", {
 });
 assert.equal(response.status, 201);
 
+const perfectFrameData = JSON.stringify({
+  rolls: Array(12).fill(10),
+  frames: Array.from({ length: 10 }, (_, index) => ({
+    ball1: 10,
+    ball2: index === 9 ? 10 : null,
+    ball3: index === 9 ? 10 : null,
+    isStrike: true,
+    isSpare: false,
+    score: 30 * (index + 1),
+    cumulativeScore: 30 * (index + 1),
+    reviewLabel: `Perfect game frame ${index + 1} ${"x".repeat(48)}`,
+  })),
+  pinSelections: Array(12).fill([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+});
+assert.ok(perfectFrameData.length > 500);
+const perfectPinLeaves = JSON.stringify(Array(12).fill([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
+response = await request("/api/games", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    sessionId: createdSession.id,
+    gameNumber: 2,
+    score: 300,
+    strikes: 12,
+    spares: 0,
+    frameData: perfectFrameData,
+    pinLeaves: perfectPinLeaves,
+  }),
+});
+assert.equal(response.status, 201);
+const perfectGame = await response.json();
+
+response = await request("/api/export");
+assert.equal(response.status, 200);
+const fullGameBackup = await response.json();
+response = await request("/api/restore", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(fullGameBackup),
+});
+assert.equal(response.status, 200);
+response = await request(`/api/games/${perfectGame.id}`);
+assert.equal(response.status, 200);
+const restoredPerfectGame = await response.json();
+assert.equal(restoredPerfectGame.frameData, perfectFrameData);
+assert.equal(restoredPerfectGame.pinLeaves, perfectPinLeaves);
+
 response = await request(`/api/sessions/${createdSession.id}`);
 assert.equal(response.status, 200);
-assert.equal((await response.json()).games.length, 1);
+assert.equal((await response.json()).games.length, 2);
 
 response = await request(`/api/sessions/${createdSession.id}`, { method: "DELETE" });
 assert.equal(response.status, 204);
 
 let csvForm = new FormData();
-csvForm.set("file", new File([`date,location,game_number,score,strikes,spares,splits\n2026-07-21,"Center, East",1,210,6,2,0\n`], "scores.csv", { type: "text/csv" }));
+csvForm.set("file", new File([`date,location,game_number,score,strikes,spares,splits\n2026-07-21,"Center, East",1,210,6,2,0\n2026-07-21,"Center, East",2,220,7,2,0\n`], "scores.csv", { type: "text/csv" }));
 response = await request("/api/import/csv", { method: "POST", body: csvForm });
 assert.equal(response.status, 200);
-assert.deepEqual((await response.json()).imported, { sessions: 1, games: 1, balls: 0 });
+assert.deepEqual((await response.json()).imported, { sessions: 1, games: 2, balls: 0 });
+assert.ok(env.DB.batchSql.at(-1).every((sql) => /json_each\(\?\)/.test(sql)), "CSV rows must use multi-row inserts");
 
 response = await request("/api/data-health");
 const sessionsBeforeInvalidCsv = (await response.json()).tableCounts.find((entry) => entry.table === "sessions").count;
@@ -274,5 +412,54 @@ response = await request("/api/import/csv", { method: "POST", body: csvForm });
 assert.equal(response.status, 422);
 response = await request("/api/data-health");
 assert.equal((await response.json()).tableCounts.find((entry) => entry.table === "sessions").count, sessionsBeforeInvalidCsv);
+
+const invalidTimeZoneEnv = { ...env, BOWLSENSE_TIME_ZONE: "Not/A_Real_Time_Zone" };
+response = await worker.fetch(new Request("https://bowlsense.test/api/stats/weekly", {
+  headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" },
+}), invalidTimeZoneEnv);
+assert.equal(response.status, 200);
+
+response = await request("/api/export");
+const beforeLegacyRestore = await response.json();
+const legacyTournamentId = Math.max(0, ...beforeLegacyRestore.tournaments.map((tournament) => Number(tournament.id))) + 1;
+beforeLegacyRestore.tournaments.push({ id: legacyTournamentId, name: "Legacy Undated Open", date: null });
+response = await request("/api/restore", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(beforeLegacyRestore),
+});
+assert.equal(response.status, 200);
+response = await request(`/api/tournaments/${legacyTournamentId}`);
+assert.equal(response.status, 200);
+assert.equal((await response.json()).date, null);
+
+response = await request("/api/export");
+const beforeLargeRestore = await response.json();
+const fiftyThousandRowBackup = Object.fromEntries(
+  Object.keys(beforeLargeRestore)
+    .filter((key) => key !== "exportedAt")
+    .map((key) => [key, []]),
+);
+fiftyThousandRowBackup.sessions = Array.from({ length: 50_000 }, (_, index) => ({
+  id: index + 1,
+  date: "2026-07-28",
+  location: `Budget ${index}`,
+}));
+assert.ok(Buffer.byteLength(JSON.stringify(fiftyThousandRowBackup)) < 5 * 1024 * 1024);
+response = await request("/api/restore", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(fiftyThousandRowBackup),
+});
+assert.equal(response.status, 200);
+assert.ok(env.DB.batchSizes.at(-1) + 15 <= 50, "50,000-row restore plus schema reserve must fit the D1 request budget");
+response = await request("/api/data-health");
+assert.equal((await response.json()).tableCounts.find((entry) => entry.table === "sessions").count, 50_000);
+response = await request("/api/restore", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(beforeLargeRestore),
+});
+assert.equal(response.status, 200);
 
 console.log(JSON.stringify({ ok: true, imported: counts, statsGames: stats.overall.totalGames }));

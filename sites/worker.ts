@@ -21,6 +21,7 @@ interface Env {
   DB: D1Database;
   ASSETS: { fetch(request: Request): Promise<Response> };
   BOWLSENSE_ALLOWED_EMAILS?: string;
+  BOWLSENSE_PUBLIC_PROFILE_NAME?: string;
   BOWLSENSE_TIME_ZONE?: string;
 }
 
@@ -29,6 +30,9 @@ type Row = Record<string, any>;
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+const MAX_STRUCTURED_JSON_BYTES = 256 * 1024;
+const MAX_D1_JSON_BIND_BYTES = 1024 * 1024;
+const MAX_D1_STATEMENTS_PER_REQUEST = 50;
 const DEFAULT_TIME_ZONE = "America/New_York";
 
 class HttpError extends Error {
@@ -84,6 +88,11 @@ function isAuthorizedRequest(request: Request, env: Env): boolean {
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
   return allowed.length > 0 && allowed.includes(email);
+}
+
+function publicProfileName(env: Env): string | null {
+  const name = (env.BOWLSENSE_PUBLIC_PROFILE_NAME || "").trim();
+  return name ? name.slice(0, 80) : null;
 }
 
 function snakeToCamel(value: string): string {
@@ -208,11 +217,19 @@ function validIsoDate(value: unknown): boolean {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function validateRecord(table: string, input: Row, partial = false): Row {
+function validateRecord(
+  table: string,
+  input: Row,
+  partial = false,
+  options: { allowLegacyTournamentDate?: boolean } = {},
+): Row {
   const normalized = normalizedInput(table, input);
   if (!partial) {
     for (const column of requiredColumns[table] || []) {
       if (normalized[column] == null || normalized[column] === "") throw new HttpError(422, `${column} is required`);
+    }
+    if (table === "tournaments" && !options.allowLegacyTournamentDate && normalized.date == null) {
+      throw new HttpError(422, "date is required");
     }
   }
   if (partial && Object.keys(normalized).length === 0) throw new HttpError(422, "No supported fields supplied");
@@ -230,11 +247,13 @@ function validateRecord(table: string, input: Row, partial = false): Row {
     const range = integerRanges[column];
     if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) throw new HttpError(422, `${column} is out of range`);
     if (!range && column !== "entry_fee" && column !== "prize_fund" && typeof value !== "string") throw new HttpError(422, `${column} must be text`);
-    if (typeof value === "string" && value.length > (column === "notes" || column === "description" ? 10_000 : 500)) {
-      throw new HttpError(422, `${column} is too long`);
-    }
     if ((column === "frame_data" || column === "pin_leaves") && typeof value === "string") {
+      if (new TextEncoder().encode(value).byteLength > MAX_STRUCTURED_JSON_BYTES) {
+        throw new HttpError(422, `${column} is too long`);
+      }
       try { JSON.parse(value); } catch { throw new HttpError(422, `${column} must be valid JSON`); }
+    } else if (typeof value === "string" && value.length > (column === "notes" || column === "description" ? 10_000 : 500)) {
+      throw new HttpError(422, `${column} is too long`);
     }
   }
   return normalized;
@@ -399,7 +418,7 @@ function zonedCalendar(date: Date, timeZone: string): { iso: string; weekday: st
   try {
     formatter = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", weekday: "long" });
   } catch {
-    throw new HttpError(500, "Configured time zone is invalid");
+    formatter = new Intl.DateTimeFormat("en-US", { timeZone: DEFAULT_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", weekday: "long" });
   }
   const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
   const iso = `${parts.year}-${parts.month}-${parts.day}`;
@@ -775,17 +794,26 @@ async function pinLeaves(db: D1Database): Promise<Row> {
   const allPins = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   let total = 0;
   for (const row of rows) {
-    let selections: number[][] = [];
-    try { selections = JSON.parse(row.pinLeaves); } catch { continue; }
+    let parsedLeaves: unknown;
+    try { parsedLeaves = JSON.parse(row.pinLeaves); } catch { continue; }
+    if (!Array.isArray(parsedLeaves)) continue;
+    const selections = parsedLeaves.filter(Array.isArray) as unknown[][];
+    const legacyLeaves = parsedLeaves.filter((value): value is { pins: unknown[]; converted?: unknown } => (
+      Boolean(value) && typeof value === "object" && !Array.isArray(value) && Array.isArray((value as Row).pins)
+    ));
     let frames: Row[] = [];
     try {
       const parsed = row.frameData ? JSON.parse(row.frameData) : {};
       frames = Array.isArray(parsed?.frames) ? parsed.frames : [];
     } catch { /* Invalid legacy frame data does not invalidate the game. */ }
-    const record = (pins: unknown, converted: boolean) => {
+    const record = (pins: unknown, converted: boolean, pinsAreStanding = false) => {
       if (!Array.isArray(pins) || pins.length >= 10) return;
-      const knocked = new Set(pins.map(Number).filter((pin) => allPins.includes(pin)));
-      const standing = allPins.filter((pin) => !knocked.has(pin)).join(",");
+      const selected = new Set(pins.map(Number).filter((pin) => allPins.includes(pin)));
+      const standingPins = pinsAreStanding
+        ? allPins.filter((pin) => selected.has(pin))
+        : allPins.filter((pin) => !selected.has(pin));
+      if (!standingPins.length) return;
+      const standing = standingPins.join(",");
       const current = counts.get(standing) ?? { count: 0, conversions: 0 };
       current.count += 1;
       if (converted) current.conversions += 1;
@@ -799,6 +827,11 @@ async function pinLeaves(db: D1Database): Promise<Row> {
       months.set(month, monthCounts);
       total += 1;
     };
+
+    if (legacyLeaves.length) {
+      for (const leave of legacyLeaves) record(leave.pins, Boolean(leave.converted), true);
+      continue;
+    }
 
     let rollIndex = 0;
     for (let frameIndex = 0; frameIndex < 9 && rollIndex < selections.length; frameIndex += 1) {
@@ -846,12 +879,53 @@ async function exportData(db: D1Database): Promise<Row> {
   return data;
 }
 
-function insertStatement(db: D1Database, table: string, input: Row, explicitId?: number): D1PreparedStatement {
-  const prepared = valuesFor(table, input);
-  const columns = explicitId == null ? prepared.columns : ["id", ...prepared.columns];
-  const values = explicitId == null ? prepared.values : [explicitId, ...prepared.values];
-  if (!columns.length) throw new HttpError(422, `No values supplied for ${table}`);
-  return db.prepare(`INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`).bind(...values);
+function chunkJsonRows(rows: Row[]): string[] {
+  const encoder = new TextEncoder();
+  const chunks: string[] = [];
+  let entries: string[] = [];
+  let bytes = 2;
+  for (const row of rows) {
+    const serialized = JSON.stringify(row);
+    const serializedBytes = encoder.encode(serialized).byteLength;
+    const entryBytes = serializedBytes + (entries.length ? 1 : 0);
+    if (entries.length && bytes + entryBytes > MAX_D1_JSON_BIND_BYTES) {
+      chunks.push(`[${entries.join(",")}]`);
+      entries = [];
+      bytes = 2;
+    }
+    if (serializedBytes + 2 > MAX_D1_JSON_BIND_BYTES) {
+      throw new HttpError(413, "An import record is too large");
+    }
+    entries.push(serialized);
+    bytes += serializedBytes + (entries.length > 1 ? 1 : 0);
+  }
+  if (entries.length) chunks.push(`[${entries.join(",")}]`);
+  return chunks;
+}
+
+function multiRowInsertStatements(
+  db: D1Database,
+  table: string,
+  inputs: Row[],
+  includeExplicitId = false,
+): D1PreparedStatement[] {
+  if (!inputs.length) return [];
+  const columns = includeExplicitId ? ["id", ...tableColumns[table]] : tableColumns[table];
+  const rows = inputs.map((input) => {
+    const prepared = valuesFor(table, input);
+    const row = Object.fromEntries(prepared.columns.map((column, index) => [column, prepared.values[index]]));
+    if (includeExplicitId) row.id = input.id;
+    return row;
+  });
+  const expressions = columns.map((column) => `json_extract(value, '$.${column}')`);
+  const sql = `INSERT INTO ${table} (${columns.join(", ")}) SELECT ${expressions.join(", ")} FROM json_each(?)`;
+  return chunkJsonRows(rows).map((chunk) => db.prepare(sql).bind(chunk));
+}
+
+function enforceD1StatementBudget(statements: D1PreparedStatement[], directQueries = 0): void {
+  if (schemaStatements.length + directQueries + statements.length > MAX_D1_STATEMENTS_PER_REQUEST) {
+    throw new HttpError(413, "Import is too complex to process safely");
+  }
 }
 
 function validateRestorePayload(data: Row): Map<string, Row[]> {
@@ -865,7 +939,7 @@ function validateRestorePayload(data: Row): Map<string, Row[]> {
       const row = value as Row;
       if (!Number.isInteger(row.id) || row.id < 1 || ids.has(row.id)) throw new HttpError(422, `${key}[${index}].id is invalid or duplicated`);
       ids.add(row.id);
-      return { id: row.id, ...validateRecord(table, row) };
+      return { id: row.id, ...validateRecord(table, row, false, { allowLegacyTournamentDate: true }) };
     });
     totalRows += rows.length;
     if (totalRows > 50_000) throw new HttpError(413, "Import contains too many records");
@@ -889,9 +963,10 @@ async function restoreData(db: D1Database, data: Row): Promise<Row> {
   const imported: Row = {};
   for (const [key, table] of exportTables) {
     const rows = validated.get(table) || [];
-    for (const row of rows) statements.push(insertStatement(db, table, row, Number(row.id)));
+    statements.push(...multiRowInsertStatements(db, table, rows, true));
     imported[key] = rows.length;
   }
+  enforceD1StatementBudget(statements);
   await db.batch(statements);
   return imported;
 }
@@ -1053,7 +1128,12 @@ async function sharePng(title: string, subtitle: string): Promise<Response> {
 
 interface ShareMetadata { title: string; description: string; image: string }
 
-function isPublicSharePage(path: string): boolean {
+function normalizeSharePath(path: string): string {
+  return path.length > 1 ? path.replace(/\/+$/, "") : path;
+}
+
+function isPublicSharePage(rawPath: string): boolean {
+  const path = normalizeSharePath(rawPath);
   return path === "/bowl"
     || /^\/(?:score|perfect-games)\/\d+$/.test(path)
     || /^\/sessions\/\d+\/share$/.test(path)
@@ -1061,7 +1141,9 @@ function isPublicSharePage(path: string): boolean {
     || /^\/tournaments\/\d+\/(?:share|standings|standings\/share)$/.test(path);
 }
 
-async function shareMetadata(db: D1Database, path: string, origin: string): Promise<ShareMetadata | null> {
+async function shareMetadata(env: Env, rawPath: string, origin: string): Promise<ShareMetadata | null> {
+  const db = env.DB;
+  const path = normalizeSharePath(rawPath);
   const absolute = (pathname: string) => new URL(pathname, origin).toString();
   const gameId = path.match(/^\/(?:score|perfect-games)\/(\d+)$/)?.[1];
   if (gameId) {
@@ -1090,6 +1172,7 @@ async function shareMetadata(db: D1Database, path: string, origin: string): Prom
     const kind = leagueMatch[2];
     const weekId = leagueMatch[3];
     if (weekId && !(detail.weeks || []).some((week: Row) => Number(week.id) === Number(weekId))) return null;
+    if (kind === "recap/share" && !(detail.weeks || []).length) return null;
     const suffix = kind === "leaderboard" ? " leaderboard" : kind === "recap/share" ? " recap" : weekId ? " week recap" : "";
     const imagePath = kind === "leaderboard" ? `/api/leagues/${detail.id}/leaderboard/og-image`
       : kind === "recap/share" ? `/api/leagues/${detail.id}/recap/og-image`
@@ -1111,11 +1194,14 @@ async function shareMetadata(db: D1Database, path: string, origin: string): Prom
       image: absolute(`/api/tournaments/${detail.id}/${standings ? "standings/" : ""}og-image`),
     };
   }
-  if (path === "/bowl") return {
-    title: "BowlSense public profile",
-    description: "Bowling scores, form, and milestones tracked with BowlSense.",
-    image: absolute("/api/profile/og-image"),
-  };
+  if (path === "/bowl") {
+    const profileName = publicProfileName(env);
+    return {
+      title: profileName ? `${profileName}'s BowlSense` : "BowlSense public profile",
+      description: "Bowling scores, form, and milestones tracked with BowlSense.",
+      image: absolute("/api/profile/og-image"),
+    };
+  }
   return null;
 }
 
@@ -1145,14 +1231,47 @@ function injectShareMetadata(html: string, metadata: ShareMetadata, canonical: s
   return updated.replace("</head>", `  <link rel="canonical" href="${values.canonical}" />\n  </head>`);
 }
 
-async function spaResponse(request: Request, env: Env, url: URL): Promise<Response> {
-  const indexResponse = await env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
-  const metadata = await shareMetadata(env.DB, url.pathname, url.origin);
-  if (!metadata || !indexResponse.ok) return indexResponse;
-  const headers = new Headers(indexResponse.headers);
+function injectNoIndex(html: string): string {
+  const tag = '<meta name="robots" content="noindex, nofollow" />';
+  const pattern = /<meta\s+name=["']robots["']\s+content=["'][^"']*["']\s*\/?\s*>/i;
+  return pattern.test(html) ? html.replace(pattern, tag) : html.replace("</head>", `  ${tag}\n  </head>`);
+}
+
+function dynamicHtmlHeaders(source: Headers): Headers {
+  const headers = new Headers(source);
+  for (const name of ["etag", "last-modified", "content-length", "content-encoding", "accept-ranges"]) {
+    headers.delete(name);
+  }
   headers.set("content-type", "text/html; charset=utf-8");
   headers.set("cache-control", "public, max-age=60");
-  return new Response(injectShareMetadata(await indexResponse.text(), metadata, url.toString()), { status: indexResponse.status, headers });
+  return headers;
+}
+
+async function spaResponse(request: Request, env: Env, url: URL, requireShareMetadata = false): Promise<Response> {
+  const assetHeaders = new Headers(request.headers);
+  for (const name of ["if-match", "if-none-match", "if-modified-since", "if-unmodified-since", "if-range", "range"]) {
+    assetHeaders.delete(name);
+  }
+  const indexResponse = await env.ASSETS.fetch(new Request(new URL("/index.html", request.url), {
+    method: "GET",
+    headers: assetHeaders,
+  }));
+  if (!indexResponse.ok) {
+    return new Response("<!doctype html><html><head><meta name=\"robots\" content=\"noindex, nofollow\" /></head><body>Not found</body></html>", {
+      status: 404,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+  const html = await indexResponse.text();
+  const metadata = await shareMetadata(env, url.pathname, url.origin);
+  const headers = dynamicHtmlHeaders(indexResponse.headers);
+  if (!metadata) {
+    if (!requireShareMetadata) return new Response(html, { status: 200, headers });
+    headers.set("cache-control", "no-store");
+    return new Response(injectNoIndex(html), { status: 404, headers });
+  }
+  const canonical = new URL(normalizeSharePath(url.pathname), url.origin).toString();
+  return new Response(injectShareMetadata(html, metadata, canonical), { status: 200, headers });
 }
 
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
@@ -1161,7 +1280,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   const path = url.pathname;
 
   if (path === "/health") return json({ status: "ok", timestamp: new Date().toISOString() });
-  if (path === "/api/stats" && method === "GET") return json(await statsSummary(db));
+  if (path === "/api/stats" && method === "GET") {
+    return json({
+      ...await statsSummary(db),
+      profileName: publicProfileName(env),
+      generatedAt: new Date().toISOString(),
+    });
+  }
   if (path === "/api/stats/full" && method === "GET") return json(await fullStats(db));
   if (path === "/api/stats/trend" && method === "GET") return json(await trend(db));
   if (path === "/api/stats/weekly" && method === "GET") return json(await weeklyStats(db, env.BOWLSENSE_TIME_ZONE || DEFAULT_TIME_ZONE));
@@ -1397,7 +1522,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const sessionIds = new Map<string, number>();
     const maxSession = await first(db, "SELECT COALESCE(MAX(id), 0) AS id FROM sessions");
     let nextSessionId = Number(maxSession?.id ?? 0) + 1;
-    const statements: D1PreparedStatement[] = [];
+    const sessionRows: Row[] = [];
+    const gameRows: Row[] = [];
     for (const values of rows.slice(1)) {
       if (values.length > headers.length || values.length < headers.length) throw new HttpError(422, "CSV row has a different number of columns than its header");
       const row = Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ""]));
@@ -1407,7 +1533,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       if (!sessionId) {
         sessionId = nextSessionId; nextSessionId += 1;
         const session = validateRecord("sessions", { date: row.date, location: row.location || null });
-        statements.push(insertStatement(db, "sessions", session, sessionId));
+        sessionRows.push({ id: sessionId, ...session });
         sessionIds.set(key, sessionId); imported.sessions += 1;
       }
       const game = validateRecord("games", {
@@ -1418,15 +1544,24 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         spares: csvInteger(row, "spares", 0, 0, 10),
         splits: csvInteger(row, "splits", 0, 0, 12),
       });
-      statements.push(insertStatement(db, "games", game));
+      gameRows.push(game);
       imported.games += 1;
     }
+    const statements = [
+      ...multiRowInsertStatements(db, "sessions", sessionRows, true),
+      ...multiRowInsertStatements(db, "games", gameRows),
+    ];
     if (!statements.length) throw new HttpError(422, "CSV contains no importable rows");
+    enforceD1StatementBudget(statements, 1);
     await db.batch(statements);
     return json({ ok: true, imported });
   }
 
   if ((path.endsWith("/og-image") || path.endsWith("/share-card")) && method === "GET") {
+    if (path === "/api/profile/og-image") {
+      const profileName = publicProfileName(env);
+      return await sharePng(profileName ? `${profileName}'s BowlSense` : "BowlSense", "Public bowling profile");
+    }
     const sessionId = path.match(/^\/api\/sessions\/(\d+)\/(?:og-image|share-card)$/)?.[1];
     if (sessionId) {
       const payload = await publicSessionPayload(db, Number(sessionId));
@@ -1472,13 +1607,13 @@ export default {
       }
       if (isPublicSharePage(url.pathname)) {
         await ensureSchema(env.DB);
-        return await spaResponse(request, env, url);
+        return await spaResponse(request, env, url, true);
       }
       const asset = await env.ASSETS.fetch(request);
       if (asset.status !== 404) return asset;
       return await spaResponse(request, env, url);
     } catch (caught) {
-      if (caught instanceof HttpError) return error(caught.message, caught.status);
+      if (caught instanceof HttpError && caught.status < 500) return error(caught.message, caught.status);
       console.error("BowlSense worker request failed", caught);
       return error("Unexpected server error", 500);
     }

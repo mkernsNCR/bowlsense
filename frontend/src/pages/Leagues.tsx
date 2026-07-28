@@ -501,7 +501,7 @@ function LeagueDetail({ id }: { id: string }) {
                             <div>
                               <div style={{ fontWeight: 650 }}>Game {g.gameNumber}: {g.score ?? '-'}</div>
                               {marks ? (
-                                <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 11, marginTop: 3 }}>{marks}</div>
+                                <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 12, marginTop: 3 }}>{marks}</div>
                               ) : (
                                 <div className="muted" style={{ fontSize: 12 }}>⚡ {g.strikes ?? 0} · ✅ {g.spares ?? 0} · 🔀 {g.splits ?? 0}{ballName ? ` · 🎳 ${ballName}` : ''}</div>
                               )}
@@ -612,7 +612,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
             <div key={game.gameNumber} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--surface)' }}>
               <div style={{ fontWeight: 650 }}>Game {game.gameNumber}: {game.score ?? '-'}</div>
               {marks ? (
-                <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 11, marginTop: 2 }}>{marks}</div>
+                <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 12, marginTop: 2 }}>{marks}</div>
               ) : (
                 <div className="muted" style={{ fontSize: 12 }}>⚡ {game.strikes ?? 0} · ✅ {game.spares ?? 0} · 🔀 {game.splits ?? 0}</div>
               )}

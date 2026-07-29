@@ -142,6 +142,18 @@ button.today-context:hover .today-context__copy strong {
   width: 20px;
 }
 
+.today-icon--play {
+  stroke-width: 2.4;
+}
+
+.today-icon--trendUp {
+  transform: rotate(-90deg);
+}
+
+.today-icon--trendDown {
+  transform: rotate(90deg);
+}
+
 .today-next-action {
   align-items: center;
   display: grid;

@@ -15,10 +15,8 @@ import {
   type Session,
   type Stats,
   type TonightLeague,
-  type TonightLeagueResponse,
   type WeeklyStats,
   normalizeGame,
-  normalizeTonightLeague,
 } from '../features/today/data'
 import '../features/today/today.css'
 
@@ -164,10 +162,7 @@ export default function Dashboard() {
   })
   const tonightQuery = useQuery<TonightLeague[]>({
     queryKey: ['dashboard/tonight'],
-    queryFn: async () => {
-      const leagues = await fetchJson<TonightLeagueResponse[]>('/api/dashboard/tonight')
-      return leagues.map(normalizeTonightLeague)
-    },
+    queryFn: () => fetchJson<TonightLeague[]>('/api/dashboard/tonight'),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -267,8 +262,7 @@ export default function Dashboard() {
                 <span className="today-context__copy">
                   <strong>{contextLeague.name} tonight</strong>
                   <span>
-                    Tonight · {contextLeague.location ?? 'Center not set'} · Week {contextLeague.nextWeekNumber}
-                    {` · Opponent ${contextLeague.opponent ?? 'TBD'}`}
+                    {formatDate(contextLeague.todayIso)} · {contextLeague.location ?? 'Center not set'} · Week {contextLeague.nextWeekNumber} · Opponent not set
                   </span>
                 </span>
                 {relevantLeagues.length > 1 && <span className="today-context__count">+{relevantLeagues.length - 1}</span>}
@@ -366,9 +360,10 @@ export default function Dashboard() {
               <h2>{contextLeague.name}</h2>
               <dl>
                 <div><dt>Center</dt><dd>{contextLeague.location ?? 'Not set'}</dd></div>
-                <div><dt>Start</dt><dd>Tonight · {contextLeague.todayName}</dd></div>
+                <div><dt>Start</dt><dd>Tonight · {formatDate(contextLeague.todayIso)}</dd></div>
                 <div><dt>Week</dt><dd>{contextLeague.nextWeekNumber}</dd></div>
-                <div><dt>Opponent</dt><dd>{contextLeague.opponent ?? 'TBD'}</dd></div>
+                <div><dt>Opponent</dt><dd>Not set</dd></div>
+                {contextLeague.lastOpponent && <div><dt>Last faced</dt><dd>{contextLeague.lastOpponent}</dd></div>}
               </dl>
               <button
                 type="button"

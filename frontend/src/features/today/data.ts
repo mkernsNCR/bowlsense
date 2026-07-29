@@ -10,7 +10,7 @@ export interface TonightLeague {
   todayIso: string
   inSeason: boolean
   nextWeekNumber: number
-  opponent: string | null
+  lastOpponent: string | null
   lastWeekDate: string | null
   stats: {
     average: number
@@ -20,10 +20,6 @@ export interface TonightLeague {
     gamesWon: number
     gamesLost: number
   }
-}
-
-export interface TonightLeagueResponse extends Omit<TonightLeague, 'opponent'> {
-  lastOpponent: string | null
 }
 
 export interface Stats {
@@ -106,9 +102,4 @@ export function normalizeGame(game: GameResponse): Game {
     date: game.date,
     location: game.location,
   }
-}
-
-export function normalizeTonightLeague(league: TonightLeagueResponse): TonightLeague {
-  const { lastOpponent, ...normalizedLeague } = league
-  return { ...normalizedLeague, opponent: lastOpponent }
 }

@@ -10,7 +10,7 @@ export interface TonightLeague {
   todayIso: string
   inSeason: boolean
   nextWeekNumber: number
-  lastOpponent: string | null
+  opponent: string | null
   lastWeekDate: string | null
   stats: {
     average: number
@@ -20,6 +20,10 @@ export interface TonightLeague {
     gamesWon: number
     gamesLost: number
   }
+}
+
+export interface TonightLeagueResponse extends Omit<TonightLeague, 'opponent'> {
+  lastOpponent: string | null
 }
 
 export interface Stats {
@@ -55,13 +59,16 @@ export interface Game {
   id: number
   score: number
   gameNumber?: number
-  game_number?: number
   frameData?: string | null
-  frame_data?: string | null
   sessionId?: number
-  session_id?: number
   date?: string
   location?: string
+}
+
+export interface GameResponse extends Game {
+  game_number?: number
+  frame_data?: string | null
+  session_id?: number
 }
 
 export interface Ball {
@@ -87,4 +94,21 @@ export async function fetchJson<T = unknown>(input: RequestInfo | URL, init?: Re
     throw new Error(`Request failed with status ${response.status}`)
   }
   return response.json() as Promise<T>
+}
+
+export function normalizeGame(game: GameResponse): Game {
+  return {
+    id: game.id,
+    score: game.score,
+    gameNumber: game.gameNumber ?? game.game_number,
+    frameData: game.frameData ?? game.frame_data ?? null,
+    sessionId: game.sessionId ?? game.session_id,
+    date: game.date,
+    location: game.location,
+  }
+}
+
+export function normalizeTonightLeague(league: TonightLeagueResponse): TonightLeague {
+  const { lastOpponent, ...normalizedLeague } = league
+  return { ...normalizedLeague, opponent: lastOpponent }
 }

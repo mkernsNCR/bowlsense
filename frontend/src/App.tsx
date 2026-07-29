@@ -4,14 +4,20 @@ import CompactTabBar from './features/shell/CompactTabBar'
 import MoreSheet from './features/shell/MoreSheet'
 import Sidebar from './features/shell/Sidebar'
 import ShellIcon from './features/shell/ShellIcon'
-import { isPublicRoute } from './features/shell/navigation'
+import { getShellTitle, isPublicRoute } from './features/shell/navigation'
 import './App.css'
 
-export default function App({ children }: { children: ReactNode }) {
+interface AppProps {
+  children: ReactNode
+  inspector?: ReactNode
+}
+
+export default function App({ children, inspector }: AppProps) {
   const { pathname } = useLocation()
   const [moreOpenedAtPath, setMoreOpenedAtPath] = useState<string | null>(null)
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreOpen = moreOpenedAtPath === pathname
+  const shellTitle = getShellTitle(pathname)
 
   const closeMore = useCallback(() => {
     setMoreOpenedAtPath(null)
@@ -26,7 +32,7 @@ export default function App({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="bs-shell">
+    <div className={`bs-shell${inspector ? ' bs-shell--with-inspector' : ''}`}>
       <a className="bs-shell__skip-link" href="#main-content">
         Skip to content
       </a>
@@ -35,16 +41,23 @@ export default function App({ children }: { children: ReactNode }) {
 
       <div className="bs-shell__workspace">
         <header className="bs-shell__toolbar">
-          <div className="bs-shell__compact-brand" aria-hidden="true">
+          <div className="bs-shell__compact-title">
             <ShellIcon name="lane" size={20} />
             <span>BowlSense</span>
           </div>
+          <p className="bs-shell__wide-title">{shellTitle}</p>
         </header>
 
         <main id="main-content" className="bs-shell__content" tabIndex={-1}>
           {children}
         </main>
       </div>
+
+      {inspector && (
+        <aside className="bs-shell__inspector" aria-label="Inspector">
+          {inspector}
+        </aside>
+      )}
 
       <CompactTabBar
         pathname={pathname}

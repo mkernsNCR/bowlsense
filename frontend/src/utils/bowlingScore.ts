@@ -124,7 +124,7 @@ export function knockPins(state: GameState, pinsKnocked: number[]): GameState {
   const nextFrame = frames[frameIndex]
   const rolls = [...state.rolls, pinsDown]
   let currentFrame = frameIndex
-  let currentBall = state.currentBall
+  let currentBall: number
   let pinsStanding = [...state.pinsStanding]
   let isComplete = false
 

@@ -22,6 +22,24 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
+let activeBodyScrollLocks = 0
+let bodyOverflowBeforeLock = ''
+
+function lockBodyScroll() {
+  if (activeBodyScrollLocks === 0) {
+    bodyOverflowBeforeLock = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  activeBodyScrollLocks += 1
+}
+
+function unlockBodyScroll() {
+  activeBodyScrollLocks = Math.max(0, activeBodyScrollLocks - 1)
+  if (activeBodyScrollLocks === 0) {
+    document.body.style.overflow = bodyOverflowBeforeLock
+  }
+}
+
 export function Sheet({ open, onClose, title, description, children, footer, closeLabel = 'Close', className = '' }: SheetProps) {
   const titleId = useId()
   const descriptionId = useId()
@@ -37,8 +55,7 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
 
     const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const panel = panelRef.current
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    lockBodyScroll()
 
     const focusFrame = requestAnimationFrame(() => {
       const firstControl = panel?.querySelector<HTMLElement>(focusableSelector)
@@ -75,7 +92,7 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       cancelAnimationFrame(focusFrame)
-      document.body.style.overflow = previousOverflow
+      unlockBodyScroll()
       returnFocus?.focus()
     }
   }, [open])

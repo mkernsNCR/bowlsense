@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
+import { Icon } from '../../design'
 import type { Session } from './data'
-import { TodayIcon } from './TodayIcon'
 
 function sessionDate(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
@@ -53,7 +53,7 @@ export function RecentSessions({ sessions }: { sessions: Session[] }) {
               <span><small>AVG</small><strong>{average || '—'}</strong></span>
               <span><small>HIGH</small><strong>{high || '—'}</strong></span>
             </span>
-            <TodayIcon name="chevron" />
+            <Icon className="today-icon" name="chevron-right" />
           </Link>
         )
       })}

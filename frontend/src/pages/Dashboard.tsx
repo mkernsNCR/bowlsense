@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Icon } from '../design'
 import { useSettings } from '../hooks/useSettings'
 import { QuickLogSheet, type QuickLogDraft } from '../features/today/QuickLogSheet'
 import { RecentSessions } from '../features/today/RecentSessions'
 import { TodayFrameRibbon } from '../features/today/TodayFrameRibbon'
-import { TodayIcon } from '../features/today/TodayIcon'
 import {
   fetchJson,
   type Ball,
@@ -55,7 +55,7 @@ function TodayActions({ onQuickLog }: { onQuickLog: () => void }) {
   return (
     <div className="today-next-action">
       <Link to="/sessions/new" className="today-button today-button--primary">
-        <TodayIcon name="play" />
+        <Icon className="today-icon" name="start" />
         Start bowling
       </Link>
       <button type="button" className="today-button today-button--text" onClick={onQuickLog}>
@@ -108,17 +108,16 @@ function DashboardError({ onRetry }: { onRetry: () => void }) {
       </header>
       <section className="today-state" role="alert">
         <div className="today-state__icon" aria-hidden="true">
-          <TodayIcon name="retry" />
+          <Icon className="today-icon" name="warning" />
         </div>
         <h2>Your activity didn’t load</h2>
         <p>Check your connection and try again. You can still start a new session now.</p>
         <div className="today-state__actions">
           <button type="button" className="today-button today-button--secondary" onClick={onRetry}>
-            <TodayIcon name="retry" />
             Try again
           </button>
           <Link to="/sessions/new" className="today-button today-button--primary">
-            <TodayIcon name="play" />
+            <Icon className="today-icon" name="start" />
             Start bowling
           </Link>
         </div>
@@ -258,7 +257,7 @@ export default function Dashboard() {
                 onClick={() => navigate(`/leagues/${contextLeague.id}`)}
                 aria-label={`View ${contextLeague.name}, week ${contextLeague.nextWeekNumber}`}
               >
-                <span className="today-context__icon" aria-hidden="true"><TodayIcon name="league" /></span>
+                <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="league" /></span>
                 <span className="today-context__copy">
                   <strong>{contextLeague.name} tonight</strong>
                   <span>
@@ -266,11 +265,11 @@ export default function Dashboard() {
                   </span>
                 </span>
                 {relevantLeagues.length > 1 && <span className="today-context__count">+{relevantLeagues.length - 1}</span>}
-                <TodayIcon name="chevron" />
+                <Icon className="today-icon" name="chevron-right" />
               </button>
             ) : (
               <div className="today-context">
-                <span className="today-context__icon" aria-hidden="true"><TodayIcon name="location" /></span>
+                <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="location" /></span>
                 <span className="today-context__copy">
                   <strong>{latestSession?.location || 'Ready when you are'}</strong>
                   <span>{latestSession ? `Last bowled ${formatDate(latestSession.date)}` : 'Your first frame starts here'}</span>
@@ -308,7 +307,12 @@ export default function Dashboard() {
                     <strong>{stats?.average ?? '—'}</strong>
                     {averageDelta !== null && (
                       <span className={`today-delta ${averageDelta > 0 ? 'today-delta--up' : averageDelta < 0 ? 'today-delta--down' : ''}`}>
-                        {averageDelta !== 0 && <TodayIcon name={averageDelta > 0 ? 'trendUp' : 'trendDown'} />}
+                        {averageDelta !== 0 && (
+                          <Icon
+                            className={`today-icon today-icon--${averageDelta > 0 ? 'trendUp' : 'trendDown'}`}
+                            name="back"
+                          />
+                        )}
                         {averageDelta === 0 ? 'No change' : `${Math.abs(averageDelta)} vs last week`}
                       </span>
                     )}

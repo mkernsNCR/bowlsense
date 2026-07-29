@@ -25,6 +25,14 @@ const focusableSelector = [
 let activeBodyScrollLocks = 0
 let bodyOverflowBeforeLock = ''
 
+interface OpenSheet {
+  id: symbol
+  panel: HTMLDivElement | null
+  returnFocus: HTMLElement | null
+}
+
+const openSheets: OpenSheet[] = []
+
 function lockBodyScroll() {
   if (activeBodyScrollLocks === 0) {
     bodyOverflowBeforeLock = document.body.style.overflow
@@ -40,11 +48,46 @@ function unlockBodyScroll() {
   }
 }
 
+function isTopmostSheet(id: symbol) {
+  return openSheets.at(-1)?.id === id
+}
+
+function registerSheet(sheet: OpenSheet) {
+  openSheets.push(sheet)
+}
+
+function unregisterSheet(id: symbol) {
+  const index = openSheets.findIndex((sheet) => sheet.id === id)
+  if (index === -1) return
+
+  const wasTopmost = index === openSheets.length - 1
+  const [removed] = openSheets.splice(index, 1)
+  const nextNestedSheet = openSheets[index]
+
+  if (
+    nextNestedSheet &&
+    removed.panel?.contains(nextNestedSheet.returnFocus)
+  ) {
+    nextNestedSheet.returnFocus = removed.returnFocus
+  }
+
+  if (!wasTopmost) return
+  if (removed.returnFocus?.isConnected) {
+    removed.returnFocus.focus()
+    return
+  }
+
+  const activePanel = openSheets.at(-1)?.panel
+  const firstControl = activePanel?.querySelector<HTMLElement>(focusableSelector)
+  ;(firstControl ?? activePanel)?.focus()
+}
+
 export function Sheet({ open, onClose, title, description, children, footer, closeLabel = 'Close', className = '' }: SheetProps) {
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
+  const sheetIdRef = useRef(Symbol('sheet'))
 
   useEffect(() => {
     onCloseRef.current = onClose
@@ -55,14 +98,18 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
 
     const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const panel = panelRef.current
+    const sheetId = sheetIdRef.current
     lockBodyScroll()
+    registerSheet({ id: sheetId, panel, returnFocus })
 
     const focusFrame = requestAnimationFrame(() => {
+      if (!isTopmostSheet(sheetId)) return
       const firstControl = panel?.querySelector<HTMLElement>(focusableSelector)
       ;(firstControl ?? panel)?.focus()
     })
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!isTopmostSheet(sheetId)) return
       if (event.key === 'Escape') {
         event.preventDefault()
         onCloseRef.current()
@@ -92,8 +139,8 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       cancelAnimationFrame(focusFrame)
+      unregisterSheet(sheetId)
       unlockBodyScroll()
-      returnFocus?.focus()
     }
   }, [open])
 

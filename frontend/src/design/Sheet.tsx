@@ -35,7 +35,6 @@ type OpenSheet = {
 const openSheets: OpenSheet[] = []
 let bodyLockCount = 0
 let bodyOverflowBeforeLock = ''
-let fallbackReturnFocus: HTMLElement | null = null
 
 function lockBody() {
   if (bodyLockCount === 0) {
@@ -65,19 +64,25 @@ function unregisterSheet(panel: HTMLElement) {
   const index = openSheets.findIndex((entry) => entry.panel === panel)
   if (index === -1) return
 
-  const [{ returnFocus }] = openSheets.splice(index, 1)
-  if (returnFocus && document.contains(returnFocus)) fallbackReturnFocus = returnFocus
-  unlockBody()
+  const wasTopmost = index === openSheets.length - 1
+  const [removed] = openSheets.splice(index, 1)
+  const nextNestedSheet = openSheets[index]
 
-  const target = returnFocus && document.contains(returnFocus)
-    ? returnFocus
-    : fallbackReturnFocus && document.contains(fallbackReturnFocus)
-      ? fallbackReturnFocus
-      : null
-  if (target && (index === openSheets.length || openSheets.length === 0)) {
-    target.focus()
-    if (openSheets.length === 0) fallbackReturnFocus = null
+  if (nextNestedSheet && removed.panel.contains(nextNestedSheet.returnFocus)) {
+    nextNestedSheet.returnFocus = removed.returnFocus
   }
+
+  unlockBody()
+  if (!wasTopmost) return
+
+  if (removed.returnFocus?.isConnected) {
+    removed.returnFocus.focus()
+    return
+  }
+
+  const activePanel = openSheets.at(-1)?.panel
+  const firstControl = activePanel?.querySelector<HTMLElement>(focusableSelector)
+  ;(firstControl ?? activePanel)?.focus()
 }
 
 export function Sheet({
@@ -113,6 +118,7 @@ export function Sheet({
     registerSheet(panel, returnFocus)
 
     const focusFrame = requestAnimationFrame(() => {
+      if (!isTopSheet(panel)) return
       const requestedControl = initialFocusRef?.current
       const firstControl = panel.querySelector<HTMLElement>(focusableSelector)
       ;(requestedControl && panel.contains(requestedControl) ? requestedControl : firstControl ?? panel).focus()

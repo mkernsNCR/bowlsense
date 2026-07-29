@@ -1,25 +1,27 @@
 :root {
   color-scheme: light dark;
-  --canvas: #f6f3ed;
-  --surface: #ffffff;
-  --surface-raised: #fcfbf8;
-  --ink: #16181c;
-  --ink-secondary: #64676f;
-  --oil-violet: #6854c7;
-  --strike-gold: #875600;
-  --spare-green: #1d7e55;
-  --separator: rgba(22, 24, 28, 0.12);
-  --danger: #b42318;
-  --focus-ring: #4d3ab1;
-  --on-tint: #ffffff;
-  --backdrop: rgba(22, 24, 28, 0.34);
-  --material: rgba(252, 251, 248, 0.84);
-  --lane-maple: #d9b985;
-  --lane-pine: #f1d9ad;
-  --foul-line: #272b31;
+  --canvas: light-dark(#f6f3ed, #0d0f12);
+  --surface: light-dark(#ffffff, #181b20);
+  --surface-raised: light-dark(#fcfbf8, #22262d);
+  --ink: light-dark(#16181c, #f5f6f7);
+  --ink-secondary: light-dark(#64676f, #a6aab2);
+  --oil-violet: light-dark(#6854c7, #9a87f2);
+  --strike-gold: light-dark(#875600, #f1b84b);
+  --spare-green: light-dark(#1d7e55, #4cc38a);
+  --separator: light-dark(rgba(22, 24, 28, 0.12), rgba(255, 255, 255, 0.12));
+  --danger: light-dark(#b42318, #ff8a80);
+  --focus-ring: light-dark(#4d3ab1, #b9aaf7);
+  --on-tint: light-dark(#ffffff, #0d0f12);
+  --backdrop: light-dark(rgba(22, 24, 28, 0.34), rgba(0, 0, 0, 0.62));
+  --material: light-dark(rgba(252, 251, 248, 0.84), rgba(24, 27, 32, 0.86));
+  --lane-maple: light-dark(#d9b985, #604f38);
+  --lane-pine: light-dark(#f1d9ad, #756044);
+  --foul-line: light-dark(#272b31, #050607);
+  --shadow-1: light-dark(0 1px 4px rgba(22, 24, 28, 0.12), 0 1px 6px rgba(0, 0, 0, 0.48));
+  --shadow-drawer: light-dark(-8px 0 24px rgba(0, 0, 0, 0.14), -8px 0 28px rgba(0, 0, 0, 0.52));
 
   --font-display: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-body: -apple-system, "BlinkMacSystemFont", "SF Pro Text", system-ui, sans-serif;
   --font-data: ui-monospace, "SFMono-Regular", monospace;
 
   --space-1: 0.25rem;
@@ -35,45 +37,11 @@
 }
 
 :root[data-theme='dark'] {
-  --canvas: #0d0f12;
-  --surface: #181b20;
-  --surface-raised: #22262d;
-  --ink: #f5f6f7;
-  --ink-secondary: #a6aab2;
-  --oil-violet: #9a87f2;
-  --strike-gold: #f1b84b;
-  --spare-green: #4cc38a;
-  --separator: rgba(255, 255, 255, 0.12);
-  --danger: #ff8a80;
-  --focus-ring: #b9aaf7;
-  --on-tint: #0d0f12;
-  --backdrop: rgba(0, 0, 0, 0.62);
-  --material: rgba(24, 27, 32, 0.86);
-  --lane-maple: #604f38;
-  --lane-pine: #756044;
-  --foul-line: #050607;
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --canvas: #0d0f12;
-    --surface: #181b20;
-    --surface-raised: #22262d;
-    --ink: #f5f6f7;
-    --ink-secondary: #a6aab2;
-    --oil-violet: #9a87f2;
-    --strike-gold: #f1b84b;
-    --spare-green: #4cc38a;
-    --separator: rgba(255, 255, 255, 0.12);
-    --danger: #ff8a80;
-    --focus-ring: #b9aaf7;
-    --on-tint: #0d0f12;
-    --backdrop: rgba(0, 0, 0, 0.62);
-    --material: rgba(24, 27, 32, 0.86);
-    --lane-maple: #604f38;
-    --lane-pine: #756044;
-    --foul-line: #050607;
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 .bs-visually-hidden {
@@ -83,7 +51,7 @@
   padding: 0 !important;
   margin: -1px !important;
   overflow: hidden !important;
-  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
   white-space: nowrap !important;
   border: 0 !important;
 }
@@ -642,8 +610,6 @@ a.bs-list-row:hover {
 }
 
 .bs-frame-ribbon {
-  position: relative;
-  isolation: isolate;
   overflow-x: auto;
   border: var(--hairline) solid color-mix(in srgb, var(--foul-line) 62%, var(--separator));
   border-radius: var(--radius-control);
@@ -651,7 +617,13 @@ a.bs-list-row:hover {
   scrollbar-width: thin;
 }
 
-.bs-frame-ribbon::after {
+.bs-frame-ribbon__track {
+  position: relative;
+  min-width: max(100%, 20rem);
+  isolation: isolate;
+}
+
+.bs-frame-ribbon__track::after {
   position: absolute;
   right: 0;
   bottom: 0;
@@ -674,8 +646,8 @@ a.bs-list-row:hover {
 
 .bs-frame-ribbon__frames {
   display: grid;
-  grid-template-columns: repeat(9, minmax(1.55rem, 1fr)) minmax(2.25rem, 1.35fr);
-  min-width: 17.75rem;
+  grid-template-columns: repeat(9, minmax(1.55rem, 1fr)) minmax(3.25rem, 1.65fr);
+  min-width: 20rem;
   margin: 0;
   padding: 0 0 0.25rem;
   list-style: none;
@@ -852,13 +824,6 @@ a.bs-list-row:hover {
   *::before,
   *::after {
     scroll-behavior: auto !important;
-  }
-
-  .bs-tab-bar__icon,
-  .bs-button,
-  .bs-sheet,
-  .bs-sheet-backdrop,
-  .bs-empty-state__icon {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

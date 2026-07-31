@@ -96,7 +96,18 @@
 .gear-capacity > span { color: var(--gear-muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
 
 .gear-back { align-items: center; color: var(--gear-muted); display: inline-flex; font-size: .8rem; gap: 6px; margin-bottom: 10px; min-height: 44px; text-decoration: none; }
-.gear-bag { background: var(--gear-surface-2); border: 1px solid var(--gear-line); border-radius: 18px; display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); padding: 12px; }
+.gear-bag {
+  background-color: var(--gear-surface-2);
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 52px, rgb(91 76 48 / .08) 52px 53px),
+    linear-gradient(160deg, rgb(255 255 255 / .22), transparent 48%, rgb(115 86 164 / .08));
+  border: 1px solid var(--gear-line);
+  border-radius: 18px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 12px;
+}
 .gear-slot { align-items: center; background: var(--gear-surface); border: 1px solid var(--gear-line); border-radius: 14px; display: flex; gap: 10px; min-height: 86px; padding: 12px; position: relative; }
 .gear-slot--empty { border-style: dashed; color: var(--gear-muted); justify-content: center; }
 .gear-slot__number { color: var(--gear-muted); font-size: .65rem; position: absolute; right: 8px; top: 6px; }

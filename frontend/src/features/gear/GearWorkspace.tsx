@@ -7,7 +7,7 @@ export function GearNavigation() {
   return (
     <nav className="gear-segments" aria-label="Gear sections">
       <NavLink to="/balls" className={({ isActive }) => isActive ? 'gear-segment is-active' : 'gear-segment'}>
-        Ball library
+        Balls
       </NavLink>
       <NavLink to="/arsenals" className={({ isActive }) => isActive ? 'gear-segment is-active' : 'gear-segment'}>
         Arsenals
@@ -20,8 +20,8 @@ export function GearHeader({ title, description, action }: { title: string; desc
   return (
     <header className="gear-header">
       <div>
-        <p className="gear-eyebrow">Gear</p>
-        <h1>{title}</h1>
+        <p className="gear-eyebrow">{title}</p>
+        <h1>Gear</h1>
         <p>{description}</p>
       </div>
       {action && <div className="gear-header__action">{action}</div>}
@@ -51,11 +51,12 @@ export function GearSheet({ open, title, description, onClose, children }: {
 }
 
 export function BallImage({ path, name, size = 'medium' }: { path?: string | null; name: string; size?: 'small' | 'medium' | 'large' }) {
-  const [failed, setFailed] = useState(false)
   const source = path?.startsWith('http') ? path : `https://www.bowwwl.com${path || ''}`
+  const [failedSource, setFailedSource] = useState<string | null>(null)
+  const failed = Boolean(path && failedSource === source)
   return (
     <div className={`gear-ball-image gear-ball-image--${size}`} title={!path || failed ? `Image unavailable for ${name}` : undefined}>
-      {path && !failed ? <img src={source} alt="" loading="lazy" onError={() => setFailed(true)} /> : <span aria-hidden="true" />}
+      {path && !failed ? <img src={source} alt="" loading="lazy" onError={() => setFailedSource(source)} /> : <span aria-hidden="true" />}
       <span className="sr-only">{!path || failed ? `Image unavailable for ${name}` : name}</span>
     </div>
   )

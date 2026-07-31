@@ -1,24 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BallImage, GearHeader, GearNavigation, GearSheet, GearState } from '../features/gear/GearWorkspace'
+import { request, requestJson } from '../features/gear/api'
+import { missingBallSpecs, type GearBall } from '../features/gear/types'
+import { copyText } from '../features/scoring/copyText'
 import { Icon } from '../design'
-
-interface Ball {
-  id: number
-  name: string
-  brand: string
-  color: string
-  notes: string
-  bowwwlId?: string
-  coreType?: string
-  coreRg?: string
-  coreDiff?: string
-  coverstockName?: string
-  coverstockType?: string
-  factoryFinish?: string
-  thumbnailImage?: string
-  createdAt?: string
-}
 
 interface BowwwlBall {
   ball_id: string
@@ -44,21 +30,15 @@ interface BallPerformance {
   average: number
 }
 
-type BallForm = Pick<Ball, 'name' | 'brand' | 'color' | 'notes'>
+interface BallForm {
+  name: string
+  brand: string
+  color: string
+  notes: string
+}
 type CoverFilter = 'all' | 'solid' | 'pearl' | 'hybrid' | 'urethane' | 'other'
 
 const EMPTY_FORM: BallForm = { name: '', brand: '', color: '', notes: '' }
-
-async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
-  return response.json() as Promise<T>
-}
-
-async function request(input: RequestInfo | URL, init?: RequestInit): Promise<void> {
-  const response = await fetch(input, init)
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
-}
 
 async function clipboardImage(path: string): Promise<void> {
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Image clipboard unavailable')
@@ -97,26 +77,13 @@ async function clipboardImage(path: string): Promise<void> {
   await navigator.clipboard.write([new ClipboardItem({ [image.type]: image })])
 }
 
-function coverGroup(ball: Ball): CoverFilter {
+function coverGroup(ball: GearBall): CoverFilter {
   const cover = `${ball.coverstockType || ''} ${ball.coverstockName || ''}`.toLowerCase()
   if (cover.includes('solid')) return 'solid'
   if (cover.includes('pearl')) return 'pearl'
   if (cover.includes('hybrid')) return 'hybrid'
   if (cover.includes('urethane')) return 'urethane'
   return 'other'
-}
-
-function copyText(text: string): Promise<void> {
-  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text)
-  const field = document.createElement('textarea')
-  field.value = text
-  field.style.position = 'fixed'
-  field.style.opacity = '0'
-  document.body.appendChild(field)
-  field.select()
-  const success = document.execCommand('copy')
-  field.remove()
-  return success ? Promise.resolve() : Promise.reject(new Error('Clipboard unavailable'))
 }
 
 export default function Balls() {
@@ -129,7 +96,7 @@ export default function Balls() {
   const [catalogSearchTerm, setCatalogSearchTerm] = useState('')
   const [selectedCatalogBall, setSelectedCatalogBall] = useState<BowwwlBall | null>(null)
   const [manualForm, setManualForm] = useState<BallForm>(EMPTY_FORM)
-  const [selectedBall, setSelectedBall] = useState<Ball | null>(null)
+  const [selectedBall, setSelectedBall] = useState<GearBall | null>(null)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<BallForm>(EMPTY_FORM)
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
@@ -139,9 +106,9 @@ export default function Balls() {
     return () => window.clearTimeout(timeout)
   }, [catalogQuery])
 
-  const ballsQuery = useQuery<Ball[]>({
+  const ballsQuery = useQuery<GearBall[]>({
     queryKey: ['balls'],
-    queryFn: () => requestJson<Ball[]>('/api/balls'),
+    queryFn: () => requestJson<GearBall[]>('/api/balls'),
   })
 
   const performanceQuery = useQuery<BallPerformance[]>({
@@ -157,7 +124,7 @@ export default function Balls() {
   })
 
   const addBall = useMutation({
-    mutationFn: (payload: object) => requestJson<Ball>('/api/balls', {
+    mutationFn: (payload: object) => requestJson<GearBall>('/api/balls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -185,10 +152,7 @@ export default function Balls() {
   })
 
   const deleteBall = useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetch(`/api/balls/${id}`, { method: 'DELETE' })
-      if (!response.ok) throw new Error(`Request failed (${response.status})`)
-    },
+    mutationFn: (id: number) => request(`/api/balls/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['balls'] })
       setSelectedBall(null)
@@ -208,7 +172,7 @@ export default function Balls() {
     [performanceQuery.data],
   )
 
-  const openBall = (ball: Ball) => {
+  const openBall = (ball: GearBall) => {
     setSelectedBall(ball)
     setEditForm({ name: ball.name || '', brand: ball.brand || '', color: ball.color || '', notes: ball.notes || '' })
     setEditing(false)
@@ -296,29 +260,32 @@ export default function Balls() {
           <p className="gear-result-count">{visibleBalls.length} of {ballsQuery.data?.length} balls</p>
           {visibleBalls.length ? (
             <section className="gear-library" aria-label="Ball library results">
-              {visibleBalls.map((ball) => (
-                <button className="gear-ball-card" type="button" key={ball.id} onClick={() => openBall(ball)}>
-                  <BallImage path={ball.thumbnailImage} name={ball.name} />
-                  <span className="gear-ball-card__copy">
-                    <strong>{ball.name}</strong>
-                    <span>{ball.brand || 'Brand not recorded'}{ball.color ? ` · ${ball.color}` : ''}</span>
-                    <span className="gear-ball-card__usage">
-                      {performanceQuery.isError
-                        ? 'Usage unavailable'
-                        : performanceByBall.has(ball.id)
-                        ? `${performanceByBall.get(ball.id)?.gameCount} games · ${performanceByBall.get(ball.id)?.average} average`
-                        : 'Never used in a logged game'}
+              {visibleBalls.map((ball) => {
+                const missing = missingBallSpecs(ball)
+                return (
+                  <button className="gear-ball-card" type="button" key={ball.id} onClick={() => openBall(ball)}>
+                    <BallImage path={ball.thumbnailImage} name={ball.name} />
+                    <span className="gear-ball-card__copy">
+                      <strong>{ball.name}</strong>
+                      <span>{ball.brand || 'Brand not recorded'}{ball.color ? ` · ${ball.color}` : ''}</span>
+                      <span className="gear-ball-card__usage">
+                        {performanceQuery.isError
+                          ? 'Usage unavailable'
+                          : performanceByBall.has(ball.id)
+                          ? `${performanceByBall.get(ball.id)?.gameCount} games · ${performanceByBall.get(ball.id)?.average} average`
+                          : 'Never used in a logged game'}
+                      </span>
+                      <span className="gear-ball-card__specs">
+                        {ball.coverstockType && <span className="gear-chip">{ball.coverstockType}</span>}
+                        {ball.coreType && <span className="gear-chip">{ball.coreType}</span>}
+                        {ball.coreRg && <span className="gear-chip">RG {ball.coreRg}</span>}
+                        {missing.length > 0 && <span className="gear-chip gear-chip--missing">Missing {missing.join(', ')}</span>}
+                      </span>
                     </span>
-                    <span className="gear-ball-card__specs">
-                      {ball.coverstockType && <span className="gear-chip">{ball.coverstockType}</span>}
-                      {ball.coreType && <span className="gear-chip">{ball.coreType}</span>}
-                      {ball.coreRg && <span className="gear-chip">RG {ball.coreRg}</span>}
-                      {!ball.coverstockType && !ball.coreType && !ball.coreRg && <span className="gear-chip gear-chip--missing">Specs incomplete</span>}
-                    </span>
-                  </span>
-                  <Icon className="gear-chevron" name="chevron-right" size={18} />
-                </button>
-              ))}
+                    <Icon className="gear-chevron" name="chevron-right" size={18} />
+                  </button>
+                )
+              })}
             </section>
           ) : (
             <GearState kind="empty" title="No equipment matches" detail="Clear the search or choose a different coverstock filter." action={<button className="btn btn-ghost" type="button" onClick={() => { setLibraryQuery(''); setCoverFilter('all') }}>Clear filters</button>} />

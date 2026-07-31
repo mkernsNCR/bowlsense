@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Icon, Sheet } from '../../design'
+import { Icon, Sheet, type IconName } from '../../design'
 import './competition.css'
 
 type CompetitionArea = 'leagues' | 'tournaments'
@@ -72,6 +72,29 @@ export function CompetitionSheet({
   )
 }
 
+interface PublicFact {
+  label: string
+  value: ReactNode
+}
+
+export function PublicResult({ score, label, accessibleLabel, facts }: {
+  score: ReactNode
+  label: string
+  accessibleLabel: string
+  facts: PublicFact[]
+}) {
+  return (
+    <div className="share-result">
+      <section className="share-result__primary" aria-label={accessibleLabel}>
+        <div><div className="share-result__score">{score}</div><div className="share-result__label">{label}</div></div>
+      </section>
+      <dl className="share-result__facts">
+        {facts.map((fact) => <div className="share-result__fact" key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
+      </dl>
+    </div>
+  )
+}
+
 export function PublicShell({
   eyebrow,
   title,
@@ -111,6 +134,6 @@ export function PublicShell({
 }
 
 export function ActionIcon({ name }: { name: 'add' | 'share' | 'save' | 'close' | 'edit' }) {
-  const iconName = name === 'add' ? 'plus' : name
+  const iconName: IconName = name === 'add' ? 'plus' : name
   return <Icon className="competition-action-icon" name={iconName} />
 }

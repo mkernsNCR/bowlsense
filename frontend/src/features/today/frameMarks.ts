@@ -1,3 +1,5 @@
+import type { FrameState } from '../../design'
+
 type FrameRecord = {
   ball1?: number | null
   ball2?: number | null
@@ -8,7 +10,8 @@ type FrameRecord = {
 export interface ParsedRibbonFrame {
   rolls: readonly string[]
   score: number | null
-  state: 'pending' | 'complete' | 'strike' | 'spare' | 'open'
+  state: FrameState
+  label: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,20 +64,20 @@ function frameRolls(frame: FrameRecord, index: number) {
   return [mark(ball1), second, third].filter(Boolean)
 }
 
-function frameState(frame: FrameRecord | null, index: number): ParsedRibbonFrame['state'] {
+function frameState(frame: FrameRecord | null): ParsedRibbonFrame['state'] {
   if (!frame || frame.ball1 === null || frame.ball1 === undefined) return 'pending'
   if (frame.ball1 === 10) return 'strike'
-  if (frame.ball2 === null || frame.ball2 === undefined) return 'complete'
+  if (frame.ball2 === null || frame.ball2 === undefined) return 'partial'
   if (frame.ball1 + frame.ball2 === 10) return 'spare'
-  if (index === 9 && frame.ball3 === 10) return 'strike'
   return 'open'
 }
 
 function emptyFrames(): ParsedRibbonFrame[] {
-  return Array.from({ length: 10 }, () => ({
+  return Array.from({ length: 10 }, (_, index) => ({
     rolls: [],
     score: null,
     state: 'pending',
+    label: String(index + 1),
   }))
 }
 
@@ -91,7 +94,8 @@ export function parseFrameRibbonFrames(frameData: string | null | undefined): Pa
       return {
         rolls: frame ? frameRolls(frame, index) : [],
         score: frame?.cumulative ?? null,
-        state: frameState(frame, index),
+        state: frameState(frame),
+        label: String(index + 1),
       }
     })
   } catch {

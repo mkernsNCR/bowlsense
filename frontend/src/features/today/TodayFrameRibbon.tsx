@@ -17,10 +17,11 @@ export function TodayFrameRibbon({ frames, score, gameNumber, location }: TodayF
       return `Frame ${index + 1}: ${frame.rolls.join(' ') || 'not recorded'}${cumulative}`
     })
     .join(', ')
+  const noFrameDetails = 'Frame details weren’t recorded for this game.'
 
   return (
     <figure className="today-frame-ribbon">
-      <figcaption className="today-sr-only">{`${location || 'Latest game'}, score ${score}. ${frameSummary}`}</figcaption>
+      <figcaption className="bs-visually-hidden">{`${location || 'Latest game'}, score ${score}. ${hasFrameDetails ? frameSummary : noFrameDetails}`}</figcaption>
       <div className="today-frame-ribbon__meta" aria-hidden="true">
         <span>{location || 'Latest game'}{gameNumber ? ` · Game ${gameNumber}` : ''}</span>
         <strong>{score || '—'}</strong>
@@ -30,7 +31,7 @@ export function TodayFrameRibbon({ frames, score, gameNumber, location }: TodayF
         frames={ribbonFrames}
         label={`${location || 'Latest game'}, score ${score}`}
       />
-      {!hasFrameDetails && <p className="today-frame-ribbon__note">Frame details weren’t recorded for this game.</p>}
+      {!hasFrameDetails && <p className="today-frame-ribbon__note">{noFrameDetails}</p>}
     </figure>
   )
 }

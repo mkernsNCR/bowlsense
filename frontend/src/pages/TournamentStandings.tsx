@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
-import { ActionIcon } from '../features/competition/CompetitionUI'
+import { Link, useParams } from 'react-router-dom'
+import { ActionIcon, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { copyText } from '../features/scoring/copyText'
 
 interface TournamentStanding {
   rank: number
@@ -42,14 +44,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div
       style={{
-        background: 'var(--surface)',
+        background: '#121228',
         borderRadius: 16,
         padding: '14px 16px',
-        border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
+        border: '1px solid rgba(167,139,250,0.2)',
       }}
     >
-      <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 70%, transparent)', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--ink)', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#a78bfa', lineHeight: 1.1 }}>{value}</div>
     </div>
   )
 }
@@ -81,11 +83,12 @@ export default function TournamentStandings() {
     },
   })
 
+  const tournamentMeta = tournament?.tournament
   const subtitle = [
-    tournament?.tournament?.location,
-    tournament?.tournament?.format,
-    tournament?.tournament?.date
-      ? new Date(tournament.tournament.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    tournamentMeta?.location,
+    tournamentMeta?.format,
+    tournamentMeta?.date
+      ? new Date(tournamentMeta.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : null,
   ].filter(Boolean).join(' · ')
 
@@ -93,23 +96,11 @@ export default function TournamentStandings() {
   const description = subtitle || 'Tournament standings'
   const ogImageUrl = `/api/tournaments/${tournamentId}/standings/og-image`
 
-  useEffect(() => {
-    document.title = title
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, property); document.head.appendChild(el) }
-      el.content = content
-    }
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    setMeta('og:image', ogImageUrl)
-    setMeta('og:type', 'website')
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, ogImageUrl])
+  usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
   const shareCopy = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await copyText(window.location.href)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch {
@@ -147,19 +138,18 @@ export default function TournamentStandings() {
 
   if (invalidId) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: 24 }}>
-        <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: 'var(--surface)' }}>
-          <h2 style={{ marginBottom: 8 }}>Tournament not found</h2>
-          <p className="muted">The tournament link looks invalid.</p>
-          <a href="/" className="btn btn-ghost">BowlSense home</a>
-        </div>
-      </div>
+      <PublicShell eyebrow="Tournament standings" title="Tournament not found" detail="The tournament link looks invalid."><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
   return (
-    <div className="public-competition-page">
-      <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+    <PublicShell
+      eyebrow="Tournament standings"
+      title={tournament?.tournament?.name || 'Tournament standings'}
+      detail={subtitle}
+      action={<button onClick={shareCopy} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share standings'}</button>}
+    >
+      <div className="public-legacy-content">
         <style>{`
           .ts-mobile-cards {
             display: none;
@@ -177,21 +167,13 @@ export default function TournamentStandings() {
           }
         `}</style>
 
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-          <div>
-            <div style={{ color: 'var(--oil-violet)', fontWeight: 800, letterSpacing: 0.4, marginBottom: 8 }}>BowlSense</div>
-            <h1 style={{ margin: 0 }}>{tournament?.tournament?.name || 'Tournament standings'}</h1>
-            {subtitle && <p className="muted" style={{ marginTop: 8 }}>{subtitle}</p>}
-          </div>
-          <button onClick={shareCopy} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share standings'}</button>
-        </header>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
             <a
               href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the ${tournament?.tournament?.name || 'tournament'} standings.`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-ghost"
-              style={{ borderColor: 'color-mix(in srgb, var(--ink) 20%, transparent)', color: 'var(--ink)', textDecoration: 'none' }}
+              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none' }}
             >
               Share on X
             </a>
@@ -199,14 +181,14 @@ export default function TournamentStandings() {
               onClick={handleDownloadPng}
               disabled={downloading}
               className="btn btn-ghost"
-              style={{ borderColor: 'color-mix(in srgb, var(--ink) 20%, transparent)', color: 'var(--ink)', textDecoration: 'none', minHeight: 44 }}
+              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none', minHeight: 44 }}
             >
               {downloading ? 'Saving…' : 'Download image'}
             </button>
         </div>
 
-        {isLoading && <div className="card" style={{ background: 'var(--surface)' }}>Loading standings...</div>}
-        {isError && <div className="card" style={{ background: 'var(--surface)', color: 'var(--danger)' }}>Could not load standings right now.</div>}
+        {isLoading && <div className="card" style={{ background: '#121228' }}>Loading standings...</div>}
+        {isError && <div className="card" style={{ background: '#121228', color: '#fc8181' }}>Could not load standings right now.</div>}
 
         {!isLoading && !isError && data && (
           <>
@@ -228,9 +210,9 @@ export default function TournamentStandings() {
               )}
             </div>
 
-            <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)', overflow: 'hidden' }}>
+            <div style={{ background: '#121228', borderRadius: 16, border: '1px solid rgba(167,139,250,0.2)', overflow: 'hidden' }}>
               {!data.standings?.length ? (
-                <div style={{ padding: 28, textAlign: 'center', color: 'color-mix(in srgb, var(--ink) 80%, transparent)' }}>
+                <div style={{ padding: 28, textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>
                   No games logged yet. Add a game after your next tournament.
                 </div>
               ) : (
@@ -238,9 +220,9 @@ export default function TournamentStandings() {
                   <div className="ts-table-wrap" style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', minWidth: 620, borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: 'color-mix(in srgb, var(--ink) 3%, transparent)' }}>
+                        <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                           {['Rank', 'Ball / Name', 'Games', 'Total Pins', 'Average', 'High Game'].map((h) => (
-                            <th key={h} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 12, letterSpacing: 0.4, color: 'color-mix(in srgb, var(--ink) 72%, transparent)' }}>{h}</th>
+                            <th key={h} style={{ textAlign: 'left', padding: '12px 14px', fontSize: '0.75rem', letterSpacing: '0.025rem', color: 'rgba(255,255,255,0.72)' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -248,13 +230,13 @@ export default function TournamentStandings() {
                         {data.standings.map((s) => {
                           const isYou = /\b(matt|you|me)\b/i.test(s.ballName)
                           return (
-                            <tr key={`${s.rank}-${s.ballName}`} style={{ borderTop: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)', background: isYou ? 'color-mix(in srgb, var(--ink) 6%, transparent)' : 'transparent' }}>
-                              <td style={{ padding: '12px 14px', fontWeight: 800, color: s.rank === 1 ? 'var(--strike-gold)' : 'var(--ink)' }}>#{s.rank}</td>
+                            <tr key={`${s.rank}-${s.ballName}`} style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: isYou ? 'rgba(167,139,250,0.14)' : 'transparent' }}>
+                              <td style={{ padding: '12px 14px', fontWeight: 800, color: s.rank === 1 ? '#fbbf24' : '#fff' }}>#{s.rank}</td>
                               <td style={{ padding: '12px 14px' }}>{s.ballName}</td>
                               <td style={{ padding: '12px 14px' }}>{s.games}</td>
                               <td style={{ padding: '12px 14px' }}>{s.total}</td>
                               <td style={{ padding: '12px 14px', fontWeight: 800 }}>{s.average}</td>
-                              <td style={{ padding: '12px 14px', color: s.highGame === 300 ? 'var(--strike-gold)' : 'var(--ink)', fontWeight: s.highGame === 300 ? 800 : 500 }}>{s.highGame}</td>
+                              <td style={{ padding: '12px 14px', color: s.highGame === 300 ? '#fbbf24' : '#fff', fontWeight: s.highGame === 300 ? 800 : 500 }}>{s.highGame}</td>
                             </tr>
                           )
                         })}
@@ -269,20 +251,20 @@ export default function TournamentStandings() {
                         <div
                           key={`mobile-${s.rank}-${s.ballName}`}
                           style={{
-                            border: `1px solid ${isYou ? 'var(--separator)' : 'color-mix(in srgb, var(--ink) 12%, transparent)'}`,
-                            background: isYou ? 'color-mix(in srgb, var(--ink) 6%, transparent)' : 'var(--surface)',
+                            border: `1px solid ${isYou ? 'rgba(167,139,250,0.45)' : 'rgba(255,255,255,0.12)'}`,
+                            background: isYou ? 'rgba(167,139,250,0.14)' : '#0f1020',
                             borderRadius: 12,
                             padding: '10px 12px',
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                            <div style={{ fontWeight: 800, color: s.rank === 1 ? 'var(--strike-gold)' : 'var(--ink)' }}>#{s.rank} {s.ballName}</div>
-                            <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--ink)' }}>{s.average}</div>
+                            <div style={{ fontWeight: 800, color: s.rank === 1 ? '#fbbf24' : '#fff' }}>#{s.rank} {s.ballName}</div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#a78bfa' }}>{s.average}</div>
                           </div>
-                          <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, fontSize: 12, color: 'color-mix(in srgb, var(--ink) 78%, transparent)' }}>
+                          <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, fontSize: '0.75rem', color: 'rgba(255,255,255,0.78)' }}>
                             <div>Games: <b>{s.games}</b></div>
                             <div>Pins: <b>{s.total}</b></div>
-                            <div>High: <b style={{ color: s.highGame === 300 ? 'var(--strike-gold)' : 'var(--ink)' }}>{s.highGame}</b></div>
+                            <div>High: <b style={{ color: s.highGame === 300 ? '#fbbf24' : '#fff' }}>{s.highGame}</b></div>
                           </div>
                         </div>
                       )
@@ -293,12 +275,7 @@ export default function TournamentStandings() {
             </div>
           </>
         )}
-
-        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'color-mix(in srgb, var(--ink) 65%, transparent)', fontSize: 13 }}>
-          <div>Tracked with BowlSense</div>
-          <a href={`/tournaments/${tournamentId}/standings/share`} style={{ color: 'var(--oil-violet)', textDecoration: 'none', fontWeight: 700 }}>Share standings</a>
-        </div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

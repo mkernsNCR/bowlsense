@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
 
-export type FrameState = 'pending' | 'current' | 'complete' | 'strike' | 'spare' | 'open'
+export type FrameState = 'pending' | 'partial' | 'current' | 'complete' | 'strike' | 'spare' | 'open'
 
 export interface FrameRibbonFrame {
   rolls?: readonly string[]
   score?: number | null
   state?: FrameState
+  label?: string
   ariaLabel?: string
   selectable?: boolean
 }
@@ -22,7 +23,7 @@ function frameDescription(frame: FrameRibbonFrame, index: number) {
   const state = frame.state ?? 'pending'
   const rolls = frame.rolls?.length ? `Rolls ${frame.rolls.join(', ')}` : 'Not bowled'
   const score = frame.score == null ? '' : `, cumulative score ${frame.score}`
-  return frame.ariaLabel ?? `Frame ${index + 1}, ${state}, ${rolls}${score}`
+  return frame.ariaLabel ?? frame.label ?? `Frame ${index + 1}, ${state}, ${rolls}${score}`
 }
 
 export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false, className = '', onSelectFrame }: FrameRibbonProps) {

@@ -39,18 +39,6 @@ export interface WeeklyStats {
   dayOfWeek: string
 }
 
-export interface Session {
-  id: number
-  date: string
-  location: string
-  lanes: string
-  notes: string
-  gameCount?: number
-  avgScore?: number
-  highScore?: number
-  perfectGames?: number
-}
-
 export interface Game {
   id: number
   score: number
@@ -67,29 +55,8 @@ export interface GameResponse extends Game {
   session_id?: number
 }
 
-export interface Ball {
-  id: number
-  name: string
-  brand?: string
-  thumbnailImage?: string
-}
-
-export interface SavedGame {
-  gameNumber: number
-  score: number
-  strikes: number
-  spares: number
-  splits: number
-  ballId: number | null
-  frameData: string
-}
-
-export async function fetchJson<T = unknown>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`)
-  }
-  return response.json() as Promise<T>
+export function parseCalendarDate(value: string) {
+  return new Date(`${value.slice(0, 10)}T00:00:00`)
 }
 
 export function normalizeGame(game: GameResponse): Game {

@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { copyText } from '../features/scoring/copyText'
 import { downloadTournamentStandingsCard } from '../utils/tournamentShare'
 
 interface StandingsEntry {
@@ -43,25 +46,6 @@ interface TournamentPayload {
   stats: TournamentStats
 }
 
-function StatCard({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
-  return (
-    <div style={{
-      background: 'var(--surface)',
-      borderRadius: 16,
-      padding: '14px 16px',
-      border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
-    }}>
-      <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 70%, transparent)', marginBottom: 8 }}>{label}</div>
-      <div style={{
-        fontSize: 28,
-        fontWeight: 800,
-        color: gold ? 'var(--strike-gold)' : 'var(--ink)',
-        lineHeight: 1.1,
-      }}>{value}</div>
-    </div>
-  )
-}
-
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span style={{ fontSize: 20 }}>🥇</span>
   if (rank === 2) return <span style={{ fontSize: 20 }}>🥈</span>
@@ -74,8 +58,8 @@ function RankBadge({ rank }: { rank: number }) {
       width: 28,
       height: 28,
       borderRadius: 8,
-      background: 'color-mix(in srgb, var(--ink) 8%, transparent)',
-      color: 'color-mix(in srgb, var(--ink) 60%, transparent)',
+      background: 'rgba(255,255,255,0.08)',
+      color: 'rgba(255,255,255,0.6)',
       fontWeight: 800,
       fontSize: 13,
     }}>#{rank}</span>
@@ -132,37 +116,11 @@ export default function TournamentStandingsShare() {
     return tournament?.name ? `${tournament.name} Standings 🎯` : 'Tournament Standings 🎯'
   }, [tournament])
 
-  useEffect(() => {
-    if (!tournament) return
-    document.title = title
-
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) {
-        el = document.createElement('meta')
-        el.setAttribute(attr, property)
-        document.head.appendChild(el)
-      }
-      el.setAttribute('content', content)
-    }
-
-    setMeta('og:title', title)
-    setMeta('og:description', subtitle || 'Tournament standings')
-    if (ogImageUrl) {
-      setMeta('og:image', ogImageUrl)
-      setMeta('og:image:width', '1200')
-      setMeta('og:image:height', '630')
-    }
-    setMeta('og:type', 'website')
-    setMeta('twitter:card', 'summary_large_image')
-    setMeta('twitter:title', title)
-    setMeta('twitter:description', subtitle || 'Tournament standings')
-    if (ogImageUrl) setMeta('twitter:image', ogImageUrl)
-  }, [title, subtitle, ogImageUrl, tournament])
+  usePublicMetadata({ title, description: subtitle || 'Tournament standings', imageUrl: ogImageUrl })
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await copyText(window.location.href)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch { /* ignore */ }
@@ -185,69 +143,37 @@ export default function TournamentStandingsShare() {
 
   // Aggregate totals from standings data
   const totalGames = standings?.standings?.reduce((sum, s) => sum + s.games, 0) ?? 0
-  const totalPins = standings?.standings?.reduce((sum, s) => sum + s.total, 0) ?? 0
-  const overallAvg = totalGames > 0 ? Math.round(totalPins / totalGames) : 0
+  const overallAvg = totalGames > 0
+    ? Math.round((standings?.standings?.reduce((sum, s) => sum + s.total, 0) ?? 0) / totalGames)
+    : 0
   const highGame = standings?.standings?.reduce((max, s) => Math.max(max, s.highGame), 0) ?? 0
 
   if (invalid) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--canvas)', color: 'var(--ink)', fontFamily: 'system-ui', padding: 24 }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: 'var(--surface)', borderRadius: 16, padding: 32 }}>
-          <h2 style={{ marginBottom: 8 }}>Tournament not found</h2>
-          <Link to="/" style={{ color: 'var(--oil-violet)' }}>BowlSense home</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Tournament standings" title="Tournament not found"><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
   return (
-    <div className="public-competition-page" style={{
-      minHeight: '100vh',
-      background: 'var(--canvas)',
-      color: 'var(--ink)',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-      paddingBottom: 48,
-    }}>
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+    <PublicShell eyebrow="Tournament standings" title={tournament?.name || 'Tournament'} detail={subtitle || 'Shared result'}>
+      <div className="public-legacy-content" style={{ maxWidth: 960, margin: '0 auto' }}>
 
-        {/* Hero */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{
-            display: 'inline-flex',
-            padding: '5px 14px',
-            borderRadius: 999,
-            background: 'var(--surface-raised)',
-            color: 'var(--ink-secondary)',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            marginBottom: 14,
-            border: '1px solid var(--separator)',
-          }}>
-            🎯 Tournament Standings
-          </div>
-          <h1 style={{
-            margin: '0 0 8px',
-            fontSize: 'clamp(1.8rem, 5vw, 2.8rem)',
-            fontWeight: 900,
-            lineHeight: 1.1,
-          }}>
-            {tournament?.name || 'Tournament Standings'}
-          </h1>
-          {subtitle && <div style={{ color: 'color-mix(in srgb, var(--ink) 72%, transparent)', fontSize: 15 }}>{subtitle}</div>}
-        </div>
+        {standings && tournamentData && <PublicResult score={stats?.placement ? `#${stats.placement}` : overallAvg || '—'} label={stats?.placement ? 'Final placement' : 'Tournament average'} accessibleLabel={stats?.placement ? `Final placement ${stats.placement}` : `Tournament average ${overallAvg || 'not available'}`} facts={[
+          { label: 'Average', value: stats?.average || overallAvg || '—' },
+          { label: 'Games', value: stats?.totalGames || totalGames },
+          { label: 'High game', value: stats?.high || highGame || '—' },
+        ]} />}
 
         {/* Share buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
           <button
             onClick={handleCopyLink}
-            className="public-action-target"
             style={{
-              background: copied ? 'var(--spare-green)' : 'var(--oil-violet)',
+              background: copied ? '#34d399' : '#a78bfa',
               border: 'none',
               borderRadius: 12,
               padding: '10px 20px',
-              color: 'var(--on-tint)',
+              color: '#0d0d1a',
               fontWeight: 700,
               fontSize: 14,
               cursor: 'pointer',
@@ -258,31 +184,30 @@ export default function TournamentStandingsShare() {
           </button>
           <a
             href={twitterUrl}
-            className="public-action-target"
             target="_blank"
             rel="noopener noreferrer"
+            className="btn btn-ghost"
             style={{
-              background: 'color-mix(in srgb, var(--ink) 8%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--ink) 20%, transparent)',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.2)',
               borderRadius: 12,
               padding: '10px 20px',
-              color: 'var(--ink)',
+              color: '#fff',
               fontWeight: 700,
               fontSize: 14,
               textDecoration: 'none',
             }}
           >
-            Share on X
+            𝕏 Share on X
           </a>
           <button
             onClick={handleDownload}
-            className="public-action-target"
             style={{
-              background: downloaded ? 'var(--spare-green)' : 'color-mix(in srgb, var(--ink) 6%, transparent)',
-              border: '1px solid var(--separator)',
+              background: downloaded ? '#34d399' : 'rgba(167,139,250,0.2)',
+              border: '1px solid rgba(167,139,250,0.4)',
               borderRadius: 12,
               padding: '10px 20px',
-              color: downloaded ? 'var(--canvas)' : 'var(--ink-secondary)',
+              color: downloaded ? '#0d0d1a' : '#c4b5fd',
               fontWeight: 700,
               fontSize: 14,
               cursor: 'pointer',
@@ -314,48 +239,20 @@ export default function TournamentStandingsShare() {
         )}
 
         {/* Stats row */}
-        {standingsLoading && <div style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)', padding: 20 }}>Loading...</div>}
-        {standingsError && <div style={{ color: 'var(--danger)', padding: 20 }}>Could not load standings.</div>}
+        {standingsLoading && <div style={{ color: 'rgba(255,255,255,0.6)', padding: 20 }}>Loading...</div>}
+        {standingsError && <div style={{ color: '#fc8181', padding: 20 }}>Could not load standings.</div>}
 
         {standings && tournamentData && (
           <>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: 12,
-              marginBottom: 24,
-            }}>
-              <StatCard label="Total Games" value={String(totalGames)} />
-              <StatCard label="Total Pins" value={String(totalPins)} />
-              <StatCard label="Avg Score" value={String(overallAvg)} />
-              <StatCard
-                label="High Game"
-                value={highGame ? String(highGame) : '—'}
-                gold={highGame > 0}
-              />
-              {stats?.placement != null && (
-                <StatCard
-                  label="Placement"
-                  value={
-                    stats.placement === 1 ? '🥇 1st'
-                    : stats.placement === 2 ? '🥈 2nd'
-                    : stats.placement === 3 ? '🥉 3rd'
-                    : `#${stats.placement}`
-                  }
-                  gold={stats.placement <= 3}
-                />
-              )}
-            </div>
-
             {/* Standings table */}
             <div style={{
-              background: 'var(--surface)',
+              background: '#121228',
               borderRadius: 16,
-              border: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
+              border: '1px solid rgba(167,139,250,0.2)',
               overflow: 'hidden',
             }}>
               {!standings.standings?.length ? (
-                <div style={{ padding: 28, textAlign: 'center', color: 'color-mix(in srgb, var(--ink) 70%, transparent)' }}>
+                <div style={{ padding: 28, textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
                   No standings data yet — check back after your tournament! 🎯
                 </div>
               ) : (
@@ -364,14 +261,14 @@ export default function TournamentStandingsShare() {
                   <div className="tss-desktop">
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: 'color-mix(in srgb, var(--ink) 3%, transparent)' }}>
+                        <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                           {['Rank', 'Ball / Name', 'Games', 'Total Pins', 'Average', 'High Game'].map((h) => (
                             <th key={h} style={{
                               textAlign: 'left',
                               padding: '12px 16px',
                               fontSize: 12,
                               letterSpacing: 0.4,
-                              color: 'color-mix(in srgb, var(--ink) 72%, transparent)',
+                              color: 'rgba(255,255,255,0.72)',
                             }}>{h}</th>
                           ))}
                         </tr>
@@ -380,7 +277,7 @@ export default function TournamentStandingsShare() {
                         {standings.standings.map((entry) => (
                           <tr
                             key={entry.rank}
-                            style={{ borderTop: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)' }}
+                            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
                           >
                             <td style={{ padding: '14px 16px', width: 64 }}>
                               <RankBadge rank={entry.rank} />
@@ -391,12 +288,12 @@ export default function TournamentStandingsShare() {
                                 <span style={{ fontWeight: 600 }}>{entry.ballName}</span>
                               </div>
                             </td>
-                            <td style={{ padding: '14px 16px', color: 'color-mix(in srgb, var(--ink) 80%, transparent)' }}>{entry.games}</td>
+                            <td style={{ padding: '14px 16px', color: 'rgba(255,255,255,0.8)' }}>{entry.games}</td>
                             <td style={{ padding: '14px 16px', fontWeight: 700 }}>{entry.total}</td>
-                            <td style={{ padding: '14px 16px', fontWeight: 800, color: 'var(--ink)' }}>{entry.average}</td>
+                            <td style={{ padding: '14px 16px', fontWeight: 800, color: '#a78bfa' }}>{entry.average}</td>
                             <td style={{
                               padding: '14px 16px',
-                              color: entry.highGame === 300 ? 'var(--strike-gold)' : 'var(--ink)',
+                              color: entry.highGame === 300 ? '#fbbf24' : '#fff',
                               fontWeight: entry.highGame === 300 ? 800 : 500,
                             }}>
                               {entry.highGame || '—'}
@@ -415,7 +312,7 @@ export default function TournamentStandingsShare() {
                         key={`mobile-${entry.rank}`}
                         style={{
                           padding: '12px 16px',
-                          borderBottom: '1px solid color-mix(in srgb, var(--ink) 6%, transparent)',
+                          borderBottom: '1px solid rgba(255,255,255,0.06)',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
@@ -426,14 +323,14 @@ export default function TournamentStandingsShare() {
                           <RankBadge rank={entry.rank} />
                           <div>
                             <div style={{ fontWeight: 600, fontSize: 14 }}>{entry.ballName}</div>
-                            <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--ink) 60%, transparent)' }}>
+                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
                               {entry.games} game{entry.games !== 1 ? 's' : ''} · avg {entry.average}
                             </div>
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--ink)' }}>{entry.total}</div>
-                          <div style={{ fontSize: 11, color: entry.highGame === 300 ? 'var(--strike-gold)' : 'color-mix(in srgb, var(--ink) 50%, transparent)' }}>
+                          <div style={{ fontWeight: 800, fontSize: 18, color: '#a78bfa' }}>{entry.total}</div>
+                          <div style={{ fontSize: 12, color: entry.highGame === 300 ? '#fbbf24' : 'rgba(255,255,255,0.5)' }}>
                             high {entry.highGame || '—'}
                           </div>
                         </div>
@@ -446,26 +343,6 @@ export default function TournamentStandingsShare() {
           </>
         )}
 
-        {/* Footer */}
-        <div style={{
-          marginTop: 28,
-          paddingTop: 20,
-          borderTop: '1px solid color-mix(in srgb, var(--ink) 10%, transparent)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 10,
-          color: 'color-mix(in srgb, var(--ink) 50%, transparent)',
-          fontSize: 13,
-        }}>
-          <span>Tracked with BowlSense 🧠</span>
-          <Link
-            to="/"
-            style={{ color: 'var(--oil-violet)', textDecoration: 'none', fontWeight: 700 }}
-          >
-            BowlSense home
-          </Link>
-        </div>
       </div>
 
       <style>{`
@@ -475,6 +352,6 @@ export default function TournamentStandingsShare() {
           .tss-mobile { display: block; }
         }
       `}</style>
-    </div>
+    </PublicShell>
   )
 }

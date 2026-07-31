@@ -2,19 +2,10 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
+import { fetchRecentSessions, type Ball, type SavedGame, type Session } from '../api/bowling'
 
 interface QuickAddGameProps {
   onDone?: (gameId: number) => void
-}
-
-interface SavedGame {
-  gameNumber: number
-  score: number
-  strikes: number
-  spares: number
-  splits: number
-  ballId: number | null
-  frameData: string
 }
 
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
@@ -28,17 +19,14 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const [gameNumber, setGameNumber] = useState(1)
   const [saved, setSaved] = useState(false)
 
-  const { data: sessions } = useQuery<any[]>({
-    queryKey: ['sessions'],
-    queryFn: async () => {
-      const data = await fetch('/api/sessions?limit=100&offset=0').then(r => r.json())
-      return Array.isArray(data) ? data : (data.sessions ?? [])
-    },
+  const { data: sessions } = useQuery<Session[]>({
+    queryKey: ['sessions', 'recent'],
+    queryFn: fetchRecentSessions,
   })
 
-  const { data: balls = [] } = useQuery<any[]>({
+  const { data: balls = [] } = useQuery<Ball[]>({
     queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then(r => r.json()),
+    queryFn: () => fetch('/api/balls').then(r => r.json() as Promise<Ball[]>),
   })
 
   const latestSessionLocation = sessions && sessions.length
@@ -58,7 +46,7 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   })
 
   const createGameMutation = useMutation({
-    mutationFn: async (payload: { sessionId: number; gameNumber: number; score: number; strikes: number; spares: number; splits: number; ballId: number | null; frameData: string }) => {
+    mutationFn: async (payload: { sessionId: number; gameNumber: number; score: number; strikes: number; spares: number; splits: number; ballId: number | null; frameData: string; pinLeaves?: string }) => {
       const response = await fetch('/api/games', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,6 +84,7 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
         splits: game.splits,
         ballId: game.ballId,
         frameData: game.frameData,
+        pinLeaves: game.pinLeaves,
       })
 
       setSaved(true)
@@ -104,12 +93,12 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
       await qc.invalidateQueries({ queryKey: ['games-recent'] })
       await qc.invalidateQueries({ queryKey: ['recentGames'] })
 
-      const returnedId = (gameRes as any)?.id
+      const returnedId = gameRes.id
       if (returnedId) {
         onDone?.(returnedId)
       } else {
-        const sessionData = await fetch(`/api/sessions/${sid}`).then(r => r.json())
-        const highestGameId = sessionData?.games?.reduce((max: number, g: any) => Math.max(max, g.id || 0), 0)
+        const sessionData = await fetch(`/api/sessions/${sid}`).then(r => r.json()) as { games?: { id?: number }[] }
+        const highestGameId = sessionData.games?.reduce((max, game) => Math.max(max, game.id || 0), 0)
         if (highestGameId) onDone?.(highestGameId)
       }
     } catch (err) {

@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../../design'
-import type { Session } from './data'
+import type { Session } from '../../api/bowling'
+import { parseCalendarDate } from './data'
 
 function sessionDate(date: string) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+  return parseCalendarDate(date).toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',

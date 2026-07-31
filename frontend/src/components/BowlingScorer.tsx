@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   gameFromFrameData,
   type GameState,
@@ -7,17 +7,11 @@ import {
   rewindToFrame,
   undoLastRoll,
 } from '../utils/bowlingScore'
-import FrameRibbon from '../features/scoring/FrameRibbon'
-import ScoringIcon from '../features/scoring/ScoringIcon'
-import ScoringSheet from '../features/scoring/ScoringSheet'
+import { FrameRibbon, Icon, Sheet } from '../design'
+import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
+import { requiresDiscardConfirmation } from '../features/scoring/interaction'
+import type { ScoringBall } from '../features/scoring/types'
 import '../features/scoring/scoring.css'
-
-interface Ball {
-  id: number
-  name: string
-  brand?: string
-  thumbnailImage?: string
-}
 
 export interface SavedBowlingGame {
   gameNumber: number
@@ -32,7 +26,7 @@ export interface SavedBowlingGame {
 
 interface BowlingScorerProps {
   gameNumber: number
-  balls: Ball[]
+  balls: ScoringBall[]
   defaultBallId?: string
   initialFrameData?: string | null
   onSave: (game: SavedBowlingGame) => void | Promise<void>
@@ -71,6 +65,17 @@ export default function BowlingScorer({
   const [confirmRetake, setConfirmRetake] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
+  useEffect(() => {
+    const previousHtmlOverflowX = document.documentElement.style.overflowX
+    const previousBodyOverflowX = document.body.style.overflowX
+    document.documentElement.style.overflowX = 'clip'
+    document.body.style.overflowX = 'clip'
+    return () => {
+      document.documentElement.style.overflowX = previousHtmlOverflowX
+      document.body.style.overflowX = previousBodyOverflowX
+    }
+  }, [])
+
   const selectedBall = balls.find((ball) => String(ball.id) === selectedBallId)
   const strikes = useMemo(
     () => state.frames.reduce((count, frame, index) => {
@@ -85,6 +90,10 @@ export default function BowlingScorer({
     frames: state.frames,
     pinSelections: state.pinSelections,
   })
+  const ribbonFrames = toFrameRibbonFrames(
+    state.frames,
+    state.isComplete ? undefined : state.currentFrame,
+  )
 
   const savePayload = (): SavedBowlingGame => ({
     gameNumber,
@@ -136,7 +145,10 @@ export default function BowlingScorer({
       onCancel()
       return
     }
-    if (state.rolls.length > 0) {
+    if (requiresDiscardConfirmation({
+      recordedRolls: state.rolls.length,
+      savedAsideRolls: editSnapshot?.rolls.length,
+    })) {
       setConfirmCancel(true)
       return
     }
@@ -173,26 +185,43 @@ export default function BowlingScorer({
 
   return (
     <div className="scoring-flow live-scorer">
-      <header className="live-score-header" aria-label="Current game status">
-        <div className="live-score-context">
-          <span>Game {gameNumber}</span>
-          <strong>{activeFrameLabel(state)}</strong>
-        </div>
-        <div className="live-score-total" aria-live="polite">
-          <span>Total</span>
-          <strong>{state.totalScore}</strong>
-        </div>
-        <button type="button" className="scoring-icon-button" onClick={handleCancel} aria-label="Close scorer">
-          <ScoringIcon name="arrow-left" />
-        </button>
-      </header>
+      <div className="live-score-sticky">
+        <header className="live-score-header" aria-label="Current game status">
+          <div className="live-score-context">
+            <span>Game {gameNumber}</span>
+            <strong>{activeFrameLabel(state)}</strong>
+          </div>
+          <div className="live-score-total" aria-live="polite">
+            <span>Total</span>
+            <strong>{state.totalScore}</strong>
+          </div>
+          <button type="button" className="scoring-icon-button" onClick={handleCancel} aria-label="Close scorer">
+            <Icon name="back" />
+          </button>
+        </header>
 
-      <FrameRibbon
-        frames={state.frames}
-        currentFrame={state.isComplete ? undefined : state.currentFrame}
-        onSelectFrame={(index) => setEditCandidate(index)}
-        label={`Game ${gameNumber} frame ribbon. Select a completed frame to edit from that point.`}
-      />
+        <FrameRibbon
+          frames={ribbonFrames}
+          label={`Game ${gameNumber} frame ribbon`}
+          compact
+          className="live-frame-ribbon"
+        />
+
+        <div className="live-ball">
+          <label htmlFor={`ball-${gameNumber}`}>Ball</label>
+          <select
+            id={`ball-${gameNumber}`}
+            value={selectedBallId}
+            onChange={(event) => setSelectedBallId(event.target.value)}
+            aria-label="Ball used for this game"
+          >
+            <option value="">Not selected</option>
+            {balls.map((ball) => (
+              <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {editingFromFrame != null && (
         <div className="live-edit-banner" role="status">
@@ -203,25 +232,10 @@ export default function BowlingScorer({
 
       {reviewingSavedGame && (
         <div className="live-edit-banner" role="status">
-          <span>Select a completed frame in the ribbon to re-score from that point.</span>
+          <span>Open Score details and select a completed frame to re-score from that point.</span>
           <button type="button" className="scoring-button quiet" onClick={handleCancel}>Done</button>
         </div>
       )}
-
-      <div className="live-ball">
-        <label htmlFor={`ball-${gameNumber}`}>Ball</label>
-        <select
-          id={`ball-${gameNumber}`}
-          value={selectedBallId}
-          onChange={(event) => setSelectedBallId(event.target.value)}
-          aria-label="Ball used for this game"
-        >
-          <option value="">Not selected</option>
-          {balls.map((ball) => (
-            <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
-          ))}
-        </select>
-      </div>
 
       <div className="scoring-segments scoring-mode" role="group" aria-label="Scoring view">
         <button type="button" className="scoring-segment" aria-pressed={activeView === 'pins'} onClick={() => setActiveView('pins')}>Pins</button>
@@ -274,7 +288,7 @@ export default function BowlingScorer({
               onClick={handleUndo}
               disabled={state.rolls.length === 0}
             >
-              <ScoringIcon name="undo" size={18} /> Undo
+              <Icon name="undo" size={18} /> Undo
             </button>
           </div>
           <p className="live-help">
@@ -296,105 +310,115 @@ export default function BowlingScorer({
             >
               <span>Frame {index + 1}</span>
               <strong>{frame.cumulative ?? '—'}</strong>
-              <ScoringIcon name="chevron" size={16} />
+              <Icon name="chevron-right" size={16} />
             </button>
           ))}
         </div>
       )}
 
       {state.isComplete && !reviewingSavedGame && state.totalScore !== 300 && (
-        <ScoringSheet open title={saveStatus === 'saved' ? 'Game saved' : 'Game complete'} dismissible={false}>
+        <Sheet
+          open
+          onClose={() => { if (saveStatus === 'saved') onCancel(); else setConfirmCancel(true) }}
+          title={saveStatus === 'saved' ? 'Game saved' : `${state.totalScore}`}
+          description={saveStatus === 'saved'
+            ? `Your ${state.totalScore} is in this session.`
+            : `${strikes} strikes · ${spares} spares${selectedBall ? ` · ${selectedBall.name}` : ''}`}
+          closeLabel={saveStatus === 'saved' ? 'Done' : 'Close completed game'}
+          className="scoring-sheet-theme"
+        >
           {saveStatus === 'saved' ? (
             <div className="scoring-status" role="status">
-              <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
-              <p>Your {state.totalScore} is in this session.</p>
-              <button type="button" className="scoring-button primary wide" onClick={onCancel}>Done</button>
+              <div className="scoring-save-check"><Icon name="check" size={34} /></div>
+              <button type="button" className="scoring-button primary" onClick={onCancel}>Done</button>
             </div>
           ) : (
             <>
-              <div className="scoring-complete-score">{state.totalScore}</div>
-              <p className="scoring-subtitle">{strikes} strikes · {spares} spares{selectedBall ? ` · ${selectedBall.name}` : ''}</p>
               {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
               {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
               <div className="scoring-sheet-actions">
                 <button type="button" className="scoring-button secondary" onClick={handleUndo}>
-                  <ScoringIcon name="undo" size={18} /> Undo last roll
+                  <Icon name="undo" size={18} /> Undo last roll
                 </button>
                 <button type="button" className="scoring-button secondary" onClick={handleRetake}>
                   {confirmRetake ? 'Confirm retake' : 'Retake'}
                 </button>
-                <button type="button" className="scoring-button primary" disabled={saveStatus === 'saving'} onClick={handleSave}>
+                <button type="button" className="scoring-button primary" autoFocus disabled={saveStatus === 'saving'} onClick={handleSave}>
                   {saveStatus === 'saving' ? 'Saving…' : 'Save game'}
                 </button>
               </div>
               {confirmRetake && <p className="scoring-subtitle">Retaking clears every recorded roll. Tap “Confirm retake” to continue.</p>}
             </>
           )}
-        </ScoringSheet>
+        </Sheet>
       )}
 
       {editCandidate != null && (
-        <ScoringSheet
+        <Sheet
           open
+          onClose={() => setEditCandidate(null)}
           role="alertdialog"
           title={`Edit from frame ${editCandidate + 1}?`}
           description={`This temporarily removes frame ${editCandidate + 1} and every later roll so bonuses stay correct. You can restore the original game at any time.`}
-          onClose={() => setEditCandidate(null)}
+          closeLabel="Keep score"
+          className="scoring-sheet-theme"
         >
           <div className="scoring-sheet-actions">
-            <button type="button" className="scoring-button secondary" onClick={() => setEditCandidate(null)}>Keep score</button>
+            <button type="button" className="scoring-button secondary" autoFocus onClick={() => setEditCandidate(null)}>Keep score</button>
             <button type="button" className="scoring-button primary" onClick={beginFrameEdit}>Edit from here</button>
           </div>
-        </ScoringSheet>
+        </Sheet>
       )}
 
       {confirmCancel && (
-        <ScoringSheet
+        <Sheet
           open
+          onClose={() => setConfirmCancel(false)}
           role="alertdialog"
           title={initialFrameData ? 'Discard changes?' : 'Discard this game?'}
           description={initialFrameData
             ? 'The saved game stays unchanged.'
-            : `All ${state.rolls.length} recorded ${state.rolls.length === 1 ? 'roll' : 'rolls'} will be lost.`}
-          onClose={() => setConfirmCancel(false)}
+            : `All ${Math.max(state.rolls.length, editSnapshot?.rolls.length ?? 0)} recorded ${Math.max(state.rolls.length, editSnapshot?.rolls.length ?? 0) === 1 ? 'roll' : 'rolls'} will be lost.`}
+          closeLabel="Keep scoring"
+          className="scoring-sheet-theme"
         >
           <div className="scoring-sheet-actions">
-            <button type="button" className="scoring-button secondary" onClick={() => setConfirmCancel(false)}>Keep scoring</button>
+            <button type="button" className="scoring-button secondary" autoFocus onClick={() => setConfirmCancel(false)}>Keep scoring</button>
             <button type="button" className="scoring-button danger" onClick={onCancel}>{initialFrameData ? 'Discard changes' : 'Discard game'}</button>
           </div>
-        </ScoringSheet>
+        </Sheet>
       )}
 
       {state.isComplete && !reviewingSavedGame && state.totalScore === 300 && (
-        <ScoringSheet
+        <Sheet
           open
+          onClose={() => { if (saveStatus === 'saved') onCancel(); else setConfirmCancel(true) }}
           title={saveStatus === 'saved' ? 'Perfect game saved' : 'Perfect game'}
-          dismissible={false}
-          className="perfect-lane"
+          description={saveStatus === 'saved' ? undefined : 'Every frame held. This one belongs in your history.'}
+          closeLabel={saveStatus === 'saved' ? 'Done' : 'Close perfect game'}
+          className="scoring-sheet-theme perfect-lane"
           backdropClassName="perfect-lane-backdrop"
         >
           {saveStatus === 'saved' ? (
             <div className="scoring-status" role="status">
-              <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
-              <p>Your perfect game is in this session.</p>
-              <button type="button" className="scoring-button primary wide" onClick={onCancel}>Done</button>
+              <div className="scoring-save-check"><Icon name="check" size={34} /></div>
+              <button type="button" className="scoring-button primary" onClick={onCancel}>Done</button>
             </div>
           ) : (
             <>
               <p className="scoring-eyebrow">Twelve strikes</p>
               <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
-              <p className="scoring-subtitle">Every frame held. This one belongs in your history.</p>
               {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
               {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
               <div className="scoring-sheet-actions">
-                <button type="button" className="scoring-button secondary" onClick={handleUndo}><ScoringIcon name="undo" size={18} /> Undo last roll</button>
+                <button type="button" className="scoring-button secondary" onClick={handleUndo}><Icon name="undo" size={18} /> Undo last roll</button>
                 <button type="button" className="scoring-button secondary" onClick={handleRetake}>{confirmRetake ? 'Confirm retake' : 'Retake'}</button>
-                <button type="button" className="scoring-button primary" disabled={saveStatus === 'saving'} onClick={handleSave}>{saveStatus === 'saving' ? 'Saving…' : 'Save 300'}</button>
+                <button type="button" className="scoring-button primary" autoFocus disabled={saveStatus === 'saving'} onClick={handleSave}>{saveStatus === 'saving' ? 'Saving…' : 'Save 300'}</button>
               </div>
               {confirmRetake && <p className="scoring-subtitle">Retaking clears the perfect game. Tap “Confirm retake” to continue.</p>}
             </>
           )}
-        </ScoringSheet>
+        </Sheet>
       )}
     </div>
   )

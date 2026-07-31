@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import QuickAddGame from '../components/QuickAddGame'
-import ScoringIcon from '../features/scoring/ScoringIcon'
+import { Icon } from '../design'
 import '../features/scoring/scoring.css'
 
 interface SessionSummary {
@@ -74,7 +74,7 @@ export default function QuickStart() {
                   </p>
                 </div>
                 {session.highScore != null && <span className="scoring-row-value">{session.highScore}</span>}
-                <ScoringIcon name="chevron" size={18} />
+                <Icon name="chevron-right" size={18} />
               </Link>
             </div>
           ))}

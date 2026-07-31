@@ -9,6 +9,7 @@
   --today-gold: var(--strike-gold, var(--warning, #b87700));
   --today-green: var(--spare-green, var(--success, #1d7e55));
   --today-separator: var(--separator, var(--border, rgba(22, 24, 28, 0.12)));
+
   color: var(--today-ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
@@ -77,12 +78,13 @@
   width: 100%;
 }
 
-button.today-context {
+.today-context--league {
   border-radius: 0;
   cursor: pointer;
+  text-decoration: none;
 }
 
-button.today-context:hover .today-context__copy strong {
+.today-context--league:hover .today-context__copy strong {
   color: var(--today-violet);
 }
 
@@ -258,7 +260,7 @@ button.today-context:hover .today-context__copy strong {
   line-height: 1;
 }
 
-.today-frame-ribbon__lane {
+.today-frame-ribbon .bs-frame-ribbon__lane {
   background:
     linear-gradient(90deg, transparent 49%, color-mix(in srgb, var(--today-ink) 4%, transparent) 50%, transparent 51%),
     color-mix(in srgb, var(--today-gold) 8%, var(--today-raised));
@@ -269,7 +271,7 @@ button.today-context:hover .today-context__copy strong {
   min-width: 340px;
 }
 
-.today-frame-ribbon__frame {
+.today-frame-ribbon .bs-frame-ribbon__frame {
   align-items: center;
   border-inline-end: 1px solid var(--today-separator);
   display: grid;
@@ -279,25 +281,25 @@ button.today-context:hover .today-context__copy strong {
   text-align: center;
 }
 
-.today-frame-ribbon__frame:last-child {
+.today-frame-ribbon .bs-frame-ribbon__frame:last-child {
   border-inline-end: 0;
 }
 
-.today-frame-ribbon__number {
+.today-frame-ribbon .bs-frame-ribbon__number {
   color: var(--today-secondary);
-  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.75rem;
 }
 
-.today-frame-ribbon__frame strong {
+.today-frame-ribbon :is(.bs-frame-ribbon__rolls, .bs-frame-ribbon__score) {
   color: var(--today-ink);
-  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.today-frame-ribbon__frame:has(strong:not(:empty)) strong {
+.today-frame-ribbon .bs-frame-ribbon__frame:not(.is-pending, .is-partial) .bs-frame-ribbon__score {
   color: var(--today-gold);
 }
 
@@ -524,7 +526,7 @@ button.today-context:hover .today-context__copy strong {
 
 .today-session-row__scores small {
   color: var(--today-secondary);
-  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.75rem;
 }
 
@@ -706,6 +708,18 @@ button.today-context:hover .today-context__copy strong {
   min-height: 48px;
 }
 
+.today-sheet__fields input:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.today-sheet__session-note {
+  color: var(--today-secondary);
+  font-size: 0.78rem;
+  margin: -6px auto 16px;
+  max-width: 640px;
+}
+
 .today-sheet-panel .bs-sheet__body > .card,
 .today-sheet__success,
 .today-sheet__status,
@@ -784,16 +798,6 @@ button.today-context:hover .today-context__copy strong {
 .today-skeleton--metrics { height: 146px; border-radius: 20px; }
 .today-skeleton--rows { height: 226px; border-radius: 20px; }
 .today-skeleton--inspector { height: 300px; border-radius: 20px; }
-
-.today-sr-only {
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
 
 @media (max-width: 430px) {
   .today-frame-ribbon {
@@ -891,14 +895,5 @@ button.today-context:hover .today-context__copy strong {
     font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
     font-size: 2.5rem;
     line-height: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .today-page *,
-  .today-page *::before,
-  .today-page *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
   }
 }

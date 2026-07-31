@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Icon } from '../design'
 import { useSettings } from '../hooks/useSettings'
 import { QuickLogSheet, type QuickLogDraft } from '../features/today/QuickLogSheet'
@@ -8,21 +8,25 @@ import { RecentSessions } from '../features/today/RecentSessions'
 import { TodayFrameRibbon } from '../features/today/TodayFrameRibbon'
 import {
   fetchJson,
+  fetchRecentSessions,
   type Ball,
-  type Game,
-  type GameResponse,
   type SavedGame,
   type Session,
+} from '../api/bowling'
+import {
+  type Game,
+  type GameResponse,
   type Stats,
   type TonightLeague,
   type WeeklyStats,
   normalizeGame,
+  parseCalendarDate,
 } from '../features/today/data'
 import '../features/today/today.css'
 
 function formatDate(date: string | undefined) {
   if (!date) return ''
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+  return parseCalendarDate(date).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -66,6 +70,12 @@ function TodayActions({ onQuickLog }: { onQuickLog: () => void }) {
 }
 
 function DashboardLoading() {
+  const [announcement, setAnnouncement] = useState('')
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setAnnouncement('Loading your latest bowling activity.'), 0)
+    return () => window.clearTimeout(timeout)
+  }, [])
+
   return (
     <div className="today-page" aria-busy="true" aria-label="Loading Today">
       <div className="today-layout">
@@ -94,7 +104,7 @@ function DashboardLoading() {
           <div className="today-skeleton today-skeleton--inspector" />
         </aside>
       </div>
-      <span className="today-sr-only" role="status">Loading your latest bowling activity.</span>
+      <span className="bs-visually-hidden" role="status">{announcement}</span>
     </div>
   )
 }
@@ -129,7 +139,6 @@ function DashboardError({ onRetry }: { onRetry: () => void }) {
 export default function Dashboard() {
   const { settings } = useSettings()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
   const [showQuickLog, setShowQuickLog] = useState(false)
   const [quickLogDraft, setQuickLogDraft] = useState<QuickLogDraft>(createQuickLogDraft)
 
@@ -142,11 +151,8 @@ export default function Dashboard() {
     queryFn: () => fetchJson<WeeklyStats>('/api/stats/weekly'),
   })
   const sessionsQuery = useQuery<Session[]>({
-    queryKey: ['sessions'],
-    queryFn: async () => {
-      const data = await fetchJson<Session[] | { sessions?: Session[] }>('/api/sessions?limit=100&offset=0')
-      return Array.isArray(data) ? data : (data.sessions ?? [])
-    },
+    queryKey: ['sessions', 'recent'],
+    queryFn: fetchRecentSessions,
   })
   const recentGamesQuery = useQuery<Game[]>({
     queryKey: ['games-recent'],
@@ -194,7 +200,7 @@ export default function Dashboard() {
 
   const isLoading = statsQuery.isLoading || sessionsQuery.isLoading || recentGamesQuery.isLoading
   const hasCriticalError = statsQuery.isError || sessionsQuery.isError || recentGamesQuery.isError
-  const hasSupportingError = weeklyQuery.isError || tonightQuery.isError
+  const hasSupportingError = weeklyQuery.isError || tonightQuery.isError || ballsQuery.isError
 
   const retryDashboard = () => {
     void Promise.all([
@@ -217,24 +223,28 @@ export default function Dashboard() {
   const closeQuickLog = useCallback(() => setShowQuickLog(false), [])
 
   const handleQuickLogSave = async (game: SavedGame) => {
-    let sessionId = quickLogDraft.sessionId
-    if (sessionId === null) {
-      sessionId = (await createSessionMutation.mutateAsync({
-        date: quickLogDraft.date,
-        location: quickLogDraft.location,
-        lanes: quickLogDraft.lanes,
-      })).id
-      setQuickLogDraft((draft) => ({ ...draft, sessionId }))
-    }
+    try {
+      let sessionId = quickLogDraft.sessionId
+      if (sessionId === null) {
+        sessionId = (await createSessionMutation.mutateAsync({
+          date: quickLogDraft.date,
+          location: quickLogDraft.location,
+          lanes: quickLogDraft.lanes,
+        })).id
+        setQuickLogDraft((draft) => ({ ...draft, sessionId }))
+      }
 
-    await createGameMutation.mutateAsync({ ...game, sessionId })
-    setQuickLogDraft((draft) => ({ ...draft, saved: true }))
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['sessions'] }),
-      queryClient.invalidateQueries({ queryKey: ['stats'] }),
-      queryClient.invalidateQueries({ queryKey: ['stats/weekly'] }),
-      queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
-    ])
+      await createGameMutation.mutateAsync({ ...game, sessionId })
+      setQuickLogDraft((draft) => ({ ...draft, saved: true }))
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats/weekly'] }),
+        queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
+      ])
+    } catch {
+      // Mutation state drives the inline retry message; keep the scorer promise handled.
+    }
   }
 
   if (isLoading) return <DashboardLoading />
@@ -251,10 +261,9 @@ export default function Dashboard() {
             <div className="today-kicker">{settings.name ? `For ${settings.name}` : 'BowlSense'}</div>
             <h1>Today</h1>
             {contextLeague ? (
-              <button
-                type="button"
+              <Link
+                to={`/leagues/${contextLeague.id}`}
                 className="today-context today-context--league"
-                onClick={() => navigate(`/leagues/${contextLeague.id}`)}
                 aria-label={`View ${contextLeague.name}, week ${contextLeague.nextWeekNumber}`}
               >
                 <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="league" /></span>
@@ -266,7 +275,7 @@ export default function Dashboard() {
                 </span>
                 {relevantLeagues.length > 1 && <span className="today-context__count">+{relevantLeagues.length - 1}</span>}
                 <Icon className="today-icon" name="chevron-right" />
-              </button>
+              </Link>
             ) : (
               <div className="today-context">
                 <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="location" /></span>
@@ -296,7 +305,7 @@ export default function Dashboard() {
                   frames={gameFrameData(latestGame)}
                   score={latestGame?.score ?? latestSession?.highScore ?? 0}
                   gameNumber={latestGame?.gameNumber}
-                  location={latestGame?.location ?? latestSession?.location}
+                  location={latestGame?.location ?? latestSession?.location ?? undefined}
                 />
               </section>
 
@@ -313,18 +322,18 @@ export default function Dashboard() {
                             name="back"
                           />
                         )}
-                        {averageDelta === 0 ? 'No change' : `${Math.abs(averageDelta)} vs last week`}
+                        {averageDelta === 0 ? 'No change' : `${averageDelta > 0 ? 'Up' : 'Down'} ${Math.abs(averageDelta)} vs last week`}
                       </span>
                     )}
                   </div>
                 </div>
                 <div className="today-metric">
                   <span className="today-metric__label">Strike rate</span>
-                  <strong>{stats?.strikeRate !== null && stats?.strikeRate !== undefined ? `${stats.strikeRate}%` : '—'}</strong>
+                  <strong>{stats?.strikeRate == null ? '—' : `${stats.strikeRate}%`}</strong>
                 </div>
                 <div className="today-metric">
                   <span className="today-metric__label">Spare rate</span>
-                  <strong>{stats?.spareRate !== null && stats?.spareRate !== undefined ? `${stats.spareRate}%` : '—'}</strong>
+                  <strong>{stats?.spareRate == null ? '—' : `${stats.spareRate}%`}</strong>
                 </div>
               </section>
 
@@ -369,13 +378,12 @@ export default function Dashboard() {
                 <div><dt>Opponent</dt><dd>Not set</dd></div>
                 {contextLeague.lastOpponent && <div><dt>Last faced</dt><dd>{contextLeague.lastOpponent}</dd></div>}
               </dl>
-              <button
-                type="button"
+              <Link
+                to={`/leagues/${contextLeague.id}?logWeek=1&date=${contextLeague.todayIso}`}
                 className="today-button today-button--secondary"
-                onClick={() => navigate(`/leagues/${contextLeague.id}?logWeek=1&date=${contextLeague.todayIso}`)}
               >
                 Log league week
-              </button>
+              </Link>
             </section>
           ) : (
             <section className="today-inspector__section">
@@ -408,6 +416,8 @@ export default function Dashboard() {
         onSave={handleQuickLogSave}
         onClose={closeQuickLog}
         onLogAnother={() => {
+          createSessionMutation.reset()
+          createGameMutation.reset()
           setQuickLogDraft((draft) => ({
             ...draft,
             gameNumber: draft.gameNumber + 1,

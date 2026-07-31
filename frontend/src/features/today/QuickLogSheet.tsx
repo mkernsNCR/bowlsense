@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import BowlingScorer from '../../components/BowlingScorer'
 import { Sheet } from '../../design'
-import type { Ball, SavedGame } from './data'
+import type { Ball, SavedGame } from '../../api/bowling'
 
 export interface QuickLogDraft {
   date: string
@@ -57,6 +57,7 @@ export function QuickLogSheet({
             onChange={(event) => onDraftChange({ location: event.target.value })}
             placeholder="Bowling center"
             autoComplete="organization"
+            disabled={draft.sessionId !== null}
           />
         </label>
         <label>
@@ -65,6 +66,7 @@ export function QuickLogSheet({
             type="date"
             value={draft.date}
             onChange={(event) => onDraftChange({ date: event.target.value })}
+            disabled={draft.sessionId !== null}
           />
         </label>
         <label>
@@ -74,9 +76,11 @@ export function QuickLogSheet({
             onChange={(event) => onDraftChange({ lanes: event.target.value })}
             placeholder="12–13"
             inputMode="numeric"
+            disabled={draft.sessionId !== null}
           />
         </label>
       </div>
+      {draft.sessionId !== null && <p className="today-sheet__session-note">Additional games stay in this created session.</p>}
 
       {draft.saved && draft.sessionId ? (
         <div className="today-sheet__success" role="status">

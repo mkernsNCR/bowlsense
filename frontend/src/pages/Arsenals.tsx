@@ -2,51 +2,8 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { BallImage, GearBackLink, GearHeader, GearNavigation, GearSheet, GearState } from '../features/gear/GearWorkspace'
-
-type UseCase = 'League' | 'Tournament' | 'Practice' | 'Sport Shot' | 'Custom'
-
-interface Ball {
-  id: number
-  name: string
-  brand: string | null
-  thumbnailImage: string | null
-}
-
-interface Arsenal {
-  id: number
-  name: string
-  description: string | null
-  useCase: UseCase | null
-  maxSize: number
-  notes: string | null
-  ballCount?: number
-}
-
-interface ArsenalBall {
-  id: number
-  ballId: number
-  role: string | null
-  slotOrder: number
-  notes: string | null
-  ball: Ball
-}
-
-interface ArsenalStats {
-  gamesPlayed: number
-  averageScore: number
-  highGame: number
-  byBall: Array<{ ballId: number; ballName: string; role: string | null; gamesPlayed: number; averageScore: number; highGame: number }>
-  byUseCase: {
-    open: { games: number; average: number }
-    league: { games: number; average: number }
-    tournament: { games: number; average: number }
-  }
-}
-
-interface ArsenalDetail extends Arsenal {
-  balls: ArsenalBall[]
-  stats?: ArsenalStats
-}
+import { arsenalJson, arsenalRequest, requestJson } from '../features/gear/api'
+import type { Arsenal, ArsenalBall, ArsenalDetail, ArsenalUseCase, GearBall } from '../features/gear/types'
 
 interface EntryForm {
   ballId: string
@@ -55,43 +12,15 @@ interface EntryForm {
   notes: string
 }
 
-const USE_CASES: UseCase[] = ['League', 'Tournament', 'Practice', 'Sport Shot', 'Custom']
+const USE_CASES: ArsenalUseCase[] = ['League', 'Tournament', 'Practice', 'Sport Shot', 'Custom']
 const ROLES = ['Strike', 'Spare', 'Heavy Oil', 'Dry Lane', 'Benchmark', 'Wet-Dry', 'Backup Ball', 'Custom']
 const EMPTY_ENTRY: EntryForm = { ballId: '', role: 'Benchmark', slotOrder: '', notes: '' }
-
-function shouldUseLegacyArsenalRoute(response: Response, expectJson: boolean): boolean {
-  const contentType = response.headers.get('content-type') || ''
-  const servedSpaFallback = response.ok && contentType.includes('text/html')
-  return response.status === 404
-    || response.status === 405
-    || servedSpaFallback
-    || (expectJson && response.ok && !contentType.includes('application/json'))
-}
-
-async function arsenalJson<T>(suffix = '', init?: RequestInit): Promise<T> {
-  let response = await fetch(`/api/arsenals${suffix}`, init)
-  if (shouldUseLegacyArsenalRoute(response, true)) response = await fetch(`/arsenals${suffix}`, init)
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
-  return response.json() as Promise<T>
-}
-
-async function arsenalRequest(suffix: string, init?: RequestInit): Promise<void> {
-  let response = await fetch(`/api/arsenals${suffix}`, init)
-  if (shouldUseLegacyArsenalRoute(response, false)) response = await fetch(`/arsenals${suffix}`, init)
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
-}
-
-async function ballJson<T>(): Promise<T> {
-  const response = await fetch('/api/balls')
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
-  return response.json() as Promise<T>
-}
 
 function ArsenalList({ createMode }: { createMode: boolean }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [createOpen, setCreateOpen] = useState(createMode)
-  const [form, setForm] = useState({ name: '', description: '', useCase: 'League' as UseCase, maxSize: '6', notes: '' })
+  const [form, setForm] = useState({ name: '', description: '', useCase: 'League' as ArsenalUseCase, maxSize: '6', notes: '' })
   const arsenalsQuery = useQuery<Arsenal[]>({ queryKey: ['arsenals'], queryFn: () => arsenalJson<Arsenal[]>() })
   const createArsenal = useMutation({
     mutationFn: (payload: object) => arsenalJson<Arsenal>('', {
@@ -106,7 +35,7 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
   })
 
   return (
-    <main className="gear-workspace">
+    <div className="gear-workspace">
       <GearHeader title="Arsenals" description="Build purpose-made bags and see the role every ball plays before you get to the lanes." action={<button className="btn btn-primary" type="button" onClick={() => setCreateOpen(true)}>Build an arsenal</button>} />
       <GearNavigation />
 
@@ -138,7 +67,7 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
         <div className="gear-form">
           <label>Arsenal name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="League night" /></label>
           <div className="gear-form__row">
-            <label>Use case<select value={form.useCase} onChange={(event) => setForm({ ...form, useCase: event.target.value as UseCase })}>{USE_CASES.map((useCase) => <option value={useCase} key={useCase}>{useCase}</option>)}</select></label>
+            <label>Use case<select value={form.useCase} onChange={(event) => setForm({ ...form, useCase: event.target.value as ArsenalUseCase })}>{USE_CASES.map((useCase) => <option value={useCase} key={useCase}>{useCase}</option>)}</select></label>
             <label>Bag size<input type="number" min="1" max="12" value={form.maxSize} onChange={(event) => setForm({ ...form, maxSize: event.target.value })} /></label>
           </div>
           <label>Description<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Fresh house shot with a late transition" /></label>
@@ -147,7 +76,7 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
           <div className="gear-form__actions"><button className="btn btn-primary" type="button" disabled={!form.name.trim() || Number(form.maxSize) < 1 || Number(form.maxSize) > 12 || createArsenal.isPending} onClick={() => createArsenal.mutate({ name: form.name.trim(), description: form.description || null, useCase: form.useCase, maxSize: Number(form.maxSize), notes: form.notes || null })}>{createArsenal.isPending ? 'Building…' : 'Build arsenal'}</button></div>
         </div>
       </GearSheet>
-    </main>
+    </div>
   )
 }
 
@@ -160,7 +89,7 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
   const [notes, setNotes] = useState(arsenal.notes || '')
   const [performanceSort, setPerformanceSort] = useState<'average' | 'games' | 'high'>('average')
 
-  const ballsQuery = useQuery<Ball[]>({ queryKey: ['balls'], queryFn: () => ballJson<Ball[]>() })
+  const ballsQuery = useQuery<GearBall[]>({ queryKey: ['balls'], queryFn: () => requestJson<GearBall[]>('/api/balls') })
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['arsenal', arsenal.id] })
 
   const addBall = useMutation({
@@ -251,7 +180,7 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
   }
 
   return (
-    <main className="gear-workspace">
+    <div className="gear-workspace">
       <GearBackLink to="/arsenals">All arsenals</GearBackLink>
       <GearHeader title={arsenal.name} description={arsenal.description || 'A purpose-built equipment plan.'} />
       <GearNavigation />
@@ -328,14 +257,14 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
           <div className="gear-danger-row"><button className="btn btn-danger" type="button" disabled={removeEntry.isPending} onClick={() => removeEntry.mutate(selectedEntry.id)}>{removeEntry.isPending ? 'Removing…' : 'Remove from bag'}</button><button className="btn btn-primary" type="button" disabled={updateEntry.isPending} onClick={() => updateEntry.mutate({ entryId: selectedEntry.id, payload: { role: editEntry.role, slotOrder: Number(editEntry.slotOrder), notes: editEntry.notes || null } })}>{updateEntry.isPending ? 'Saving…' : 'Save changes'}</button></div>
         </div>}
       </GearSheet>
-    </main>
+    </div>
   )
 }
 
 function ArsenalDetailView({ id }: { id: number }) {
   const arsenalQuery = useQuery<ArsenalDetail>({ queryKey: ['arsenal', id], queryFn: () => arsenalJson<ArsenalDetail>(`/${id}`) })
-  if (arsenalQuery.isLoading) return <main className="gear-workspace"><GearNavigation /><GearState kind="loading" title="Opening this bag" detail="Loading ball roles and performance." /></main>
-  if (arsenalQuery.isError || !arsenalQuery.data) return <main className="gear-workspace"><GearNavigation /><GearState kind="error" title="Arsenal unavailable" detail="This bag could not be loaded. It may have been removed, or the connection failed." action={<button className="btn btn-ghost" type="button" onClick={() => void arsenalQuery.refetch()}>Try again</button>} /></main>
+  if (arsenalQuery.isLoading) return <div className="gear-workspace"><GearNavigation /><GearState kind="loading" title="Opening this bag" detail="Loading ball roles and performance." /></div>
+  if (arsenalQuery.isError || !arsenalQuery.data) return <div className="gear-workspace"><GearNavigation /><GearState kind="error" title="Arsenal unavailable" detail="This bag could not be loaded. It may have been removed, or the connection failed." action={<button className="btn btn-ghost" type="button" onClick={() => void arsenalQuery.refetch()}>Try again</button>} /></div>
   return <ArsenalDetailContent arsenal={arsenalQuery.data} />
 }
 

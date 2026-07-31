@@ -1,4 +1,5 @@
-.gear-workspace {
+.gear-workspace,
+.gear-sheet-theme {
   --gear-ink: var(--text, #18161d);
   --gear-muted: var(--muted, #6f6876);
   --gear-surface: var(--surface, #fff);
@@ -6,11 +7,13 @@
   --gear-line: var(--border, #ddd8e2);
   --gear-accent: var(--accent, #7356a4);
   color: var(--gear-ink);
+}
+.gear-workspace {
   max-width: 1080px;
   margin: 0 auto;
   padding-bottom: 32px;
 }
-.gear-workspace .sr-only { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+.gear-workspace .sr-only, .gear-sheet-theme .sr-only { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 
 .gear-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin: 8px 0 18px; }
 .gear-header h1 { font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.035em; margin: 2px 0 6px; }
@@ -52,13 +55,10 @@
 .gear-chip--role { color: var(--gear-ink); }
 .gear-chip--missing { border-style: dashed; }
 
-.gear-sheet-backdrop { align-items: end; background: rgb(6 4 10 / .58); display: flex; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 1000; }
-.gear-sheet { background: var(--gear-surface); border: 1px solid var(--gear-line); border-radius: 22px; box-shadow: 0 24px 80px rgb(0 0 0 / .32); max-height: min(780px, calc(100dvh - 36px)); max-width: 640px; overflow: auto; width: 100%; }
-.gear-sheet__handle { background: var(--gear-line); border-radius: 99px; height: 4px; margin: 8px auto 2px; width: 36px; }
-.gear-sheet__header { align-items: start; border-bottom: 1px solid var(--gear-line); display: flex; gap: 20px; justify-content: space-between; padding: 16px 20px; }
-.gear-sheet__header h2 { font-size: 1.35rem; margin: 0 0 3px; }
-.gear-sheet__header p { color: var(--gear-muted); font-size: .82rem; margin: 0; }
-.gear-sheet__body { padding: 20px; }
+.bs-sheet.gear-sheet-panel { max-width: 640px; color: var(--gear-ink); background: var(--gear-surface); border-color: var(--gear-line); }
+.gear-sheet-panel .bs-sheet__header { border-color: var(--gear-line); }
+.gear-sheet-panel .bs-sheet__header p { color: var(--gear-muted); }
+.gear-sheet-panel .bs-sheet__body { padding: 20px; }
 .gear-icon-button { align-items: center; background: transparent; border: 1px solid var(--gear-line); border-radius: 50%; color: inherit; cursor: pointer; display: inline-flex; height: 44px; justify-content: center; padding: 0; width: 44px; }
 .gear-icon-button svg { fill: none; height: 18px; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; width: 18px; }
 
@@ -96,7 +96,18 @@
 .gear-capacity > span { color: var(--gear-muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
 
 .gear-back { align-items: center; color: var(--gear-muted); display: inline-flex; font-size: .8rem; gap: 6px; margin-bottom: 10px; min-height: 44px; text-decoration: none; }
-.gear-bag { background: var(--gear-surface-2); border: 1px solid var(--gear-line); border-radius: 18px; display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); padding: 12px; }
+.gear-bag {
+  background-color: var(--gear-surface-2);
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 52px, rgb(91 76 48 / .08) 52px 53px),
+    linear-gradient(160deg, rgb(255 255 255 / .22), transparent 48%, rgb(115 86 164 / .08));
+  border: 1px solid var(--gear-line);
+  border-radius: 18px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 12px;
+}
 .gear-slot { align-items: center; background: var(--gear-surface); border: 1px solid var(--gear-line); border-radius: 14px; display: flex; gap: 10px; min-height: 86px; padding: 12px; position: relative; }
 .gear-slot--empty { border-style: dashed; color: var(--gear-muted); justify-content: center; }
 .gear-slot__number { color: var(--gear-muted); font-size: .65rem; position: absolute; right: 8px; top: 6px; }
@@ -138,8 +149,7 @@
   .gear-ball-card { grid-template-columns: auto 1fr; }
   .gear-chevron { display: none; }
   .gear-form__row { grid-template-columns: 1fr; }
-  .gear-sheet-backdrop { padding: 0; }
-  .gear-sheet { border-radius: 20px 20px 0 0; max-height: 92dvh; }
+  .bs-sheet.gear-sheet-panel { max-height: 92dvh; }
   .gear-bag { grid-template-columns: 1fr; }
   .gear-performance__row { grid-template-columns: 1fr repeat(3, 40px); }
 }

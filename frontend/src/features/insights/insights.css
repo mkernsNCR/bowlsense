@@ -216,6 +216,19 @@
   margin: 4px 0 0;
 }
 
+.insights-chart-summary {
+  color: var(--insights-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0.75rem 0 0;
+}
+
+.chart-axis-title {
+  fill: var(--insights-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .insights-chart svg {
   display: block;
   height: auto;

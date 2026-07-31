@@ -3,8 +3,8 @@ import { NavLink } from 'react-router-dom'
 import './insights.css'
 
 const sections = [
-  { label: 'Snapshot', to: '/stats' },
-  { label: 'Pin practice', to: '/pin-leaves' },
+  { label: 'Form', to: '/stats' },
+  { label: 'Pin leaves', to: '/pin-leaves' },
   { label: 'Calculator', to: '/score-calculator' },
 ]
 

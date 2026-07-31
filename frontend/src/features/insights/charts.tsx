@@ -1,21 +1,5 @@
 import { useId } from 'react'
-
-interface TrendGame {
-  id: number
-  score: number
-  date: string
-  location: string
-  gameNumber: number
-}
-
-export interface TrendData {
-  games: TrendGame[]
-  rolling5: number[]
-  rolling10: number[]
-  rolling20: number[]
-}
-
-export type TrendWindow = 5 | 10 | 20
+import { trendWindowConfig, type TrendData, type TrendWindow } from './trend'
 
 function polylinePoints(values: number[], xOf: (index: number) => number, yOf: (value: number) => number) {
   return values.map((value, index) => `${xOf(index)},${yOf(value)}`).join(' ')
@@ -29,7 +13,8 @@ export function ScoreTrendChart({ data, windowSize }: { data: TrendData; windowS
   const padding = { top: 18, right: 18, bottom: 36, left: 44 }
   const plotWidth = width - padding.left - padding.right
   const plotHeight = height - padding.top - padding.bottom
-  const rollingAverage = windowSize === 5 ? data.rolling5 : windowSize === 10 ? data.rolling10 : data.rolling20
+  const windowConfig = trendWindowConfig(windowSize)
+  const rollingAverage = data[windowConfig.dataKey]
   const values = [...data.games.map((game) => game.score), ...rollingAverage]
     .filter((value) => Number.isFinite(value) && value >= 0)
   const rawMin = values.length > 0 ? Math.min(...values) : 0
@@ -44,6 +29,14 @@ export function ScoreTrendChart({ data, windowSize }: { data: TrendData; windowS
   const dateRange = data.games.length > 1
     ? `${data.games[0].date} through ${data.games[data.games.length - 1].date}`
     : data.games[0]?.date ?? 'the selected period'
+  const firstRollingAverage = rollingAverage.find((value) => Number.isFinite(value))
+  const lastRollingAverage = [...rollingAverage].reverse().find((value) => Number.isFinite(value))
+  const rollingChange = firstRollingAverage === undefined || lastRollingAverage === undefined
+    ? null
+    : lastRollingAverage - firstRollingAverage
+  const trendSummary = rollingChange === null
+    ? `The selected ${windowSize}-game average is not available yet. Scores range from ${rawMin} to ${rawMax}.`
+    : `The selected ${windowSize}-game average ${rollingChange === 0 ? 'held steady' : rollingChange > 0 ? `rose ${rollingChange} pins` : `fell ${Math.abs(rollingChange)} pins`} from ${firstRollingAverage} to ${lastRollingAverage}. Scores range from ${rawMin} to ${rawMax}.`
 
   return (
     <figure className="insights-chart">
@@ -53,7 +46,7 @@ export function ScoreTrendChart({ data, windowSize }: { data: TrendData; windowS
           <p>{data.games.length} games · {dateRange}</p>
         </div>
         <div className="insights-chart-legend" aria-hidden="true">
-          <span><i className={`is-${windowSize === 5 ? 'five' : windowSize === 10 ? 'ten' : 'twenty'}`} />{windowSize} game average</span>
+          <span><i className={`is-${windowConfig.tone}`} />{windowSize} game average</span>
           <span><i className="is-score" />Score</span>
         </div>
       </figcaption>
@@ -72,9 +65,17 @@ export function ScoreTrendChart({ data, windowSize }: { data: TrendData; windowS
             <text className="chart-axis-label" x={padding.left - 8} y={yOf(tick) + 4} textAnchor="end">{tick}</text>
           </g>
         ))}
+        <text className="chart-axis-title" x={14} y={padding.top + plotHeight / 2} textAnchor="middle" transform={`rotate(-90 14 ${padding.top + plotHeight / 2})`}>Score</text>
+        {data.games.length > 0 && (
+          <>
+            <text className="chart-axis-label" x={padding.left} y={height - 18} textAnchor="start">{data.games[0].date}</text>
+            {data.games.length > 1 && <text className="chart-axis-label" x={width - padding.right} y={height - 18} textAnchor="end">{data.games[data.games.length - 1].date}</text>}
+            <text className="chart-axis-title" x={padding.left + plotWidth / 2} y={height - 3} textAnchor="middle">Game date</text>
+          </>
+        )}
         {rollingAverage.length > 1 && (
           <polyline
-            className={`chart-line is-${windowSize === 5 ? 'five' : windowSize === 10 ? 'ten' : 'twenty'}`}
+            className={`chart-line is-${windowConfig.tone}`}
             points={polylinePoints(rollingAverage, xOf, yOf)}
           />
         )}
@@ -84,6 +85,7 @@ export function ScoreTrendChart({ data, windowSize }: { data: TrendData; windowS
           </circle>
         ))}
       </svg>
+      <p className="insights-chart-summary">{trendSummary}</p>
     </figure>
   )
 }

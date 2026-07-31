@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { InsightMetric, InsightsWorkspace, InsightState, LeadTakeaway } from '../features/insights/InsightsWorkspace'
+import { fetchJson } from '../features/insights/data'
 
 interface PinLeaveEntry {
   pins: string
@@ -58,31 +59,27 @@ function PinDeck({ leave }: { leave: string | null }) {
   )
 }
 
-async function fetchPinLeaves(): Promise<PinLeaveData> {
-  const response = await fetch('/api/analytics/pin-leaves')
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-  return response.json() as Promise<PinLeaveData>
-}
-
 export default function PinLeaves() {
   const query = useQuery<PinLeaveData>({
     queryKey: ['pin-leaves'],
-    queryFn: fetchPinLeaves,
+    queryFn: () => fetchJson<PinLeaveData>('/api/analytics/pin-leaves'),
   })
   const [selectedLeave, setSelectedLeave] = useState<string | null>(null)
 
+  const repeatedLeaves = useMemo(
+    () => query.data?.leaves.filter((leave) => leave.count >= 2) ?? [],
+    [query.data],
+  )
   const practiceLeave = useMemo(() => {
-    const repeated = query.data?.leaves.filter((leave) => leave.count >= 2) ?? []
-    return repeated.sort((a, b) => {
+    return [...repeatedLeaves].sort((a, b) => {
       const missedA = a.count - a.conversions
       const missedB = b.count - b.conversions
       return missedB - missedA || b.count - a.count || a.conversionRate - b.conversionRate
     })[0] ?? null
-  }, [query.data])
+  }, [repeatedLeaves])
   const bestConversion = useMemo(() => {
-    const repeated = query.data?.leaves.filter((leave) => leave.count >= 2) ?? []
-    return repeated.sort((a, b) => b.conversionRate - a.conversionRate || b.count - a.count)[0] ?? null
-  }, [query.data])
+    return [...repeatedLeaves].sort((a, b) => b.conversionRate - a.conversionRate || b.count - a.count)[0] ?? null
+  }, [repeatedLeaves])
 
   if (query.isLoading) {
     return (
@@ -116,7 +113,7 @@ export default function PinLeaves() {
       <InsightsWorkspace description="Find the leave that deserves your next practice block.">
         <InsightState
           title="Frame data unlocks pin practice"
-          action={<Link className="insights-button" to="/sessions/new">Log frames</Link>}
+          action={<Link className="insights-button" to="/sessions/new">Start bowling</Link>}
         >
           Record first-ball leaves and spare attempts in a game. Repeat patterns and conversion opportunities will appear here.
         </InsightState>

@@ -47,6 +47,7 @@ export function QuickLogSheet({
       title="Log a past game"
       description="Add a completed game without starting a live session."
       closeLabel="Close past-game log"
+      closeDisabled={status.saving}
       className="today-sheet-theme today-sheet-panel"
     >
       <div className="today-sheet__fields">
@@ -57,7 +58,7 @@ export function QuickLogSheet({
             onChange={(event) => onDraftChange({ location: event.target.value })}
             placeholder="Bowling center"
             autoComplete="organization"
-            disabled={draft.sessionId !== null}
+            disabled={draft.sessionId !== null || status.saving}
           />
         </label>
         <label>
@@ -66,7 +67,7 @@ export function QuickLogSheet({
             type="date"
             value={draft.date}
             onChange={(event) => onDraftChange({ date: event.target.value })}
-            disabled={draft.sessionId !== null}
+            disabled={draft.sessionId !== null || status.saving}
           />
         </label>
         <label>
@@ -76,7 +77,7 @@ export function QuickLogSheet({
             onChange={(event) => onDraftChange({ lanes: event.target.value })}
             placeholder="12–13"
             inputMode="numeric"
-            disabled={draft.sessionId !== null}
+            disabled={draft.sessionId !== null || status.saving}
           />
         </label>
       </div>
@@ -99,6 +100,7 @@ export function QuickLogSheet({
           gameNumber={draft.gameNumber}
           balls={balls}
           defaultBallId={defaultBallId}
+          saving={status.saving}
           onSave={onSave}
           onCancel={onClose}
         />

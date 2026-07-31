@@ -10,6 +10,7 @@ export interface SheetProps {
   children: ReactNode
   footer?: ReactNode
   closeLabel?: string
+  closeDisabled?: boolean
   className?: string
 }
 
@@ -82,16 +83,18 @@ function unregisterSheet(id: symbol) {
   ;(firstControl ?? activePanel)?.focus()
 }
 
-export function Sheet({ open, onClose, title, description, children, footer, closeLabel = 'Close', className = '' }: SheetProps) {
+export function Sheet({ open, onClose, title, description, children, footer, closeLabel = 'Close', closeDisabled = false, className = '' }: SheetProps) {
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
+  const closeDisabledRef = useRef(closeDisabled)
   const sheetIdRef = useRef(Symbol('sheet'))
 
   useEffect(() => {
     onCloseRef.current = onClose
-  }, [onClose])
+    closeDisabledRef.current = closeDisabled
+  }, [closeDisabled, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -112,7 +115,7 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
       if (!isTopmostSheet(sheetId)) return
       if (event.key === 'Escape') {
         event.preventDefault()
-        onCloseRef.current()
+        if (!closeDisabledRef.current) onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !panel) return
@@ -147,7 +150,7 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
   if (!open) return null
 
   return createPortal(
-    <div className="bs-sheet-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="bs-sheet-backdrop" onPointerDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose() }}>
       <div
         ref={panelRef}
         className={`bs-sheet ${className}`.trim()}
@@ -163,7 +166,7 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <button className="bs-sheet__close" type="button" onClick={onClose} aria-label={closeLabel}>
+          <button className="bs-sheet__close" type="button" onClick={onClose} aria-label={closeLabel} disabled={closeDisabled}>
             <Icon name="close" size={20} />
           </button>
         </header>

@@ -29,6 +29,7 @@ interface BowlingScorerProps {
   balls: ScoringBall[]
   defaultBallId?: string
   initialFrameData?: string | null
+  saving?: boolean
   onSave: (game: SavedBowlingGame) => void | Promise<void>
   onCancel: () => void
 }
@@ -50,6 +51,7 @@ export default function BowlingScorer({
   balls,
   defaultBallId,
   initialFrameData,
+  saving = false,
   onSave,
   onCancel,
 }: BowlingScorerProps) {
@@ -64,6 +66,7 @@ export default function BowlingScorer({
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [confirmRetake, setConfirmRetake] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const isSaving = saving || saveStatus === 'saving'
 
   useEffect(() => {
     const previousHtmlOverflowX = document.documentElement.style.overflowX
@@ -134,6 +137,7 @@ export default function BowlingScorer({
   }
 
   const handleUndo = () => {
+    if (isSaving) return
     setReviewingSavedGame(false)
     setState((current) => undoLastRoll(current))
     setSelectedKnocked([])
@@ -141,6 +145,7 @@ export default function BowlingScorer({
   }
 
   const handleCancel = () => {
+    if (isSaving) return
     if (reviewingSavedGame) {
       onCancel()
       return
@@ -156,6 +161,7 @@ export default function BowlingScorer({
   }
 
   const handleSave = async () => {
+    if (isSaving) return
     setSaveStatus('saving')
     try {
       await onSave(savePayload())
@@ -166,6 +172,7 @@ export default function BowlingScorer({
   }
 
   const handleRetake = () => {
+    if (isSaving) return
     if (!confirmRetake) {
       setConfirmRetake(true)
       return
@@ -319,6 +326,7 @@ export default function BowlingScorer({
       {state.isComplete && !reviewingSavedGame && state.totalScore !== 300 && (
         <Sheet
           open
+          closeDisabled={isSaving}
           onClose={() => { if (saveStatus === 'saved') onCancel(); else setConfirmCancel(true) }}
           title={saveStatus === 'saved' ? 'Game saved' : `${state.totalScore}`}
           description={saveStatus === 'saved'
@@ -335,16 +343,16 @@ export default function BowlingScorer({
           ) : (
             <>
               {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
-              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
+              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={restoreBeforeEdit}>Restore original game</button>}
               <div className="scoring-sheet-actions">
-                <button type="button" className="scoring-button secondary" onClick={handleUndo}>
+                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleUndo}>
                   <Icon name="undo" size={18} /> Undo last roll
                 </button>
-                <button type="button" className="scoring-button secondary" onClick={handleRetake}>
+                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleRetake}>
                   {confirmRetake ? 'Confirm retake' : 'Retake'}
                 </button>
-                <button type="button" className="scoring-button primary" autoFocus disabled={saveStatus === 'saving'} onClick={handleSave}>
-                  {saveStatus === 'saving' ? 'Saving…' : 'Save game'}
+                <button type="button" className="scoring-button primary" autoFocus disabled={isSaving} onClick={handleSave}>
+                  {isSaving ? 'Saving…' : 'Save game'}
                 </button>
               </div>
               {confirmRetake && <p className="scoring-subtitle">Retaking clears every recorded roll. Tap “Confirm retake” to continue.</p>}
@@ -356,6 +364,7 @@ export default function BowlingScorer({
       {editCandidate != null && (
         <Sheet
           open
+          closeDisabled={isSaving}
           onClose={() => setEditCandidate(null)}
           role="alertdialog"
           title={`Edit from frame ${editCandidate + 1}?`}
@@ -392,6 +401,7 @@ export default function BowlingScorer({
       {state.isComplete && !reviewingSavedGame && state.totalScore === 300 && (
         <Sheet
           open
+          closeDisabled={isSaving}
           onClose={() => { if (saveStatus === 'saved') onCancel(); else setConfirmCancel(true) }}
           title={saveStatus === 'saved' ? 'Perfect game saved' : 'Perfect game'}
           description={saveStatus === 'saved' ? undefined : 'Every frame held. This one belongs in your history.'}
@@ -409,11 +419,11 @@ export default function BowlingScorer({
               <p className="scoring-eyebrow">Twelve strikes</p>
               <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
               {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
-              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={restoreBeforeEdit}>Restore original game</button>}
+              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={restoreBeforeEdit}>Restore original game</button>}
               <div className="scoring-sheet-actions">
-                <button type="button" className="scoring-button secondary" onClick={handleUndo}><Icon name="undo" size={18} /> Undo last roll</button>
-                <button type="button" className="scoring-button secondary" onClick={handleRetake}>{confirmRetake ? 'Confirm retake' : 'Retake'}</button>
-                <button type="button" className="scoring-button primary" autoFocus disabled={saveStatus === 'saving'} onClick={handleSave}>{saveStatus === 'saving' ? 'Saving…' : 'Save 300'}</button>
+                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleUndo}><Icon name="undo" size={18} /> Undo last roll</button>
+                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleRetake}>{confirmRetake ? 'Confirm retake' : 'Retake'}</button>
+                <button type="button" className="scoring-button primary" autoFocus disabled={isSaving} onClick={handleSave}>{isSaving ? 'Saving…' : 'Save 300'}</button>
               </div>
               {confirmRetake && <p className="scoring-subtitle">Retaking clears the perfect game. Tap “Confirm retake” to continue.</p>}
             </>

@@ -10,6 +10,7 @@ export interface SheetProps {
   children: ReactNode
   footer?: ReactNode
   closeLabel?: string
+  closeDisabled?: boolean
   className?: string
   backdropClassName?: string
   id?: string
@@ -93,6 +94,7 @@ export function Sheet({
   children,
   footer,
   closeLabel = 'Close',
+  closeDisabled = false,
   className = '',
   backdropClassName = '',
   id,
@@ -104,10 +106,12 @@ export function Sheet({
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
+  const closeDisabledRef = useRef(closeDisabled)
 
   useEffect(() => {
     onCloseRef.current = onClose
-  }, [onClose])
+    closeDisabledRef.current = closeDisabled
+  }, [closeDisabled, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -129,7 +133,7 @@ export function Sheet({
       if (event.key === 'Escape' && dismissible && onCloseRef.current) {
         event.preventDefault()
         event.stopImmediatePropagation()
-        onCloseRef.current()
+        if (!closeDisabledRef.current) onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !panel) return
@@ -163,7 +167,7 @@ export function Sheet({
     <div
       className={`bs-sheet-backdrop${backdropClassName ? ` ${backdropClassName}` : ''}`}
       onPointerDown={(event) => {
-        if (dismissible && onClose && event.target === event.currentTarget) onClose()
+        if (dismissible && onClose && !closeDisabled && event.target === event.currentTarget) onClose()
       }}
     >
       <div
@@ -183,7 +187,7 @@ export function Sheet({
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
           {dismissible && onClose ? (
-            <button className="bs-sheet__close" type="button" onClick={onClose} aria-label={closeLabel}>
+            <button className="bs-sheet__close" type="button" onClick={onClose} aria-label={closeLabel} disabled={closeDisabled}>
               <Icon name="close" size={20} />
             </button>
           ) : null}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { type Frame, type GameState, getDisplayMark, initGame, knockPins } from '../utils/bowlingScore'
 import PerfectGameCelebration from './PerfectGameCelebration'
 
@@ -13,6 +13,7 @@ interface BowlingScorerProps {
   gameNumber: number
   balls: Ball[]
   defaultBallId?: string
+  saving?: boolean
   onSave: (game: {
     gameNumber: number
     score: number
@@ -43,14 +44,13 @@ function frameSummary(frame: Frame): string {
   return `${getDisplayMark(frame, 0)}${getDisplayMark(frame, 1)}`
 }
 
-export default function BowlingScorer({ gameNumber, balls, defaultBallId, onSave, onCancel }: BowlingScorerProps) {
+export default function BowlingScorer({ gameNumber, balls, defaultBallId, saving = false, onSave, onCancel }: BowlingScorerProps) {
   const [state, setState] = useState<GameState>(initGame());
   const [selectedKnocked, setSelectedKnocked] = useState<number[]>([]);
   const [activeView, setActiveView] = useState<'pins' | 'scores'>('pins');
   const [showDetails, setShowDetails] = useState(false);
   const [selectedBallId, setSelectedBallId] = useState<string>(defaultBallId || '');
   const [editingFrameIndex, setEditingFrameIndex] = useState<number | null>(null);
-  const [showCelebration, setShowCelebration] = useState(false);
 
   const selectedBall = balls.find((b) => String(b.id) === selectedBallId);
 
@@ -244,7 +244,6 @@ export default function BowlingScorer({ gameNumber, balls, defaultBallId, onSave
     setActiveView('pins')
     setShowDetails(false)
     setEditingFrameIndex(null)
-    setShowCelebration(false)
   }
 
   const frameData = JSON.stringify({
@@ -252,15 +251,6 @@ export default function BowlingScorer({ gameNumber, balls, defaultBallId, onSave
     frames: state.frames,
     pinSelections: state.pinSelections,
   })
-
-  useEffect(() => {
-    if (state.isComplete && state.totalScore === 300) {
-      setShowCelebration(true)
-    }
-    if (!state.isComplete) {
-      setShowCelebration(false)
-    }
-  }, [state.isComplete, state.totalScore])
 
   return (
     <div className="card" style={{ marginBottom: 84, padding: 12, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
@@ -446,7 +436,7 @@ export default function BowlingScorer({ gameNumber, balls, defaultBallId, onSave
         )}
       </div>
 
-      {state.isComplete && state.totalScore !== 300 && !showCelebration && (
+      {state.isComplete && state.totalScore !== 300 && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'grid', placeItems: 'center', zIndex: 60, padding: 16 }}>
           <div className="card" style={{ width: '100%', maxWidth: 420 }}>
             <h3 style={{ marginTop: 0 }}>Game Complete!</h3>
@@ -484,9 +474,10 @@ export default function BowlingScorer({ gameNumber, balls, defaultBallId, onSave
               ))}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <button className="btn" onClick={onRetake} style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>Retake</button>
+              <button className="btn" disabled={saving} onClick={onRetake} style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>Retake</button>
               <button
                 className="btn btn-primary"
+                disabled={saving}
                 onClick={() => onSave(savePayload())}
               >
                 Save Game
@@ -496,13 +487,14 @@ export default function BowlingScorer({ gameNumber, balls, defaultBallId, onSave
         </div>
       )}
 
-      {state.isComplete && state.totalScore === 300 && showCelebration && (
+      {state.isComplete && state.totalScore === 300 && (
         <PerfectGameCelebration
           score={state.totalScore}
           gameNumber={gameNumber}
           frameData={frameData}
           session={{ location: '', date: '', lanes: '' }}
           ballName={selectedBall?.name}
+          saving={saving}
           onShare={() => {
             onSave(savePayload())
           }}

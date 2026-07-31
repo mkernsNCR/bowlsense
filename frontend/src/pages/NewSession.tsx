@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSettings } from '../hooks/useSettings'
-import ScoringIcon from '../features/scoring/ScoringIcon'
+import { Icon } from '../design'
+import { localDateValue } from '../features/scoring/date'
 import '../features/scoring/scoring.css'
 
 interface SessionDraft {
@@ -14,14 +15,6 @@ interface SessionDraft {
 
 interface CreatedSession {
   id: number
-}
-
-function localDateValue() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 export default function NewSession() {
@@ -57,7 +50,7 @@ export default function NewSession() {
   }
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">Start</p>
@@ -65,7 +58,7 @@ export default function NewSession() {
           <p className="scoring-subtitle">Confirm where you are. The scorer opens next.</p>
         </div>
         <Link to="/sessions" className="scoring-button quiet">
-          <ScoringIcon name="arrow-left" size={18} /> Sessions
+          <Icon name="back" size={18} /> Sessions
         </Link>
       </div>
 
@@ -94,7 +87,7 @@ export default function NewSession() {
       <div className="scoring-disclosure">
         <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
           {showDetails ? 'Hide details' : 'Add details'}
-          <ScoringIcon name="chevron" size={16} />
+          <Icon name="chevron-right" size={16} />
         </button>
       </div>
 
@@ -124,6 +117,6 @@ export default function NewSession() {
       >
         {createSession.isPending ? 'Starting…' : 'Start bowling'}
       </button>
-    </main>
+    </div>
   )
 }

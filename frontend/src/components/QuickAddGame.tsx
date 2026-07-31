@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
+import { fetchRecentSessions, type Session } from '../api/bowling'
 import { Icon } from '../design'
 import { localDateValue } from '../features/scoring/date'
 import type { ScoringBall } from '../features/scoring/types'
@@ -11,20 +12,9 @@ interface QuickAddGameProps {
   onDone?: (gameId: number) => void
 }
 
-interface SessionSummary {
-  id: number
-  date: string
-  location: string
-}
-
-interface SessionsPayload {
-  sessions?: SessionSummary[]
-}
-
 interface CreatedRecord {
   id: number
 }
-
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const queryClient = useQueryClient()
   const { settings } = useSettings()
@@ -37,14 +27,9 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const [gameNumber, setGameNumber] = useState(1)
   const [saved, setSaved] = useState(false)
 
-  const sessionsQuery = useQuery<SessionSummary[]>({
-    queryKey: ['sessions', 'quick-add'],
-    queryFn: async () => {
-      const response = await fetch('/api/sessions?limit=100&offset=0')
-      if (!response.ok) throw new Error('Sessions could not be loaded.')
-      const payload: SessionSummary[] | SessionsPayload = await response.json()
-      return Array.isArray(payload) ? payload : (payload.sessions ?? [])
-    },
+  const sessionsQuery = useQuery<Session[]>({
+    queryKey: ['sessions', 'recent'],
+    queryFn: fetchRecentSessions,
   })
 
   const ballsQuery = useQuery<ScoringBall[]>({

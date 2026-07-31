@@ -728,6 +728,11 @@ a.bs-list-row:hover {
   color: color-mix(in srgb, var(--ink) 48%, transparent);
 }
 
+.bs-frame-ribbon__frame.is-partial {
+  outline: 2px dashed color-mix(in srgb, var(--oil-violet) 55%, transparent);
+  outline-offset: -2px;
+}
+
 .bs-frame-ribbon--compact .bs-frame-ribbon__frame {
   min-height: 3.5rem;
 }

@@ -8,6 +8,7 @@ interface PerfectGameCelebrationProps {
   frameData: string
   session: { location: string; date: string; lanes?: string }
   ballName?: string
+  saving?: boolean
   onShare: () => void
   onSave: () => void
   onRetake: () => void
@@ -20,25 +21,38 @@ const PIN_DECK = [
   [26, 22], [42, 22], [58, 22], [74, 22],
 ] as const
 
+interface ScoredFrame {
+  ball1?: unknown
+  ball2?: unknown
+  ball3?: unknown
+}
+
+function isScoredFrame(value: unknown): value is ScoredFrame {
+  return typeof value === 'object' && value !== null
+}
+
 function getStats(frameData: string) {
   try {
-    const parsed = JSON.parse(frameData)
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
+    const parsed: unknown = JSON.parse(frameData)
+    const frames = typeof parsed === 'object' && parsed !== null && 'frames' in parsed && Array.isArray(parsed.frames)
+      ? parsed.frames.filter(isScoredFrame)
+      : []
+
     let strikes = 0
     let spares = 0
 
-    frames.forEach((frame: { ball1?: number; ball2?: number; ball3?: number }, index: number) => {
+    frames.forEach((frame, index) => {
       const { ball1, ball2, ball3 } = frame
       if (index < 9) {
         if (ball1 === 10) strikes += 1
         else if (typeof ball1 === 'number' && typeof ball2 === 'number' && ball1 + ball2 === 10) spares += 1
-        return
+      } else {
+        if (ball1 === 10) strikes += 1
+        if (ball2 === 10) strikes += 1
+        if (ball3 === 10) strikes += 1
+        if (ball1 !== 10 && typeof ball1 === 'number' && typeof ball2 === 'number' && ball1 + ball2 === 10) spares += 1
+        if (ball2 !== 10 && typeof ball2 === 'number' && typeof ball3 === 'number' && ball2 + ball3 === 10) spares += 1
       }
-      if (ball1 === 10) strikes += 1
-      if (ball2 === 10) strikes += 1
-      if (ball3 === 10) strikes += 1
-      if (ball1 !== 10 && typeof ball1 === 'number' && typeof ball2 === 'number' && ball1 + ball2 === 10) spares += 1
-      if (ball2 !== 10 && typeof ball2 === 'number' && typeof ball3 === 'number' && ball2 + ball3 === 10) spares += 1
     })
     return { strikes, spares, splits: 0 }
   } catch {
@@ -52,6 +66,7 @@ export default function PerfectGameCelebration({
   frameData,
   session,
   ballName,
+  saving = false,
   onShare,
   onSave,
   onRetake,
@@ -69,9 +84,9 @@ export default function PerfectGameCelebration({
           <div className="perfect-result__score" aria-label={`${score} points`}>{score}</div>
           <p className="perfect-result__context">Game {gameNumber} · {session.location} · {session.date}</p>
           <div className="perfect-result__actions">
-            <button className="btn btn-primary" onClick={() => { onShare(); setShowShareCard(true) }}><ActionIcon name="share" /> Share score card</button>
-            <button className="btn btn-ghost" onClick={onSave}><ActionIcon name="save" /> Save game</button>
-            <button className="btn btn-ghost" onClick={onRetake}>Retake</button>
+            <button className="btn btn-primary" disabled={saving} onClick={() => { onShare(); setShowShareCard(true) }}><ActionIcon name="share" /> Share score card</button>
+            <button className="btn btn-ghost" disabled={saving} onClick={onSave}><ActionIcon name="save" /> Save game</button>
+            <button className="btn btn-ghost" disabled={saving} onClick={onRetake}>Retake</button>
           </div>
         </section>
       </div>

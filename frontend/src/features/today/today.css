@@ -426,7 +426,10 @@
   background: var(--today-surface);
   border: 1px solid var(--today-separator);
   border-radius: 20px;
+  list-style: none;
+  margin: 0;
   overflow: hidden;
+  padding: 0;
 }
 
 .today-session-row {
@@ -441,7 +444,7 @@
   text-decoration: none;
 }
 
-.today-session-row:not(:last-child)::after {
+.today-grouped-list > li:not(:last-child) .today-session-row::after {
   background: var(--today-separator);
   bottom: 0;
   content: '';

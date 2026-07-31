@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../design'
 import { useSettings } from '../hooks/useSettings'
@@ -141,6 +141,8 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const [showQuickLog, setShowQuickLog] = useState(false)
   const [quickLogDraft, setQuickLogDraft] = useState<QuickLogDraft>(createQuickLogDraft)
+  const [quickLogSaving, setQuickLogSaving] = useState(false)
+  const quickLogSaveInFlight = useRef(false)
 
   const statsQuery = useQuery<Stats>({
     queryKey: ['stats'],
@@ -214,15 +216,21 @@ export default function Dashboard() {
   }
 
   const openQuickLog = () => {
+    if (quickLogSaveInFlight.current) return
     createSessionMutation.reset()
     createGameMutation.reset()
     setQuickLogDraft(createQuickLogDraft(latestSession?.location ?? ''))
     setShowQuickLog(true)
   }
 
-  const closeQuickLog = useCallback(() => setShowQuickLog(false), [])
+  const closeQuickLog = useCallback(() => {
+    if (!quickLogSaveInFlight.current) setShowQuickLog(false)
+  }, [])
 
   const handleQuickLogSave = async (game: SavedGame) => {
+    if (quickLogSaveInFlight.current || createSessionMutation.isPending || createGameMutation.isPending) return
+    quickLogSaveInFlight.current = true
+    setQuickLogSaving(true)
     try {
       let sessionId = quickLogDraft.sessionId
       if (sessionId === null) {
@@ -235,15 +243,16 @@ export default function Dashboard() {
       }
 
       await createGameMutation.mutateAsync({ ...game, sessionId })
-      setQuickLogDraft((draft) => ({ ...draft, saved: true }))
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['sessions'] }),
         queryClient.invalidateQueries({ queryKey: ['stats'] }),
         queryClient.invalidateQueries({ queryKey: ['stats/weekly'] }),
         queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
       ])
-    } catch {
-      // Mutation state drives the inline retry message; keep the scorer promise handled.
+      setQuickLogDraft((draft) => ({ ...draft, saved: true }))
+    } finally {
+      quickLogSaveInFlight.current = false
+      setQuickLogSaving(false)
     }
   }
 
@@ -407,7 +416,7 @@ export default function Dashboard() {
         open={showQuickLog}
         draft={quickLogDraft}
         status={{
-          saving: createSessionMutation.isPending || createGameMutation.isPending,
+          saving: quickLogSaving,
           error: createSessionMutation.isError || createGameMutation.isError,
         }}
         balls={ballsQuery.data ?? []}
@@ -416,6 +425,7 @@ export default function Dashboard() {
         onSave={handleQuickLogSave}
         onClose={closeQuickLog}
         onLogAnother={() => {
+          if (quickLogSaveInFlight.current) return
           createSessionMutation.reset()
           createGameMutation.reset()
           setQuickLogDraft((draft) => ({

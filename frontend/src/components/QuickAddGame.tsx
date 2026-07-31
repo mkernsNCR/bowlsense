@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
-import ScoringIcon from '../features/scoring/ScoringIcon'
+import { Icon } from '../design'
+import { localDateValue } from '../features/scoring/date'
+import type { ScoringBall } from '../features/scoring/types'
 import '../features/scoring/scoring.css'
 
 interface QuickAddGameProps {
@@ -19,23 +21,8 @@ interface SessionsPayload {
   sessions?: SessionSummary[]
 }
 
-interface Ball {
-  id: number
-  name: string
-  brand?: string
-  thumbnailImage?: string
-}
-
 interface CreatedRecord {
   id: number
-}
-
-function localDateValue() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
@@ -60,12 +47,12 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
     },
   })
 
-  const ballsQuery = useQuery<Ball[]>({
+  const ballsQuery = useQuery<ScoringBall[]>({
     queryKey: ['balls'],
     queryFn: async () => {
       const response = await fetch('/api/balls')
       if (!response.ok) throw new Error('Balls could not be loaded.')
-      return response.json() as Promise<Ball[]>
+      return response.json() as Promise<ScoringBall[]>
     },
   })
 
@@ -134,12 +121,12 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   if (saved) {
     return (
       <div className="scoring-flow scoring-status" role="status">
-        <div className="scoring-save-check"><ScoringIcon name="check" size={34} /></div>
+        <div className="scoring-save-check"><Icon name="check" size={34} /></div>
         <h2>Game saved</h2>
         <p>{location} · Game {gameNumber}</p>
         <div className="scoring-toolbar" style={{ justifyContent: 'center' }}>
           <button type="button" className="scoring-button primary" onClick={() => { setSaved(false); setGameNumber((number) => number + 1); setShowScorer(true) }}>
-            <ScoringIcon name="plus" /> Add another
+            <Icon name="plus" /> Add another
           </button>
           <a href="/sessions" className="scoring-button secondary">View sessions</a>
         </div>
@@ -166,7 +153,7 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
 
       <div className="scoring-disclosure">
         <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
-          {showDetails ? 'Hide details' : 'Add details'} <ScoringIcon name="chevron" size={16} />
+          {showDetails ? 'Hide details' : 'Add details'} <Icon name="chevron-right" size={16} />
         </button>
       </div>
 

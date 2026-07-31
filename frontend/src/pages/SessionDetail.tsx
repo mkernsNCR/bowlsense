@@ -4,9 +4,10 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useSettings } from '../hooks/useSettings'
 import BowlingScorer, { type SavedBowlingGame } from '../components/BowlingScorer'
 import ShareCard from '../components/ShareCard'
-import FrameRibbon from '../features/scoring/FrameRibbon'
-import ScoringIcon from '../features/scoring/ScoringIcon'
+import { FrameRibbon, Icon, Sheet } from '../design'
 import { copyText } from '../features/scoring/copyText'
+import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
+import type { ScoringBall } from '../features/scoring/types'
 import { type Frame, gameFromFrameData } from '../utils/bowlingScore'
 import { downloadSessionCard, getSessionShareUrl, nativeShareSession } from '../utils/sessionShare'
 import { getGameShareUrl, shareOnX } from '../utils/gameShare'
@@ -30,13 +31,6 @@ interface SessionWithGames {
   lanes: string
   notes: string
   games: Game[]
-}
-
-interface Ball {
-  id: number
-  name: string
-  brand: string
-  thumbnailImage?: string
 }
 
 interface SessionForm {
@@ -114,12 +108,12 @@ export default function SessionDetail() {
     staleTime: 0,
   })
 
-  const ballsQuery = useQuery<Ball[]>({
+  const ballsQuery = useQuery<ScoringBall[]>({
     queryKey: ['balls'],
     queryFn: async () => {
       const response = await fetch('/api/balls')
       if (!response.ok) throw new Error('Balls could not be loaded.')
-      return response.json() as Promise<Ball[]>
+      return response.json() as Promise<ScoringBall[]>
     },
   })
 
@@ -257,19 +251,42 @@ export default function SessionDetail() {
     window.setTimeout(() => setSavedNotice(null), 1800)
   }
 
-  if (!Number.isFinite(sessionId)) return <main className="scoring-flow scoring-page scoring-error">This session link is not valid.</main>
-  if (sessionQuery.isLoading) return <main className="scoring-flow scoring-page scoring-status">Loading session…</main>
+  if (!Number.isFinite(sessionId)) return <div className="scoring-flow scoring-page scoring-error">This session link is not valid.</div>
+  if (sessionQuery.isLoading) return <div className="scoring-flow scoring-page scoring-status">Loading session…</div>
   if (sessionQuery.isError || !session) {
     return (
-      <main className="scoring-flow scoring-page scoring-status scoring-error">
+      <div className="scoring-flow scoring-page scoring-status scoring-error">
         This session could not be loaded.
         <button type="button" className="scoring-button quiet" onClick={() => sessionQuery.refetch()}>Try again</button>
-      </main>
+      </div>
+    )
+  }
+
+  if (showScorer) {
+    return (
+      <div className="scoring-flow scoring-page scoring-page--focused">
+        <BowlingScorer
+          gameNumber={games.length + 1}
+          balls={balls}
+          defaultBallId={settings.defaultBallId}
+          onSave={async (game) => {
+            await addGame.mutateAsync(game)
+            setShowScorer(false)
+            setSearchParams({}, { replace: true })
+            setSavedNotice(`Game ${game.gameNumber} saved`)
+            window.setTimeout(() => setSavedNotice(null), 1800)
+          }}
+          onCancel={() => {
+            setShowScorer(false)
+            setSearchParams({}, { replace: true })
+          }}
+        />
+      </div>
     )
   }
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">{displayDate(session.date)}</p>
@@ -278,7 +295,7 @@ export default function SessionDetail() {
             {session.lanes ? `Lanes ${session.lanes}` : 'Lanes not recorded'}{session.notes ? ` · ${session.notes}` : ''}
           </p>
         </div>
-        <button type="button" className="scoring-icon-button" onClick={() => setShowSessionActions(true)} aria-label="Session actions"><ScoringIcon name="more" /></button>
+        <button type="button" className="scoring-icon-button" onClick={() => setShowSessionActions(true)} aria-label="Session actions"><Icon name="more" /></button>
       </div>
 
       <section className="scoring-metrics" aria-label="Session summary">
@@ -289,7 +306,7 @@ export default function SessionDetail() {
 
       {savedNotice && (
         <div className="live-edit-banner" role="status">
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><ScoringIcon name="check" size={18} /> {savedNotice}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Icon name="check" size={18} /> {savedNotice}</span>
         </div>
       )}
 
@@ -309,9 +326,9 @@ export default function SessionDetail() {
                   <p className="scoring-row-title">Game {game.gameNumber} <span className="scoring-row-value" style={{ marginLeft: 8 }}>{game.score}</span></p>
                   <p className="scoring-row-meta">{game.strikes} strikes · {game.spares} spares{ballName ? ` · ${ballName}` : ''}</p>
                 </div>
-                <button type="button" className="scoring-row-action" onClick={() => { setActionGame(game); setConfirmDeleteGame(false) }} aria-label={`Actions for game ${game.gameNumber}`}><ScoringIcon name="more" /></button>
+                <button type="button" className="scoring-row-action" onClick={() => { setActionGame(game); setConfirmDeleteGame(false) }} aria-label={`Actions for game ${game.gameNumber}`}><Icon name="more" /></button>
                 <div style={{ flexBasis: '100%', minWidth: 0 }}>
-                  <FrameRibbon frames={storedFrames(game.frameData)} label={`Game ${game.gameNumber}, score ${game.score}`} />
+                  <FrameRibbon frames={toFrameRibbonFrames(storedFrames(game.frameData))} label={`Game ${game.gameNumber}, score ${game.score}`} compact />
                 </div>
               </article>
             )
@@ -320,132 +337,101 @@ export default function SessionDetail() {
       )}
 
       <button type="button" className="scoring-button primary wide" style={{ marginTop: 18, minHeight: 52 }} onClick={() => { setSearchParams({}, { replace: true }); setShowScorer(true) }}>
-        <ScoringIcon name="plus" /> Start new game
+        <Icon name="plus" /> Start new game
       </button>
 
-      {showScorer && (
-        <div style={{ marginTop: 18 }}>
+      {editingGame && (
+        <Sheet
+          open
+          onClose={() => setEditingGame(null)}
+          title={`Edit game ${editingGame.gameNumber}`}
+          description="Open Score details and choose a frame. Later rolls will be held until you confirm the new score."
+          closeLabel="Close game editor"
+          className="scoring-sheet-theme scoring-sheet-wide"
+        >
           <BowlingScorer
-            gameNumber={games.length + 1}
+            gameNumber={editingGame.gameNumber}
             balls={balls}
-            defaultBallId={settings.defaultBallId}
+            defaultBallId={editingGame.ballId ? String(editingGame.ballId) : settings.defaultBallId}
+            initialFrameData={editingGame.frameData}
             onSave={async (game) => {
-              await addGame.mutateAsync(game)
-              setShowScorer(false)
-              setSavedNotice(`Game ${game.gameNumber} saved`)
+              await updateGame.mutateAsync({ gameId: editingGame.id, game })
+              setSavedNotice(`Game ${game.gameNumber} updated`)
               window.setTimeout(() => setSavedNotice(null), 1800)
             }}
-            onCancel={() => setShowScorer(false)}
+            onCancel={() => setEditingGame(null)}
           />
-        </div>
-      )}
-
-      {editingGame && (
-        <div className="scoring-sheet-backdrop" role="presentation">
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="edit-game-title" style={{ maxWidth: 780 }}>
-            <div className="scoring-sheet-handle" />
-            <h2 id="edit-game-title">Edit game {editingGame.gameNumber}</h2>
-            <p className="scoring-subtitle">Choose a frame in the ribbon. Later rolls will be held until you confirm the new score.</p>
-            <div style={{ marginTop: 16 }}>
-              <BowlingScorer
-                gameNumber={editingGame.gameNumber}
-                balls={balls}
-                defaultBallId={editingGame.ballId ? String(editingGame.ballId) : settings.defaultBallId}
-                initialFrameData={editingGame.frameData}
-                onSave={async (game) => {
-                  await updateGame.mutateAsync({ gameId: editingGame.id, game })
-                  setSavedNotice(`Game ${game.gameNumber} updated`)
-                  window.setTimeout(() => setSavedNotice(null), 1800)
-                }}
-                onCancel={() => setEditingGame(null)}
-              />
-            </div>
-          </section>
-        </div>
+        </Sheet>
       )}
 
       {showSessionActions && (
-        <div className="scoring-sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSessionActions(false) }}>
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="session-actions-title">
-            <div className="scoring-sheet-handle" />
-            <p className="scoring-eyebrow">Session</p>
-            <h2 id="session-actions-title">Actions</h2>
-            <div className="scoring-fields">
-              <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={openEditSession}><span className="scoring-row-copy">Edit details</span><ScoringIcon name="chevron" /></button>
-              <button type="button" className="scoring-row scoring-row-action" disabled={shareStatus === 'busy'} onClick={handleSessionShare}>
-                <ScoringIcon name="share" /><span className="scoring-row-copy">{shareStatus === 'copied' ? 'Link copied' : shareStatus === 'error' ? 'Share failed — retry' : shareStatus === 'busy' ? 'Preparing…' : 'Share session'}</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleSessionDownload()}>
-                <ScoringIcon name="download" /><span className="scoring-row-copy">Download score card</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => navigate(`/sessions/${sessionId}/share`)}>
-                <span className="scoring-row-copy">Open share page</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteSession(true)}>
-                <ScoringIcon name="trash" /><span className="scoring-row-copy">Delete session</span><ScoringIcon name="chevron" />
-              </button>
-            </div>
-            {confirmDeleteSession && (
-              <div role="alert">
-                <p className="scoring-subtitle">Delete this session and all {games.length} {games.length === 1 ? 'game' : 'games'}? This cannot be undone.</p>
-                {removeSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
-                <div className="scoring-sheet-actions">
-                  <button type="button" className="scoring-button secondary" onClick={() => setConfirmDeleteSession(false)}>Keep session</button>
-                  <button type="button" className="scoring-button danger" disabled={removeSession.isPending} onClick={() => removeSession.mutate()}>{removeSession.isPending ? 'Deleting…' : 'Delete session'}</button>
-                </div>
+        <Sheet open onClose={() => setShowSessionActions(false)} title="Actions" description="Session" closeLabel="Close session actions" className="scoring-sheet-theme">
+          <div className="scoring-fields">
+            <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={openEditSession}><span className="scoring-row-copy">Edit details</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" disabled={shareStatus === 'busy'} onClick={handleSessionShare}>
+              <Icon name="share" /><span className="scoring-row-copy">{shareStatus === 'copied' ? 'Link copied' : shareStatus === 'error' ? 'Share failed — retry' : shareStatus === 'busy' ? 'Preparing…' : 'Share session'}</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleSessionDownload()}>
+              <Icon name="download" /><span className="scoring-row-copy">Download score card</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => navigate(`/sessions/${sessionId}/share`)}>
+              <span className="scoring-row-copy">Open share page</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteSession(true)}>
+              <Icon name="trash" /><span className="scoring-row-copy">Delete session</span><Icon name="chevron-right" />
+            </button>
+          </div>
+          {confirmDeleteSession && (
+            <div role="alert">
+              <p className="scoring-subtitle">Delete this session and all {games.length} {games.length === 1 ? 'game' : 'games'}? This cannot be undone.</p>
+              {removeSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={() => setConfirmDeleteSession(false)}>Keep session</button>
+                <button type="button" className="scoring-button danger" disabled={removeSession.isPending} onClick={() => removeSession.mutate()}>{removeSession.isPending ? 'Deleting…' : 'Delete session'}</button>
               </div>
-            )}
-            {!confirmDeleteSession && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setShowSessionActions(false)}>Done</button>}
-          </section>
-        </div>
+            </div>
+          )}
+          {!confirmDeleteSession && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setShowSessionActions(false)}>Done</button>}
+        </Sheet>
       )}
 
       {showEditSession && (
-        <div className="scoring-sheet-backdrop" role="presentation">
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="edit-session-title">
-            <div className="scoring-sheet-handle" />
-            <h2 id="edit-session-title">Edit session</h2>
-            <div className="scoring-fields">
-              <div className="scoring-field"><label htmlFor="edit-session-date">Date</label><input id="edit-session-date" type="date" value={activeSessionForm.date} onChange={(event) => setSessionForm({ ...activeSessionForm, date: event.target.value })} /></div>
-              <div className="scoring-field"><label htmlFor="edit-session-location">Center</label><input id="edit-session-location" value={activeSessionForm.location} onChange={(event) => setSessionForm({ ...activeSessionForm, location: event.target.value })} /></div>
-              <div className="scoring-field"><label htmlFor="edit-session-lanes">Lanes</label><input id="edit-session-lanes" value={activeSessionForm.lanes} onChange={(event) => setSessionForm({ ...activeSessionForm, lanes: event.target.value })} /></div>
-              <div className="scoring-field"><label htmlFor="edit-session-notes">Notes</label><textarea id="edit-session-notes" value={activeSessionForm.notes} onChange={(event) => setSessionForm({ ...activeSessionForm, notes: event.target.value })} /></div>
-            </div>
-            {updateSession.isError && <p className="scoring-error">Changes were not saved. Try again.</p>}
-            <div className="scoring-sheet-actions">
-              <button type="button" className="scoring-button secondary" autoFocus onClick={() => setShowEditSession(false)}>Cancel</button>
-              <button type="button" className="scoring-button primary" disabled={!activeSessionForm.date || !activeSessionForm.location.trim() || updateSession.isPending} onClick={() => updateSession.mutate(activeSessionForm)}>{updateSession.isPending ? 'Saving…' : 'Save changes'}</button>
-            </div>
-          </section>
-        </div>
+        <Sheet open onClose={() => setShowEditSession(false)} title="Edit session" closeLabel="Close session editor" className="scoring-sheet-theme">
+          <div className="scoring-fields">
+            <div className="scoring-field"><label htmlFor="edit-session-date">Date</label><input id="edit-session-date" type="date" value={activeSessionForm.date} onChange={(event) => setSessionForm({ ...activeSessionForm, date: event.target.value })} /></div>
+            <div className="scoring-field"><label htmlFor="edit-session-location">Center</label><input id="edit-session-location" value={activeSessionForm.location} onChange={(event) => setSessionForm({ ...activeSessionForm, location: event.target.value })} /></div>
+            <div className="scoring-field"><label htmlFor="edit-session-lanes">Lanes</label><input id="edit-session-lanes" value={activeSessionForm.lanes} onChange={(event) => setSessionForm({ ...activeSessionForm, lanes: event.target.value })} /></div>
+            <div className="scoring-field"><label htmlFor="edit-session-notes">Notes</label><textarea id="edit-session-notes" value={activeSessionForm.notes} onChange={(event) => setSessionForm({ ...activeSessionForm, notes: event.target.value })} /></div>
+          </div>
+          {updateSession.isError && <p className="scoring-error">Changes were not saved. Try again.</p>}
+          <div className="scoring-sheet-actions">
+            <button type="button" className="scoring-button secondary" autoFocus onClick={() => setShowEditSession(false)}>Cancel</button>
+            <button type="button" className="scoring-button primary" disabled={!activeSessionForm.date || !activeSessionForm.location.trim() || updateSession.isPending} onClick={() => updateSession.mutate(activeSessionForm)}>{updateSession.isPending ? 'Saving…' : 'Save changes'}</button>
+          </div>
+        </Sheet>
       )}
 
       {actionGame && (
-        <div className="scoring-sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActionGame(null) }}>
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="game-actions-title">
-            <div className="scoring-sheet-handle" />
-            <p className="scoring-eyebrow">Game {actionGame.gameNumber} · {actionGame.score}</p>
-            <h2 id="game-actions-title">Game actions</h2>
-            <div className="scoring-fields">
-              <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => { setEditingGame(actionGame); setActionGame(null) }}><span className="scoring-row-copy">Edit score</span><ScoringIcon name="chevron" /></button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => { setShareGame(actionGame); setActionGame(null) }}><ScoringIcon name="share" /><span className="scoring-row-copy">Share score card</span><ScoringIcon name="chevron" /></button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => shareOnX(actionGame.id, actionGame.score, session.location)}><span className="scoring-row-copy">Share on X</span><ScoringIcon name="chevron" /></button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleCopyGameLink(actionGame.id)}><span className="scoring-row-copy">Copy public link</span><ScoringIcon name="chevron" /></button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteGame(true)}><ScoringIcon name="trash" /><span className="scoring-row-copy">Delete game</span><ScoringIcon name="chevron" /></button>
-            </div>
-            {confirmDeleteGame && (
-              <div role="alert">
-                <p className="scoring-subtitle">Delete game {actionGame.gameNumber}? Session statistics will update. This cannot be undone.</p>
-                {removeGame.isError && <p className="scoring-error">The game was not deleted. Try again.</p>}
-                <div className="scoring-sheet-actions">
-                  <button type="button" className="scoring-button secondary" onClick={() => setConfirmDeleteGame(false)}>Keep game</button>
-                  <button type="button" className="scoring-button danger" disabled={removeGame.isPending} onClick={() => removeGame.mutate(actionGame.id)}>{removeGame.isPending ? 'Deleting…' : 'Delete game'}</button>
-                </div>
+        <Sheet open onClose={() => setActionGame(null)} title="Game actions" description={`Game ${actionGame.gameNumber} · ${actionGame.score}`} closeLabel="Close game actions" className="scoring-sheet-theme">
+          <div className="scoring-fields">
+            <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => { setEditingGame(actionGame); setActionGame(null) }}><span className="scoring-row-copy">Edit score</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => { setShareGame(actionGame); setActionGame(null) }}><Icon name="share" /><span className="scoring-row-copy">Share score card</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => shareOnX(actionGame.id, actionGame.score, session.location)}><span className="scoring-row-copy">Share on X</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleCopyGameLink(actionGame.id)}><span className="scoring-row-copy">Copy public link</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteGame(true)}><Icon name="trash" /><span className="scoring-row-copy">Delete game</span><Icon name="chevron-right" /></button>
+          </div>
+          {confirmDeleteGame && (
+            <div role="alert">
+              <p className="scoring-subtitle">Delete game {actionGame.gameNumber}? Session statistics will update. This cannot be undone.</p>
+              {removeGame.isError && <p className="scoring-error">The game was not deleted. Try again.</p>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={() => setConfirmDeleteGame(false)}>Keep game</button>
+                <button type="button" className="scoring-button danger" disabled={removeGame.isPending} onClick={() => removeGame.mutate(actionGame.id)}>{removeGame.isPending ? 'Deleting…' : 'Delete game'}</button>
               </div>
-            )}
-            {!confirmDeleteGame && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionGame(null)}>Done</button>}
-          </section>
-        </div>
+            </div>
+          )}
+          {!confirmDeleteGame && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionGame(null)}>Done</button>}
+        </Sheet>
       )}
 
       {shareGame && (
@@ -458,6 +444,6 @@ export default function SessionDetail() {
       )}
 
       <p className="scoring-subtitle" style={{ marginTop: 24 }}><Link to="/sessions">Back to sessions</Link></p>
-    </main>
+    </div>
   )
 }

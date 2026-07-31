@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import QuickAddGame from '../components/QuickAddGame'
-import ScoringIcon from '../features/scoring/ScoringIcon'
+import { Icon } from '../design'
 import '../features/scoring/scoring.css'
 
 interface SessionSummary {
@@ -35,7 +35,7 @@ export default function QuickStart() {
   })
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">Lane ready</p>
@@ -74,7 +74,7 @@ export default function QuickStart() {
                   </p>
                 </div>
                 {session.highScore != null && <span className="scoring-row-value">{session.highScore}</span>}
-                <ScoringIcon name="chevron" size={18} />
+                <Icon name="chevron-right" size={18} />
               </Link>
             </div>
           ))}
@@ -85,6 +85,6 @@ export default function QuickStart() {
         <Link to="/sessions" className="scoring-button secondary">All sessions</Link>
         <Link to="/stats" className="scoring-button quiet">View insights</Link>
       </div>
-    </main>
+    </div>
   )
 }

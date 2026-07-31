@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ShareCard from '../components/ShareCard'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { copyText } from '../features/scoring/copyText'
 import { downloadGameImage, nativeShareGame, shareOnX } from '../utils/gameShare'
 
 interface PerfectGamePayload {
@@ -68,29 +71,10 @@ export default function PerfectGameShare() {
     return `${data.session.location || 'Unknown Alley'} · ${data.session.date || ''}`
   }, [data])
 
-  useEffect(() => {
-    document.title = title
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) {
-        el = document.createElement('meta')
-        el.setAttribute(attr, property)
-        document.head.appendChild(el)
-      }
-      el.setAttribute('content', content)
-    }
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    if (ogImageUrl) {
-      setMeta('og:image', ogImageUrl)
-      setMeta('og:image:width', '1200')
-      setMeta('og:image:height', '630')
-    }
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, ogImageUrl])
+  usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
   const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href)
+    await copyText(window.location.href)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1400)
   }
@@ -116,58 +100,26 @@ export default function PerfectGameShare() {
 
   if (!Number.isFinite(gameId) || (loading === false && notFound)) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 64, marginBottom: 14 }}>🎳</div>
-          <h1 style={{ marginBottom: 10 }}>Perfect game not found</h1>
-          <Link to="/" className="btn btn-primary">BowlSense home</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Perfect game" title="Perfect game not found"><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center' }}>
-        <div className="muted">Loading your perfect game...</div>
-      </div>
+      <PublicShell eyebrow="Perfect game" title="Loading shared result"><div className="muted">Loading your perfect game...</div></PublicShell>
     )
   }
 
   if (!data) return null
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', padding: '32px 16px 48px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Hero */}
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{
-          display: 'inline-block',
-          background: 'rgba(251,191,36,0.15)',
-          border: '1px solid rgba(251,191,36,0.4)',
-          color: '#fbbf24',
-          borderRadius: 999,
-          fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: '0.1em',
-          padding: '4px 14px',
-          marginBottom: 12,
-        }}>
-          🏆 PERFECT GAME
-        </div>
-        <h1 style={{
-          margin: '0 0 8px',
-          fontSize: 'clamp(2.5rem, 10vw, 5rem)',
-          fontWeight: 900,
-          lineHeight: 1,
-          color: '#fbbf24',
-          textShadow: '0 0 40px rgba(251,191,36,0.35)',
-        }}>
-          {data.game.score}
-        </h1>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16 }}>
-          {data.session.location || 'Unknown Alley'} · {data.session.date}
-        </div>
-      </div>
+    <PublicShell eyebrow="Perfect game" title="Perfect 300" detail={`${data.session.location || 'Unknown Alley'} · ${data.session.date}`}>
+      <div className="public-legacy-content">
+      <PublicResult score={data.game.score} label="Final score" accessibleLabel={`Perfect game score ${data.game.score}`} facts={[
+        { label: 'Strikes', value: data.game.strikes },
+        { label: 'Spares', value: data.game.spares },
+        { label: 'Ball', value: data.game.ballName || 'Not recorded' },
+      ]} />
 
       {/* OG share card image */}
       <div style={{ maxWidth: 860, margin: '0 auto 24px', borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
@@ -319,6 +271,7 @@ export default function PerfectGameShare() {
           BowlSense home
         </Link>
       </div>
-    </div>
+      </div>
+    </PublicShell>
   )
 }

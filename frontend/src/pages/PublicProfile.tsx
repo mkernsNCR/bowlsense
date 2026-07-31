@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useSettings } from '../hooks/useSettings'
-import { ActionIcon, PublicShell } from '../features/competition/CompetitionUI'
+import { ActionIcon, PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { copyText } from '../features/scoring/copyText'
 
 interface PublicStats {
   average: number
+  generatedAt?: string
+  profileName?: string | null
   strikeRate: number
   spareRate: number
   totalGames: number
@@ -11,7 +14,6 @@ interface PublicStats {
 }
 
 export default function PublicProfile() {
-  const { settings } = useSettings()
   const [stats, setStats] = useState<PublicStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -32,7 +34,7 @@ export default function PublicProfile() {
     return () => { mounted = false }
   }, [])
 
-  const profileName = (settings?.name || '').trim()
+  const profileName = (stats?.profileName || '').trim()
   const profileTitle = profileName ? `${profileName}'s BowlSense` : 'BowlSense profile'
   const profileDescription = stats
     ? `${stats.totalGames} games · ${Math.round(stats.average)} average`
@@ -40,27 +42,15 @@ export default function PublicProfile() {
   const profileOgImageUrl = profileName
     ? `/api/profile/og-image?name=${encodeURIComponent(profileName)}`
     : '/api/profile/og-image'
+  const generatedAt = stats?.generatedAt && !Number.isNaN(Date.parse(stats.generatedAt))
+    ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(stats.generatedAt))
+    : null
 
-  useEffect(() => {
-    document.title = profileTitle
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let element = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!element) {
-        element = document.createElement('meta')
-        element.setAttribute(attr, property)
-        document.head.appendChild(element)
-      }
-      element.content = content
-    }
-    setMeta('og:title', profileTitle)
-    setMeta('og:description', profileDescription)
-    setMeta('og:image', profileOgImageUrl)
-    setMeta('twitter:card', 'summary_large_image')
-  }, [profileDescription, profileOgImageUrl, profileTitle])
+  usePublicMetadata({ title: profileTitle, description: profileDescription, imageUrl: profileOgImageUrl })
 
   const copyShareLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await copyText(window.location.href)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
     } catch {
@@ -68,27 +58,27 @@ export default function PublicProfile() {
     }
   }
 
-  if (loading) return <div className="public-scorecard" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>Loading public profile…</div>
-  if (error || !stats) return <div className="public-scorecard" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 }}>{error || 'Public profile not found'}</div>
+  if (loading) return <PublicShell eyebrow="Public profile" title="Loading public profile"><p className="muted">Loading public profile…</p></PublicShell>
+  if (error || !stats) return <PublicShell eyebrow="Public profile" title="Public profile unavailable"><p role="alert">{error || 'Public profile not found'}</p></PublicShell>
 
   return (
     <PublicShell
       eyebrow="Public profile"
       title={profileTitle}
-      detail={`${stats.totalGames} games tracked`}
+      detail={`${stats.totalGames} games tracked${generatedAt ? ` · Stats current as of ${generatedAt}` : ''}`}
       action={<button onClick={copyShareLink} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share profile'}</button>}
     >
-      <div className="share-result">
-        <section className="share-result__primary" aria-label={`Bowling average ${Math.round(stats.average)}`}>
-          <div><div className="share-result__score">{Math.round(stats.average)}</div><div className="share-result__label">Career average</div></div>
-        </section>
-        <dl className="share-result__facts">
-          <div className="share-result__fact"><dt>Games tracked</dt><dd>{stats.totalGames}</dd></div>
-          <div className="share-result__fact"><dt>Strike rate</dt><dd>{stats.strikeRate}%</dd></div>
-          <div className="share-result__fact"><dt>Spare rate</dt><dd>{stats.spareRate}%</dd></div>
-          {stats.totalScore != null && <div className="share-result__fact"><dt>Total pins</dt><dd>{stats.totalScore.toLocaleString()}</dd></div>}
-        </dl>
-      </div>
+      <PublicResult
+        score={Math.round(stats.average)}
+        label="Career average"
+        accessibleLabel={`Bowling average ${Math.round(stats.average)}`}
+        facts={[
+          { label: 'Games tracked', value: stats.totalGames },
+          { label: 'Strike rate', value: `${stats.strikeRate}%` },
+          { label: 'Spare rate', value: `${stats.spareRate}%` },
+          ...(stats.totalScore != null ? [{ label: 'Total pins', value: stats.totalScore.toLocaleString() }] : []),
+        ]}
+      />
       <p className="muted" style={{ maxWidth: 620, margin: '18px 0 0', lineHeight: 1.6 }}>
         This shared profile contains aggregate performance only. Session locations, equipment details, and private notes stay private.
       </p>

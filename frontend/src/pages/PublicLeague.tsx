@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { copyText } from '../features/scoring/copyText'
 
 interface LeagueStats {
   average: number
@@ -159,18 +162,6 @@ function WeeklyTrendChart({ data }: { data: { weekNumber: number; average: numbe
   )
 }
 
-function StatCard({ label, value, accent }: { label: string; value: string | number; accent: string }) {
-  return (
-    <div style={{
-      background: '#121228', border: '1px solid rgba(255,255,255,0.1)',
-      borderRadius: 16, padding: '14px 16px', textAlign: 'center',
-    }}>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontWeight: 600, marginBottom: 6, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 900, color: accent, lineHeight: 1.1 }}>{value}</div>
-    </div>
-  )
-}
-
 export default function PublicLeague() {
   const { id } = useParams()
   const leagueId = parseInt(id || '')
@@ -222,9 +213,16 @@ export default function PublicLeague() {
     enabled: !isNaN(leagueId),
   })
 
+  const publicDetail = [league?.location, league?.season, league?.dayOfWeek].filter(Boolean).join(' · ')
+  usePublicMetadata({
+    title: league ? `${league.name} — BowlSense` : 'Public league — BowlSense',
+    description: publicDetail || 'Shared league results',
+    imageUrl: Number.isNaN(leagueId) ? '' : `/api/leagues/${leagueId}/leaderboard/og-image`,
+  })
+
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await copyText(window.location.href)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -236,7 +234,7 @@ export default function PublicLeague() {
     const url = new URL(window.location.href)
     url.searchParams.set('tab', 'standings')
     try {
-      await navigator.clipboard.writeText(url.toString())
+      await copyText(url.toString())
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -246,29 +244,19 @@ export default function PublicLeague() {
 
   if (isNaN(leagueId)) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
-        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>League not found</div>
-        <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
-      </div>
+      <PublicShell eyebrow="League result" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
   if (leagueLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-        <div style={{ color: 'var(--muted)' }}>Loading league...</div>
-      </div>
+      <PublicShell eyebrow="League result" title="Loading shared league"><div className="muted">Loading league...</div></PublicShell>
     )
   }
 
   if (!league) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
-        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>League not found</div>
-        <Link to="/" style={{ color: '#a78bfa' }}>BowlSense home</Link>
-      </div>
+      <PublicShell eyebrow="League result" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
@@ -287,52 +275,13 @@ export default function PublicLeague() {
   }
 
   return (
-    <div>
-      {/* Public banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(167,139,250,0.18) 0%, rgba(139,92,246,0.08) 50%, transparent 100%)',
-        border: '1px solid rgba(167,139,250,0.25)',
-        borderRadius: 20, padding: '20px', marginBottom: 20,
-        position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{
-          position: 'absolute', top: -30, right: -30, width: 140, height: 140,
-          background: 'radial-gradient(circle, rgba(167,139,250,0.2) 0%, transparent 70%)',
-          pointerEvents: 'none',
-        }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{
-                background: 'rgba(167,139,250,0.22)', border: '1px solid rgba(167,139,250,0.4)',
-                borderRadius: 999, padding: '3px 10px',
-                fontSize: 11, fontWeight: 700, color: '#a78bfa', letterSpacing: '0.05em',
-              }}>
-                🏆 PUBLIC STANDINGS
-              </span>
-            </div>
-            <h1 style={{ fontSize: 'clamp(1.4rem, 5vw, 2.2rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>
-              {league.name}
-            </h1>
-            <div style={{ color: 'var(--muted)', fontSize: 13 }}>
-              {[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ')}
-            </div>
-          </div>
-          <button
-            onClick={copyLink}
-            style={{
-              background: copied ? 'rgba(52,211,153,0.2)' : 'rgba(167,139,250,0.18)',
-              border: `1px solid ${copied ? 'rgba(52,211,153,0.5)' : 'rgba(167,139,250,0.4)'}`,
-              borderRadius: 12, padding: '8px 14px',
-              color: copied ? '#34d399' : '#a78bfa',
-              fontWeight: 700, fontSize: 13, cursor: 'pointer',
-              whiteSpace: 'nowrap', transition: 'all 0.2s',
-            }}
-          >
-            {copied ? 'Link copied' : 'Share link'}
-          </button>
-        </div>
-      </div>
+    <PublicShell eyebrow="League result" title={league.name} detail={publicDetail || 'Shared result'} action={<button className="btn btn-primary" onClick={copyLink}>{copied ? 'Link copied' : 'Share league'}</button>}>
+      <div className="public-legacy-content">
+      <PublicResult score={stats?.average ?? '—'} label="League average" accessibleLabel={`League average ${stats?.average ?? 'not available'}`} facts={[
+        { label: 'Record', value: `${stats?.gamesWon ?? 0}W – ${stats?.gamesLost ?? 0}L` },
+        { label: 'Weeks', value: stats?.totalWeeks ?? sortedWeeks.length },
+        { label: 'High game', value: stats?.high ?? '—' },
+      ]} />
 
       <div style={{
         display: 'inline-flex',
@@ -367,14 +316,6 @@ export default function PublicLeague() {
 
       {activeTab === 'overview' && (
         <>
-          {/* Stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 20 }}>
-            <StatCard label="Avg Score" value={league.stats?.average ?? '—'} accent="#a78bfa" />
-            <StatCard label="W — L" value={`${league.stats?.gamesWon ?? 0} — ${league.stats?.gamesLost ?? 0}`} accent="#34d399" />
-            <StatCard label="Weeks Played" value={league.stats?.totalWeeks ?? 0} accent="#f59e0b" />
-            <StatCard label="High Game" value={league.stats?.high ?? '—'} accent="#fbbf24" />
-          </div>
-
           {/* Weekly trend */}
           {trendData.filter(d => d.average > 0).length >= 2 && (
             <div className="card" style={{ marginBottom: 20 }}>
@@ -426,7 +367,7 @@ export default function PublicLeague() {
                             ? 'rgba(252,129,129,0.35)' : 'rgba(255,255,255,0.12)'}`,
                         borderRadius: 999, padding: '4px 12px', textAlign: 'center',
                       }}>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>W-L</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>W-L</div>
                         <div style={{
                           fontWeight: 800, fontSize: 16,
                           color: week.gamesWon > week.gamesLost ? '#34d399' : week.gamesLost > week.gamesWon ? '#fc8181' : 'var(--text)',
@@ -448,11 +389,11 @@ export default function PublicLeague() {
                             border: `1px solid ${isHigh ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.1)'}`,
                             borderRadius: 12, padding: '10px 8px', textAlign: 'center', flexShrink: 0,
                           }}>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>G{g.gameNumber}</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>G{g.gameNumber}</div>
                             <div style={{ fontSize: 26, fontWeight: 900, color: isHigh ? '#fbbf24' : '#ffffff', lineHeight: 1 }}>
                               {g.score ?? '-'}
                             </div>
-                            {isHigh && <div style={{ fontSize: 10, color: '#fbbf24', fontWeight: 700, marginTop: 2 }}>BEST</div>}
+                            {isHigh && <div style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700, marginTop: 2 }}>BEST</div>}
                           </div>
                         )
                       })}
@@ -461,7 +402,7 @@ export default function PublicLeague() {
                         minWidth: 72, background: 'rgba(167,139,250,0.12)',
                         border: '1px solid rgba(167,139,250,0.3)', borderRadius: 12, padding: '10px 8px', textAlign: 'center', flexShrink: 0,
                       }}>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Series</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, marginBottom: 4 }}>Series</div>
                         <div style={{ fontSize: 22, fontWeight: 900, color: '#a78bfa', lineHeight: 1 }}>{series}</div>
                       </div>
                     </div>
@@ -579,7 +520,7 @@ export default function PublicLeague() {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 800, fontSize: 18, color: isMatt ? 'var(--accent)' : 'var(--text)' }}>{opp.avg}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>avg</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>avg</div>
                       </div>
                     </div>
                   )
@@ -590,15 +531,7 @@ export default function PublicLeague() {
         </>
       )}
 
-      <div style={{ textAlign: 'center', marginTop: 32, marginBottom: 48 }}>
-        <Link to="/" style={{ color: 'rgba(167,139,250,0.6)', fontSize: 13, textDecoration: 'none' }}>
-          BowlSense home
-        </Link>
-        <div style={{ marginTop: 8 }}>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)' }}>Tracked with </span>
-          <span style={{ fontSize: 12, color: 'rgba(167,139,250,0.4)', fontWeight: 700 }}>BowlSense</span>
-        </div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

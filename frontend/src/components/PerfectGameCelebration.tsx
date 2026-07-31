@@ -13,6 +13,13 @@ interface PerfectGameCelebrationProps {
   onRetake: () => void
 }
 
+const PIN_DECK = [
+  [50, 70],
+  [42, 54], [58, 54],
+  [34, 38], [50, 38], [66, 38],
+  [26, 22], [42, 22], [58, 22], [74, 22],
+] as const
+
 function getStats(frameData: string) {
   try {
     const parsed = JSON.parse(frameData)
@@ -56,7 +63,7 @@ export default function PerfectGameCelebration({
     <>
       <div className="perfect-result" role="dialog" aria-modal="true" aria-labelledby="perfect-result-title">
         <section className="perfect-result__card">
-          <div className="perfect-result__line" aria-hidden="true" />
+          {score === 300 && <div className="perfect-result__spotlight" aria-hidden="true">{PIN_DECK.map(([left, top], index) => <span key={index} style={{ left: `${left}%`, top: `${top}%` }} />)}</div>}
           <p className="competition-eyebrow">Perfect game confirmed</p>
           <h2 id="perfect-result-title">Twelve strikes. One clean card.</h2>
           <div className="perfect-result__score" aria-label={`${score} points`}>{score}</div>
@@ -81,15 +88,16 @@ export default function PerfectGameCelebration({
       <style>{`
         .perfect-result { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; color: #f8f5ff; background: rgba(14, 10, 22, .94); }
         .perfect-result__card { position: relative; width: min(100%, 520px); padding: clamp(28px, 7vw, 52px); overflow: hidden; background: #191423; border: 1px solid rgba(255,255,255,.16); border-radius: 22px; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
-        .perfect-result__line { position: absolute; inset: 0 0 auto; height: 4px; background: #b89af0; transform-origin: left; animation: perfect-line 700ms ease-out both; }
+        .perfect-result__spotlight { position: absolute; inset: 0 0 auto auto; width: 210px; aspect-ratio: 1; opacity: .62; background: radial-gradient(circle, rgba(184,154,240,.22), transparent 68%); transform: translate(18%, -20%) scale(.88); animation: perfect-spotlight 900ms ease-out both; pointer-events: none; }
+        .perfect-result__spotlight span { position: absolute; width: 8px; height: 13px; border: 1px solid rgba(248,245,255,.72); border-radius: 55% 55% 45% 45%; background: rgba(225,199,255,.18); transform: translate(-50%, -50%); box-shadow: 0 0 12px rgba(184,154,240,.28); }
         .perfect-result h2 { max-width: 420px; margin: 0; font-size: clamp(1.65rem, 6vw, 2.7rem); line-height: 1.05; letter-spacing: -.04em; }
         .perfect-result__score { margin: 30px 0 20px; color: #e1c7ff; font-size: clamp(6.5rem, 28vw, 10rem); font-weight: 850; line-height: .7; letter-spacing: -.08em; }
         .perfect-result__context { color: rgba(255,255,255,.68); }
         .perfect-result__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 28px; }
         .perfect-result__actions .btn:first-child { grid-column: 1 / -1; }
-        @keyframes perfect-line { from { transform: scaleX(0); } }
+        @keyframes perfect-spotlight { from { opacity: 0; transform: translate(18%, -20%) scale(.72); } }
         @media (max-width: 420px) { .perfect-result__actions { grid-template-columns: 1fr; } .perfect-result__actions .btn:first-child { grid-column: auto; } }
-        @media (prefers-reduced-motion: reduce) { .perfect-result__line { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .perfect-result__spotlight { animation: none; transform: translate(18%, -20%) scale(.88); } }
       `}</style>
     </>
   )

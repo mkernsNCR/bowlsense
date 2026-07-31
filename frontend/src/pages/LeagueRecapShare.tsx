@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { copyText } from '../features/scoring/copyText'
 
 interface RecapLeague { id: number; name: string; location: string | null; season: string | null }
 interface RecapWeek { weekNumber: number; date: string; opponent: string; won: number; lost: number; tied: number }
@@ -40,28 +43,15 @@ export default function LeagueRecapShare() {
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(window.location.href)}`
   }, [data, shareText])
 
-  useEffect(() => {
-    if (!data) return
-    const title = `Week ${data.week.weekNumber} Recap — ${data.league.name} 🎳`
-    document.title = title
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, property); document.head.appendChild(el) }
-      el.content = content
-    }
-    setMeta('og:title', title)
-    setMeta('og:description', `Week ${data.week.weekNumber} · vs ${data.week.opponent} · Avg ${data.stats.average}`)
-    setMeta('og:image', ogImageUrl)
-    setMeta('og:image:width', '1200')
-    setMeta('og:image:height', '630')
-    setMeta('og:type', 'website')
-    setMeta('twitter:card', 'summary_large_image')
-    setMeta('twitter:title', title)
-  }, [data, ogImageUrl])
+  usePublicMetadata({
+    title: data ? `Week ${data.week.weekNumber} Recap — ${data.league.name} 🎳` : 'League recap — BowlSense',
+    description: data ? `Week ${data.week.weekNumber} · vs ${data.week.opponent} · Avg ${data.stats.average}` : 'Shared league recap',
+    imageUrl: ogImageUrl,
+  })
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await copyText(window.location.href)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch { /* ignore */ }
@@ -87,51 +77,22 @@ export default function LeagueRecapShare() {
 
   if (invalidId) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <div style={{ textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
-          <h2>League not found</h2>
-          <Link to="/" style={{ color: '#a78bfa', textDecoration: 'none' }}>BowlSense home</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="League recap" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#0d0d1a',
-      color: '#fff',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-      padding: '32px 16px 60px',
-    }}>
-      <div style={{ maxWidth: 640, margin: '0 auto' }}>
-
-        {/* Header bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 10 }}>
-          <div>
-            <div style={{ display: 'inline-flex', padding: '5px 12px', borderRadius: 999, background: 'rgba(167,139,250,0.18)', color: '#c4b5fd', fontWeight: 700, fontSize: 11, letterSpacing: 0.5, marginBottom: 8 }}>
-              🏆 LEAGUE NIGHT RECAP
-            </div>
-            {loading ? (
-              <div style={{ height: 32, background: 'rgba(255,255,255,0.06)', borderRadius: 8, width: 240 }} />
-            ) : (
-              <h1 style={{ margin: 0, fontSize: 'clamp(1.4rem, 4vw, 2rem)', fontWeight: 900 }}>
-                {data?.league.name}
-              </h1>
-            )}
-            {data && (
-              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 4 }}>
-                Week {data.week.weekNumber} · {data.week.date} · vs {data.week.opponent}
-              </div>
-            )}
-          </div>
-          <Link
-            to="/"
-            style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}
-          >
-            BowlSense home
-          </Link>
-        </div>
+    <PublicShell
+      eyebrow="League recap"
+      title={data?.league.name || 'League night'}
+      detail={data ? `Week ${data.week.weekNumber} · ${data.week.date} · vs ${data.week.opponent}` : 'Shared result'}
+    >
+      <div className="public-legacy-content" style={{ maxWidth: 640, margin: '0 auto' }}>
+        {data && <PublicResult score={data.stats.average} label="Week average" accessibleLabel={`Week average ${data.stats.average}`} facts={[
+          { label: 'Series', value: data.stats.series },
+          { label: 'High game', value: data.stats.highGame },
+          { label: 'Record', value: `${data.week.won}W – ${data.week.lost}L${data.week.tied ? ` – ${data.week.tied}T` : ''}` },
+        ]} />}
 
         {/* Card preview */}
         <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 24, boxShadow: '0 12px 48px rgba(0,0,0,0.6)' }}>
@@ -190,11 +151,7 @@ export default function LeagueRecapShare() {
           </button>
         </div>
 
-        {/* Footer */}
-        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13, marginTop: 32 }}>
-          Made with 🎳 BowlSense
-        </div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

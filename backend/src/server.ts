@@ -27,7 +27,11 @@ await fastify.register(FastifyMultipart, {
 fastify.get('/api/stats', async (request) => {
   const allGames = await db.select().from(games);
   const totalGames = allGames.length;
-  if (totalGames === 0) return { average: 0, strikeRate: 0, spareRate: 0, totalGames: 0 };
+  const publicIdentity = {
+    profileName: process.env.BOWLSENSE_PUBLIC_PROFILE_NAME?.trim() || null,
+    generatedAt: new Date().toISOString(),
+  };
+  if (totalGames === 0) return { average: 0, strikeRate: 0, spareRate: 0, totalGames: 0, ...publicIdentity };
   const totalScore = allGames.reduce((sum, g) => sum + (g.score || 0), 0);
   const totalStrikes = allGames.reduce((sum, g) => sum + (g.strikes || 0), 0);
   const totalSpares = allGames.reduce((sum, g) => sum + (g.spares || 0), 0);
@@ -39,6 +43,7 @@ fastify.get('/api/stats', async (request) => {
     totalScore,
     totalStrikes,
     totalSpares,
+    ...publicIdentity,
   };
 });
 
@@ -2825,6 +2830,7 @@ fastify.get('/tournaments/:id/share', async (request, reply) => {
       entryFee: tournament.entry_fee,
       prizeFund: tournament.prize_fund,
       placement: tournament.placement,
+      notes: null,
     },
     stats: {
       totalGames: scores.length,

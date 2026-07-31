@@ -5,7 +5,8 @@ import {
   downloadSessionCard,
   nativeShareSession,
 } from '../utils/sessionShare'
-import { ActionIcon, PublicShell } from '../features/competition/CompetitionUI'
+import { ActionIcon, PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
 
 interface PublicSessionPayload {
   session: {
@@ -84,26 +85,7 @@ export default function SessionShare() {
 
   const imageUrl = useMemo(() => (Number.isFinite(sessionId) ? `/api/sessions/${sessionId}/og-image` : ''), [sessionId])
 
-  useEffect(() => {
-    document.title = title
-
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) {
-        el = document.createElement('meta')
-        el.setAttribute(attr, property)
-        document.head.appendChild(el)
-      }
-      el.setAttribute('content', content)
-    }
-
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    if (imageUrl) setMeta('og:image', imageUrl)
-    setMeta('og:image:width', '1200')
-    setMeta('og:image:height', '630')
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, imageUrl])
+  usePublicMetadata({ title, description, imageUrl })
 
   const copyLink = async () => {
     if (!Number.isFinite(sessionId)) return
@@ -133,17 +115,12 @@ export default function SessionShare() {
   }
 
   if (loading) {
-    return <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center' }} className="muted">Loading share card…</div>
+    return <PublicShell eyebrow="Session result" title="Loading shared session"><div className="muted">Loading share card…</div></PublicShell>
   }
 
   if (notFound || !data) {
     return (
-      <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24 }}>
-        <div>
-          <h1 style={{ marginBottom: 8 }}>Session not found</h1>
-          <Link to="/" className="btn btn-primary">BowlSense home</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Session result" title="Session not found"><Link to="/">BowlSense home</Link></PublicShell>
     )
   }
 
@@ -154,17 +131,17 @@ export default function SessionShare() {
       detail={[data.session.location, data.session.date, data.session.lanes ? `Lanes ${data.session.lanes}` : null].filter(Boolean).join(' · ')}
       action={<button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}><ActionIcon name="share" /> {busy === 'share' ? 'Sharing…' : 'Share result'}</button>}
     >
-      <div className="share-result">
-        <section className="share-result__primary" aria-label={`Series total ${data.summary.series}`}>
-          <div><div className="share-result__score">{data.summary.series}</div><div className="share-result__label">{data.summary.totalGames}-game series</div></div>
-        </section>
-        <dl className="share-result__facts">
-          <div className="share-result__fact"><dt>Average</dt><dd>{data.summary.average}</dd></div>
-          <div className="share-result__fact"><dt>High game</dt><dd>{data.summary.highGame}</dd></div>
-          <div className="share-result__fact"><dt>Perfect games</dt><dd>{data.summary.perfectGames}</dd></div>
-          <div className="share-result__fact"><dt>Game scores</dt><dd>{data.games.map((game) => game.score).join(' · ')}</dd></div>
-        </dl>
-      </div>
+      <PublicResult
+        score={data.summary.series}
+        label={`${data.summary.totalGames}-game series`}
+        accessibleLabel={`Series total ${data.summary.series}`}
+        facts={[
+          { label: 'Average', value: data.summary.average },
+          { label: 'High game', value: data.summary.highGame },
+          { label: 'Perfect games', value: data.summary.perfectGames },
+          { label: 'Game scores', value: data.games.map((game) => game.score).join(' · ') },
+        ]}
+      />
       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
         <button className="btn btn-ghost" onClick={copyLink}>{copied ? 'Link copied' : 'Copy link'}</button>
         <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading…' : 'Download image'}</button>

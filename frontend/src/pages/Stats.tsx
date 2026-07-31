@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { InsightMetric, InsightsWorkspace, InsightState, LeadTakeaway } from '../features/insights/InsightsWorkspace'
-import { ScoreHistogram, ScoreTrendChart, type HistogramBucket, type TrendData, type TrendWindow } from '../features/insights/charts'
+import { ScoreHistogram, ScoreTrendChart, type HistogramBucket } from '../features/insights/charts'
+import { fetchJson } from '../features/insights/data'
+import { TREND_WINDOWS, type TrendData, type TrendWindow } from '../features/insights/trend'
 
 interface FullStats {
   overall: {
@@ -33,12 +35,6 @@ interface FullStats {
       '250plus': number
     }
   }
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-  return response.json() as Promise<T>
 }
 
 function getTakeaway(stats: FullStats) {
@@ -126,7 +122,7 @@ export default function Stats() {
       <InsightsWorkspace description="Turn scores and leaves into one useful next move.">
         <InsightState
           title="Your first insight starts with a game"
-          action={<Link className="insights-button" to="/sessions/new">Log a game</Link>}
+          action={<Link className="insights-button" to="/sessions/new">Start bowling</Link>}
         >
           Add a score to establish your average. Frame-level entry will also reveal repeat pin leaves and conversion opportunities.
         </InsightState>
@@ -162,7 +158,7 @@ export default function Stats() {
       ) : trendQuery.data && trendQuery.data.games.length >= 3 ? (
         <section className="insights-trend-block" aria-label="Scoring trend">
           <div className="insights-window-switch" role="group" aria-label="Rolling average window">
-            {([5, 10, 20] as const).map((windowSize) => (
+            {TREND_WINDOWS.map(({ size: windowSize }) => (
               <button
                 key={windowSize}
                 type="button"

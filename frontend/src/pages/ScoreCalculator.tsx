@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { InsightMetric, InsightsWorkspace, InsightState, LeadTakeaway } from '../features/insights/InsightsWorkspace'
 import { ScoreHistogram, type HistogramBucket } from '../features/insights/charts'
+import { copyText } from '../features/scoring/copyText'
 
 interface GameScore {
   id: number
@@ -8,21 +9,17 @@ interface GameScore {
 }
 
 const bucketDefinitions = [
-  { key: 'under150', label: '<150' },
-  { key: '150to199', label: '150–199' },
-  { key: '200to249', label: '200–249' },
-  { key: '250to299', label: '250–299' },
-  { key: 'perfect', label: '300' },
+  { key: 'under150', label: '<150', minimum: 0, maximum: 149 },
+  { key: '150to199', label: '150–199', minimum: 150, maximum: 199 },
+  { key: '200to249', label: '200–249', minimum: 200, maximum: 249 },
+  { key: '250to299', label: '250–299', minimum: 250, maximum: 299 },
+  { key: 'perfect', label: '300', minimum: 300, maximum: 300 },
 ] as const
 
 type BucketKey = typeof bucketDefinitions[number]['key']
 
 function scoreBucket(score: number): BucketKey {
-  if (score === 300) return 'perfect'
-  if (score >= 250) return '250to299'
-  if (score >= 200) return '200to249'
-  if (score >= 150) return '150to199'
-  return 'under150'
+  return bucketDefinitions.find((bucket) => score >= bucket.minimum && score <= bucket.maximum)?.key ?? 'under150'
 }
 
 export default function ScoreCalculator() {
@@ -45,13 +42,7 @@ export default function ScoreCalculator() {
   const summary = useMemo(() => {
     if (validScores.length === 0) return null
     const total = validScores.reduce((sum, score) => sum + score, 0)
-    const buckets: Record<BucketKey, number> = {
-      under150: 0,
-      '150to199': 0,
-      '200to249': 0,
-      '250to299': 0,
-      perfect: 0,
-    }
+    const buckets = Object.fromEntries(bucketDefinitions.map((bucket) => [bucket.key, 0])) as Record<BucketKey, number>
     validScores.forEach((score) => { buckets[scoreBucket(score)] += 1 })
     return {
       average: Math.round(total / validScores.length),
@@ -127,7 +118,7 @@ export default function ScoreCalculator() {
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await copyText(window.location.href)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
     } catch {

@@ -3,21 +3,27 @@ import BowlingScorer from '../../components/BowlingScorer'
 import { Sheet } from '../../design'
 import type { Ball, SavedGame } from './data'
 
-interface QuickLogSheetProps {
-  open: boolean
+export interface QuickLogDraft {
   date: string
   location: string
   lanes: string
   sessionId: number | null
   gameNumber: number
   saved: boolean
+}
+
+interface QuickLogStatus {
   saving: boolean
   error: boolean
+}
+
+interface QuickLogSheetProps {
+  open: boolean
+  draft: QuickLogDraft
+  status: QuickLogStatus
   balls: Ball[]
   defaultBallId?: string
-  onDateChange: (date: string) => void
-  onLocationChange: (location: string) => void
-  onLanesChange: (lanes: string) => void
+  onDraftChange: (change: Partial<Pick<QuickLogDraft, 'date' | 'location' | 'lanes'>>) => void
   onSave: (game: SavedGame) => Promise<void>
   onClose: () => void
   onLogAnother: () => void
@@ -25,19 +31,11 @@ interface QuickLogSheetProps {
 
 export function QuickLogSheet({
   open,
-  date,
-  location,
-  lanes,
-  sessionId,
-  gameNumber,
-  saved,
-  saving,
-  error,
+  draft,
+  status,
   balls,
   defaultBallId,
-  onDateChange,
-  onLocationChange,
-  onLanesChange,
+  onDraftChange,
   onSave,
   onClose,
   onLogAnother,
@@ -54,24 +52,38 @@ export function QuickLogSheet({
       <div className="today-sheet__fields">
         <label>
           <span>Center</span>
-          <input value={location} onChange={(event) => onLocationChange(event.target.value)} placeholder="Bowling center" autoComplete="organization" />
+          <input
+            value={draft.location}
+            onChange={(event) => onDraftChange({ location: event.target.value })}
+            placeholder="Bowling center"
+            autoComplete="organization"
+          />
         </label>
         <label>
           <span>Date</span>
-          <input type="date" value={date} onChange={(event) => onDateChange(event.target.value)} />
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(event) => onDraftChange({ date: event.target.value })}
+          />
         </label>
         <label>
           <span>Lanes <small>Optional</small></span>
-          <input value={lanes} onChange={(event) => onLanesChange(event.target.value)} placeholder="12–13" inputMode="numeric" />
+          <input
+            value={draft.lanes}
+            onChange={(event) => onDraftChange({ lanes: event.target.value })}
+            placeholder="12–13"
+            inputMode="numeric"
+          />
         </label>
       </div>
 
-      {saved && sessionId ? (
+      {draft.saved && draft.sessionId ? (
         <div className="today-sheet__success" role="status">
           <span className="today-sheet__success-mark" aria-hidden="true">✓</span>
           <div>
             <h3>Game logged</h3>
-            <Link to={`/sessions/${sessionId}`}>View session</Link>
+            <Link to={`/sessions/${draft.sessionId}`}>View session</Link>
           </div>
           <div className="today-sheet__success-actions">
             <button type="button" className="today-button today-button--secondary" onClick={onLogAnother}>Log another game</button>
@@ -80,7 +92,7 @@ export function QuickLogSheet({
         </div>
       ) : (
         <BowlingScorer
-          gameNumber={gameNumber}
+          gameNumber={draft.gameNumber}
           balls={balls}
           defaultBallId={defaultBallId}
           onSave={onSave}
@@ -88,8 +100,8 @@ export function QuickLogSheet({
         />
       )}
 
-      {saving && <p className="today-sheet__status" role="status">Saving game…</p>}
-      {error && <p className="today-sheet__error" role="alert">The game wasn’t saved. Check your connection and try again.</p>}
+      {status.saving && <p className="today-sheet__status" role="status">Saving game…</p>}
+      {status.error && <p className="today-sheet__error" role="alert">The game wasn’t saved. Check your connection and try again.</p>}
     </Sheet>
   )
 }

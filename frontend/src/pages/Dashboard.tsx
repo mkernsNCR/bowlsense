@@ -1,20 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Icon } from '../design'
 import { useSettings } from '../hooks/useSettings'
-import { QuickLogSheet } from '../features/today/QuickLogSheet'
+import { QuickLogSheet, type QuickLogDraft } from '../features/today/QuickLogSheet'
 import { RecentSessions } from '../features/today/RecentSessions'
 import { TodayFrameRibbon } from '../features/today/TodayFrameRibbon'
-import { TodayIcon } from '../features/today/TodayIcon'
 import {
   fetchJson,
   type Ball,
   type Game,
+  type GameResponse,
   type SavedGame,
   type Session,
   type Stats,
   type TonightLeague,
   type WeeklyStats,
+  normalizeGame,
 } from '../features/today/data'
 import '../features/today/today.css'
 
@@ -34,32 +36,64 @@ function localCalendarDate(date = new Date()) {
   return `${year}-${month}-${day}`
 }
 
+function createQuickLogDraft(location = ''): QuickLogDraft {
+  return {
+    date: localCalendarDate(),
+    location,
+    lanes: '',
+    sessionId: null,
+    gameNumber: 1,
+    saved: false,
+  }
+}
+
 function gameFrameData(game: Game | undefined) {
-  return game?.frameData ?? game?.frame_data ?? null
+  return game?.frameData ?? null
+}
+
+function TodayActions({ onQuickLog }: { onQuickLog: () => void }) {
+  return (
+    <div className="today-next-action">
+      <Link to="/sessions/new" className="today-button today-button--primary">
+        <Icon className="today-icon" name="start" />
+        Start bowling
+      </Link>
+      <button type="button" className="today-button today-button--text" onClick={onQuickLog}>
+        Log a past game
+      </button>
+    </div>
+  )
 }
 
 function DashboardLoading() {
   return (
     <div className="today-page" aria-busy="true" aria-label="Loading Today">
-      <header className="today-header">
-        <div className="today-kicker">BowlSense</div>
-        <h1>Today</h1>
-        <div className="today-skeleton today-skeleton--context" />
-      </header>
-      <div className="today-skeleton today-skeleton--action" />
-      <section className="today-section" aria-hidden="true">
-        <div className="today-section-heading">
-          <span>Latest performance</span>
+      <div className="today-layout">
+        <div className="today-primary">
+          <header className="today-header">
+            <div className="today-kicker">BowlSense</div>
+            <h1>Today</h1>
+            <div className="today-skeleton today-skeleton--context" />
+          </header>
+          <section className="today-section" aria-hidden="true">
+            <div className="today-section-heading">
+              <span>Latest performance</span>
+            </div>
+            <div className="today-skeleton today-skeleton--ribbon" />
+          </section>
+          <div className="today-skeleton today-skeleton--metrics" />
+          <div className="today-skeleton today-skeleton--action" />
+          <section className="today-section" aria-hidden="true">
+            <div className="today-section-heading">
+              <span>Recent sessions</span>
+            </div>
+            <div className="today-skeleton today-skeleton--rows" />
+          </section>
         </div>
-        <div className="today-skeleton today-skeleton--ribbon" />
-      </section>
-      <div className="today-skeleton today-skeleton--metrics" />
-      <section className="today-section" aria-hidden="true">
-        <div className="today-section-heading">
-          <span>Recent sessions</span>
-        </div>
-        <div className="today-skeleton today-skeleton--rows" />
-      </section>
+        <aside className="today-inspector today-inspector--loading" aria-hidden="true">
+          <div className="today-skeleton today-skeleton--inspector" />
+        </aside>
+      </div>
       <span className="today-sr-only" role="status">Loading your latest bowling activity.</span>
     </div>
   )
@@ -74,17 +108,16 @@ function DashboardError({ onRetry }: { onRetry: () => void }) {
       </header>
       <section className="today-state" role="alert">
         <div className="today-state__icon" aria-hidden="true">
-          <TodayIcon name="retry" />
+          <Icon className="today-icon" name="warning" />
         </div>
         <h2>Your activity didn’t load</h2>
         <p>Check your connection and try again. You can still start a new session now.</p>
         <div className="today-state__actions">
           <button type="button" className="today-button today-button--secondary" onClick={onRetry}>
-            <TodayIcon name="retry" />
             Try again
           </button>
           <Link to="/sessions/new" className="today-button today-button--primary">
-            <TodayIcon name="play" />
+            <Icon className="today-icon" name="start" />
             Start bowling
           </Link>
         </div>
@@ -98,12 +131,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [showQuickLog, setShowQuickLog] = useState(false)
-  const [quickLogDate, setQuickLogDate] = useState(localCalendarDate)
-  const [quickLogLocation, setQuickLogLocation] = useState('')
-  const [quickLogLanes, setQuickLogLanes] = useState('')
-  const [quickLogSessionId, setQuickLogSessionId] = useState<number | null>(null)
-  const [quickLogGameNumber, setQuickLogGameNumber] = useState(1)
-  const [quickLogSaved, setQuickLogSaved] = useState(false)
+  const [quickLogDraft, setQuickLogDraft] = useState<QuickLogDraft>(createQuickLogDraft)
 
   const statsQuery = useQuery<Stats>({
     queryKey: ['stats'],
@@ -122,7 +150,10 @@ export default function Dashboard() {
   })
   const recentGamesQuery = useQuery<Game[]>({
     queryKey: ['games-recent'],
-    queryFn: () => fetchJson<Game[]>('/api/games-recent'),
+    queryFn: async () => {
+      const games = await fetchJson<GameResponse[]>('/api/games-recent')
+      return games.map(normalizeGame)
+    },
   })
   const ballsQuery = useQuery<Ball[]>({
     queryKey: ['balls'],
@@ -177,30 +208,27 @@ export default function Dashboard() {
   }
 
   const openQuickLog = () => {
-    setQuickLogDate(localCalendarDate())
-    setQuickLogLocation(latestSession?.location ?? '')
-    setQuickLogLanes('')
-    setQuickLogSessionId(null)
-    setQuickLogGameNumber(1)
-    setQuickLogSaved(false)
+    createSessionMutation.reset()
+    createGameMutation.reset()
+    setQuickLogDraft(createQuickLogDraft(latestSession?.location ?? ''))
     setShowQuickLog(true)
   }
 
   const closeQuickLog = useCallback(() => setShowQuickLog(false), [])
 
   const handleQuickLogSave = async (game: SavedGame) => {
-    let sessionId = quickLogSessionId
+    let sessionId = quickLogDraft.sessionId
     if (sessionId === null) {
       sessionId = (await createSessionMutation.mutateAsync({
-        date: quickLogDate,
-        location: quickLogLocation,
-        lanes: quickLogLanes,
+        date: quickLogDraft.date,
+        location: quickLogDraft.location,
+        lanes: quickLogDraft.lanes,
       })).id
-      setQuickLogSessionId(sessionId)
+      setQuickLogDraft((draft) => ({ ...draft, sessionId }))
     }
 
     await createGameMutation.mutateAsync({ ...game, sessionId })
-    setQuickLogSaved(true)
+    setQuickLogDraft((draft) => ({ ...draft, saved: true }))
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['sessions'] }),
       queryClient.invalidateQueries({ queryKey: ['stats'] }),
@@ -229,20 +257,19 @@ export default function Dashboard() {
                 onClick={() => navigate(`/leagues/${contextLeague.id}`)}
                 aria-label={`View ${contextLeague.name}, week ${contextLeague.nextWeekNumber}`}
               >
-                <span className="today-context__icon" aria-hidden="true"><TodayIcon name="league" /></span>
+                <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="league" /></span>
                 <span className="today-context__copy">
                   <strong>{contextLeague.name} tonight</strong>
                   <span>
-                    {contextLeague.location ?? 'Center not set'} · Week {contextLeague.nextWeekNumber}
-                    {contextLeague.lastOpponent ? ` · Last: ${contextLeague.lastOpponent}` : ''}
+                    {formatDate(contextLeague.todayIso)} · {contextLeague.location ?? 'Center not set'} · Week {contextLeague.nextWeekNumber} · Opponent not set
                   </span>
                 </span>
                 {relevantLeagues.length > 1 && <span className="today-context__count">+{relevantLeagues.length - 1}</span>}
-                <TodayIcon name="chevron" />
+                <Icon className="today-icon" name="chevron-right" />
               </button>
             ) : (
               <div className="today-context">
-                <span className="today-context__icon" aria-hidden="true"><TodayIcon name="location" /></span>
+                <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="location" /></span>
                 <span className="today-context__copy">
                   <strong>{latestSession?.location || 'Ready when you are'}</strong>
                   <span>{latestSession ? `Last bowled ${formatDate(latestSession.date)}` : 'Your first frame starts here'}</span>
@@ -258,16 +285,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="today-next-action">
-            <Link to="/sessions/new" className="today-button today-button--primary">
-              <TodayIcon name="play" />
-              Start bowling
-            </Link>
-            <button type="button" className="today-button today-button--text" onClick={openQuickLog}>
-              Log a past game
-            </button>
-          </div>
-
           {hasGames ? (
             <>
               <section className="today-section" aria-labelledby="latest-performance-heading">
@@ -278,7 +295,7 @@ export default function Dashboard() {
                 <TodayFrameRibbon
                   frames={gameFrameData(latestGame)}
                   score={latestGame?.score ?? latestSession?.highScore ?? 0}
-                  gameNumber={latestGame?.gameNumber ?? latestGame?.game_number}
+                  gameNumber={latestGame?.gameNumber}
                   location={latestGame?.location ?? latestSession?.location}
                 />
               </section>
@@ -290,7 +307,12 @@ export default function Dashboard() {
                     <strong>{stats?.average ?? '—'}</strong>
                     {averageDelta !== null && (
                       <span className={`today-delta ${averageDelta > 0 ? 'today-delta--up' : averageDelta < 0 ? 'today-delta--down' : ''}`}>
-                        {averageDelta !== 0 && <TodayIcon name={averageDelta > 0 ? 'trendUp' : 'trendDown'} />}
+                        {averageDelta !== 0 && (
+                          <Icon
+                            className={`today-icon today-icon--${averageDelta > 0 ? 'trendUp' : 'trendDown'}`}
+                            name="back"
+                          />
+                        )}
                         {averageDelta === 0 ? 'No change' : `${Math.abs(averageDelta)} vs last week`}
                       </span>
                     )}
@@ -305,13 +327,24 @@ export default function Dashboard() {
                   <strong>{stats?.spareRate !== null && stats?.spareRate !== undefined ? `${stats.spareRate}%` : '—'}</strong>
                 </div>
               </section>
+
+              <details className="today-details">
+                <summary>More stats</summary>
+                <dl>
+                  <div><dt>Total games</dt><dd>{stats?.totalGames ?? 0}</dd></div>
+                  <div><dt>This week</dt><dd>{weekly?.thisWeek.games ?? 0} games</dd></div>
+                  <div><dt>Weekly high</dt><dd>{weekly?.thisWeek.highGame || '—'}</dd></div>
+                </dl>
+              </details>
+
+              <TodayActions onQuickLog={openQuickLog} />
             </>
           ) : (
             <section className="today-state today-state--empty">
               <div className="today-state__lane" aria-hidden="true"><span /><span /><span /></div>
               <h2>Set your starting line</h2>
               <p>Record one game to see your frame ribbon, average, and next useful adjustment.</p>
-              <Link to="/sessions/new" className="today-button today-button--secondary">Start your first session</Link>
+              <TodayActions onQuickLog={openQuickLog} />
             </section>
           )}
 
@@ -331,8 +364,10 @@ export default function Dashboard() {
               <h2>{contextLeague.name}</h2>
               <dl>
                 <div><dt>Center</dt><dd>{contextLeague.location ?? 'Not set'}</dd></div>
-                <div><dt>Schedule</dt><dd>{contextLeague.todayName} · Week {contextLeague.nextWeekNumber}</dd></div>
-                {contextLeague.lastOpponent && <div><dt>Last opponent</dt><dd>{contextLeague.lastOpponent}</dd></div>}
+                <div><dt>Start</dt><dd>Tonight · {formatDate(contextLeague.todayIso)}</dd></div>
+                <div><dt>Week</dt><dd>{contextLeague.nextWeekNumber}</dd></div>
+                <div><dt>Opponent</dt><dd>Not set</dd></div>
+                {contextLeague.lastOpponent && <div><dt>Last faced</dt><dd>{contextLeague.lastOpponent}</dd></div>}
               </dl>
               <button
                 type="button"
@@ -362,24 +397,22 @@ export default function Dashboard() {
 
       <QuickLogSheet
         open={showQuickLog}
-        date={quickLogDate}
-        location={quickLogLocation}
-        lanes={quickLogLanes}
-        sessionId={quickLogSessionId}
-        gameNumber={quickLogGameNumber}
-        saved={quickLogSaved}
-        saving={createSessionMutation.isPending || createGameMutation.isPending}
-        error={createSessionMutation.isError || createGameMutation.isError}
+        draft={quickLogDraft}
+        status={{
+          saving: createSessionMutation.isPending || createGameMutation.isPending,
+          error: createSessionMutation.isError || createGameMutation.isError,
+        }}
         balls={ballsQuery.data ?? []}
         defaultBallId={settings.defaultBallId}
-        onDateChange={setQuickLogDate}
-        onLocationChange={setQuickLogLocation}
-        onLanesChange={setQuickLogLanes}
+        onDraftChange={(change) => setQuickLogDraft((draft) => ({ ...draft, ...change }))}
         onSave={handleQuickLogSave}
         onClose={closeQuickLog}
         onLogAnother={() => {
-          setQuickLogGameNumber((number) => number + 1)
-          setQuickLogSaved(false)
+          setQuickLogDraft((draft) => ({
+            ...draft,
+            gameNumber: draft.gameNumber + 1,
+            saved: false,
+          }))
         }}
       />
     </div>

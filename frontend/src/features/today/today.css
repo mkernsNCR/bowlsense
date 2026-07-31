@@ -12,6 +12,7 @@
   color: var(--today-ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
+
 .today-page {
   max-width: 100%;
   padding-bottom: 24px;
@@ -139,6 +140,14 @@ button.today-context:hover .today-context__copy strong {
   flex: 0 0 auto;
   height: 20px;
   width: 20px;
+}
+
+.today-icon--trendUp {
+  transform: rotate(90deg);
+}
+
+.today-icon--trendDown {
+  transform: rotate(-90deg);
 }
 
 .today-next-action {
@@ -370,6 +379,45 @@ button.today-context:hover .today-context__copy strong {
 
 .today-delta--down {
   color: var(--danger, #b42318);
+}
+
+.today-details {
+  border-block: 1px solid var(--today-separator);
+}
+
+.today-details summary {
+  color: var(--today-violet);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 680;
+  min-height: 44px;
+  padding: 12px 2px;
+}
+
+.today-details dl {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 12px;
+}
+
+.today-details dl div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.today-details dt {
+  color: var(--today-secondary);
+  font-size: 0.72rem;
+}
+
+.today-details dd {
+  color: var(--today-ink);
+  font-size: 0.9rem;
+  font-weight: 680;
+  margin: 0;
 }
 
 .today-grouped-list {
@@ -608,10 +656,25 @@ button.today-context:hover .today-context__copy strong {
   display: none;
 }
 
-.bs-sheet.today-sheet-panel { max-width: 720px; max-height: min(92dvh, 900px); color: var(--today-ink); background: var(--today-raised); border-color: var(--today-separator); }
-.today-sheet-panel .bs-sheet__header { border-color: var(--today-separator); }
-.today-sheet-panel .bs-sheet__header p { color: var(--today-secondary); }
-.today-sheet-panel .bs-sheet__body { padding: 16px 24px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.bs-sheet.today-sheet-panel {
+  background: var(--today-raised);
+  border-color: var(--today-separator);
+  color: var(--today-ink);
+  max-height: min(92dvh, 900px);
+  max-width: 720px;
+}
+
+.today-sheet-panel .bs-sheet__header {
+  border-color: var(--today-separator);
+}
+
+.today-sheet-panel .bs-sheet__header p {
+  color: var(--today-secondary);
+}
+
+.today-sheet-panel .bs-sheet__body {
+  padding: 16px 24px calc(24px + env(safe-area-inset-bottom, 0px));
+}
 
 .today-sheet__fields {
   display: grid;
@@ -720,6 +783,7 @@ button.today-context:hover .today-context__copy strong {
 .today-skeleton--ribbon { height: 104px; border-radius: 20px; }
 .today-skeleton--metrics { height: 146px; border-radius: 20px; }
 .today-skeleton--rows { height: 226px; border-radius: 20px; }
+.today-skeleton--inspector { height: 300px; border-radius: 20px; }
 
 .today-sr-only {
   clip: rect(0, 0, 0, 0);

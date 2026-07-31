@@ -1,4 +1,4 @@
-export type FrameState = 'pending' | 'current' | 'complete' | 'strike' | 'spare' | 'open'
+export type FrameState = 'pending' | 'partial' | 'current' | 'complete' | 'strike' | 'spare' | 'open'
 
 export interface FrameRibbonFrame {
   rolls?: readonly string[]

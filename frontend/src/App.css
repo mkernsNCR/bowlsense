@@ -7,11 +7,13 @@
   --bs-secondary: var(--ink-secondary, var(--muted, #6e7178));
   --bs-tint: var(--oil-violet, var(--accent, #6854c7));
   --bs-separator: var(--separator, var(--border, rgba(22, 24, 28, 0.12)));
+
   color: var(--bs-ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
 }
 .bs-shell {
   --bs-inspector-width: 20rem;
+
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--bs-canvas);
@@ -192,6 +194,7 @@
 }
 
 .bs-sheet.bs-shell-more-sheet {
+  max-height: min(82vh, 42rem);
   max-height: min(82dvh, 42rem);
   border-color: var(--bs-separator);
   color: var(--bs-ink);
@@ -461,7 +464,8 @@
 @supports not (color: color-mix(in srgb, white, black)) {
   .bs-shell__toolbar,
   .bottom-nav.bs-shell__tab-bar,
-  .bs-shell__sidebar {
+  .bs-shell__sidebar,
+  .bs-shell__inspector {
     background: var(--bs-raised);
   }
 

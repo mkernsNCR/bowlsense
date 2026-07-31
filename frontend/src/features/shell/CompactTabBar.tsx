@@ -45,6 +45,7 @@ export default function CompactTabBar({ pathname, moreOpen, moreButtonRef, onMor
         className="bs-shell__tab"
         aria-label="More navigation"
         aria-controls="bs-more-sheet"
+        aria-haspopup="dialog"
         aria-expanded={moreOpen}
         aria-current={isMoreTabActive(pathname) ? 'page' : undefined}
         onClick={onMoreOpen}

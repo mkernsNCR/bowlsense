@@ -7,6 +7,7 @@
   --bs-secondary: var(--ink-secondary, var(--muted, #6e7178));
   --bs-tint: var(--oil-violet, var(--accent, #6854c7));
   --bs-separator: var(--separator, var(--border, rgba(22, 24, 28, 0.12)));
+
   min-height: 100vh;
   min-height: 100dvh;
   color: var(--bs-ink);
@@ -204,6 +205,7 @@
 
 .bs-shell__sheet {
   width: 100%;
+  max-height: min(82vh, 42rem);
   max-height: min(82dvh, 42rem);
   overflow: auto;
   overscroll-behavior: contain;
@@ -516,7 +518,8 @@
 @supports not (color: color-mix(in srgb, white, black)) {
   .bs-shell__toolbar,
   .bottom-nav.bs-shell__tab-bar,
-  .bs-shell__sidebar {
+  .bs-shell__sidebar,
+  .bs-shell__inspector {
     background: var(--bs-raised);
   }
 

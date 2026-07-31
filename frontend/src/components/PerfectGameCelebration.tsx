@@ -7,6 +7,7 @@ interface PerfectGameCelebrationProps {
   frameData: string
   session: { location: string; date: string; lanes?: string }
   ballName?: string
+  saving?: boolean
   onShare: () => void
   onSave: () => void
   onRetake: () => void
@@ -25,15 +26,33 @@ interface ConfettiParticle {
   shape: 'square' | 'circle'
 }
 
+interface ScoredFrame {
+  ball1?: unknown
+  ball2?: unknown
+  ball3?: unknown
+}
+
+const confettiColors = ['#fbbf24', '#a78bfa', '#ffffff', '#34d399'] as const
+
+function fraction(seed: number) {
+  return ((seed * 9301 + 49297) % 233280) / 233280
+}
+
+function isScoredFrame(value: unknown): value is ScoredFrame {
+  return typeof value === 'object' && value !== null
+}
+
 function getStats(frameData: string) {
   try {
-    const parsed = JSON.parse(frameData)
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
+    const parsed: unknown = JSON.parse(frameData)
+    const frames = typeof parsed === 'object' && parsed !== null && 'frames' in parsed && Array.isArray(parsed.frames)
+      ? parsed.frames.filter(isScoredFrame)
+      : []
 
     let strikes = 0
     let spares = 0
 
-    frames.forEach((f: any, idx: number) => {
+    frames.forEach((f, idx) => {
       const b1 = f?.ball1
       const b2 = f?.ball2
       const b3 = f?.ball3
@@ -61,6 +80,7 @@ export default function PerfectGameCelebration({
   frameData,
   session,
   ballName,
+  saving = false,
   onShare,
   onSave,
   onRetake,
@@ -68,18 +88,17 @@ export default function PerfectGameCelebration({
   const [showShareCard, setShowShareCard] = useState(false)
 
   const particles = useMemo<ConfettiParticle[]>(() => {
-    const colors = ['#fbbf24', '#a78bfa', '#ffffff', '#34d399']
     return Array.from({ length: 60 }, (_, i) => ({
       id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 50,
-      size: 6 + Math.random() * 6,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      delay: Math.random() * 0.8,
-      duration: 2 + Math.random() * 1,
-      drift: -30 + Math.random() * 60,
-      rotate: -280 + Math.random() * 560,
-      shape: Math.random() > 0.5 ? 'square' : 'circle',
+      x: fraction(i * 11 + 1) * 100,
+      y: fraction(i * 11 + 2) * 50,
+      size: 6 + fraction(i * 11 + 3) * 6,
+      color: confettiColors[Math.floor(fraction(i * 11 + 4) * confettiColors.length)] ?? confettiColors[0],
+      delay: fraction(i * 11 + 5) * 0.8,
+      duration: 2 + fraction(i * 11 + 6),
+      drift: -30 + fraction(i * 11 + 7) * 60,
+      rotate: -280 + fraction(i * 11 + 8) * 560,
+      shape: fraction(i * 11 + 9) > 0.5 ? 'square' : 'circle',
     }))
   }, [])
 
@@ -123,6 +142,7 @@ export default function PerfectGameCelebration({
           <div style={{ display: 'grid', gap: 12 }}>
             <button
               className="btn"
+              disabled={saving}
               onClick={() => {
                 onShare()
                 setShowShareCard(true)
@@ -133,6 +153,7 @@ export default function PerfectGameCelebration({
             </button>
             <button
               className="btn"
+              disabled={saving}
               onClick={onSave}
               style={{ minHeight: 46, borderRadius: 14, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700 }}
             >
@@ -140,6 +161,7 @@ export default function PerfectGameCelebration({
             </button>
             <button
               className="btn"
+              disabled={saving}
               onClick={onRetake}
               style={{ minHeight: 46, borderRadius: 14, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 700 }}
             >

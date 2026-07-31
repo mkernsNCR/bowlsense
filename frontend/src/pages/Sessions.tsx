@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { copyText } from '../features/scoring/copyText'
-import ScoringIcon from '../features/scoring/ScoringIcon'
+import { Icon, Sheet } from '../design'
 import '../features/scoring/scoring.css'
 
 interface Session {
@@ -129,19 +129,19 @@ export default function Sessions() {
   }
 
   return (
-    <main className="scoring-flow scoring-page">
+    <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
           <p className="scoring-eyebrow">History</p>
           <h1 className="scoring-large-title">Sessions</h1>
           <p className="scoring-subtitle">{total === 0 ? 'Every practice session starts here.' : `${total} ${total === 1 ? 'session' : 'sessions'} recorded`}</p>
         </div>
-        <Link to="/sessions/new" className="scoring-button primary"><ScoringIcon name="plus" /> New</Link>
+        <Link to="/sessions/new" className="scoring-button primary"><Icon name="plus" /> New</Link>
       </div>
 
       <div className="scoring-toolbar">
         <label className="scoring-search">
-          <ScoringIcon name="search" size={18} />
+          <Icon name="search" size={18} />
           <span className="sr-only">Filter sessions by center</span>
           <input value={locationQuery} onChange={(event) => setLocationQuery(event.target.value)} placeholder="Search centers" />
         </label>
@@ -149,7 +149,7 @@ export default function Sessions() {
           <button type="button" className="scoring-segment" aria-pressed={sort === 'date'} onClick={() => { setSort('date'); setPage(1) }}>Recent</button>
           <button type="button" className="scoring-segment" aria-pressed={sort === 'score'} onClick={() => { setSort('score'); setPage(1) }}>Score</button>
         </div>
-        {total > 0 && <button type="button" className="scoring-icon-button" onClick={handleExport} aria-label="Export sessions as CSV"><ScoringIcon name="download" /></button>}
+        {total > 0 && <button type="button" className="scoring-icon-button" onClick={handleExport} aria-label="Export sessions as CSV"><Icon name="download" /></button>}
       </div>
 
       {sessionsQuery.isLoading && <div className="scoring-status" role="status">Loading sessions…</div>}
@@ -192,7 +192,7 @@ export default function Sessions() {
                   </Link>
                   {session.perfectGames > 0 && <span className="scoring-row-value" aria-label={`${session.perfectGames} perfect games`}>300</span>}
                   <button type="button" className="scoring-row-action" onClick={() => { setActionSession(session); setConfirmDelete(false); setShareError(false) }} aria-label={`Actions for ${session.location}`}>
-                    <ScoringIcon name="more" />
+                    <Icon name="more" />
                   </button>
                 </div>
               )
@@ -210,39 +210,41 @@ export default function Sessions() {
       )}
 
       {actionSession && (
-        <div className="scoring-sheet-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActionSession(null) }}>
-          <section className="scoring-sheet" role="dialog" aria-modal="true" aria-labelledby="session-actions-title">
-            <div className="scoring-sheet-handle" />
-            <p className="scoring-eyebrow">Session actions</p>
-            <h2 id="session-actions-title">{actionSession.location}</h2>
-            <div className="scoring-fields">
-              <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => navigate(`/sessions/${actionSession.id}?edit=1`)}>
-                <span className="scoring-row-copy">Edit session</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => handleShare(actionSession)}>
-                <ScoringIcon name="share" /><span className="scoring-row-copy">Share session</span><ScoringIcon name="chevron" />
-              </button>
-              <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDelete(true)}>
-                <ScoringIcon name="trash" /><span className="scoring-row-copy">Delete session</span><ScoringIcon name="chevron" />
-              </button>
-            </div>
-            {shareError && <p className="scoring-error" role="alert">The share link could not be copied. Open the session and copy its share-page address instead.</p>}
-            {confirmDelete && (
-              <div role="alert">
-                <p className="scoring-subtitle">Delete this session and every game in it? This cannot be undone.</p>
-                {deleteSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
-                <div className="scoring-sheet-actions">
-                  <button type="button" className="scoring-button secondary" onClick={() => setConfirmDelete(false)}>Keep session</button>
-                  <button type="button" className="scoring-button danger" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(actionSession.id)}>
-                    {deleteSession.isPending ? 'Deleting…' : 'Delete session'}
-                  </button>
-                </div>
+        <Sheet
+          open
+          onClose={() => setActionSession(null)}
+          title={actionSession.location}
+          description="Session actions"
+          closeLabel="Close session actions"
+          className="scoring-sheet-theme"
+        >
+          <div className="scoring-fields">
+            <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => navigate(`/sessions/${actionSession.id}?edit=1`)}>
+              <span className="scoring-row-copy">Edit session</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => handleShare(actionSession)}>
+              <Icon name="share" /><span className="scoring-row-copy">Share session</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDelete(true)}>
+              <Icon name="trash" /><span className="scoring-row-copy">Delete session</span><Icon name="chevron-right" />
+            </button>
+          </div>
+          {shareError && <p className="scoring-error" role="alert">The share link could not be copied. Open the session and copy its share-page address instead.</p>}
+          {confirmDelete && (
+            <div role="alert">
+              <p className="scoring-subtitle">Delete this session and every game in it? This cannot be undone.</p>
+              {deleteSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={() => setConfirmDelete(false)}>Keep session</button>
+                <button type="button" className="scoring-button danger" disabled={deleteSession.isPending} onClick={() => deleteSession.mutate(actionSession.id)}>
+                  {deleteSession.isPending ? 'Deleting…' : 'Delete session'}
+                </button>
               </div>
-            )}
-            {!confirmDelete && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionSession(null)}>Done</button>}
-          </section>
-        </div>
+            </div>
+          )}
+          {!confirmDelete && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionSession(null)}>Done</button>}
+        </Sheet>
       )}
-    </main>
+    </div>
   )
 }

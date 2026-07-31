@@ -27,6 +27,8 @@ export type IconName =
   | 'edit'
   | 'trash'
   | 'search'
+  | 'download'
+  | 'undo'
   | 'warning'
   | 'error'
   | 'empty'
@@ -64,6 +66,8 @@ const paths: Record<IconName, ReactNode> = {
   edit: <><path d="m14 5 5 5L9 20l-6 1 1-6L14 5Z"/><path d="m12 7 5 5"/></>,
   trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
   search: <><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></>,
+  download: <><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></>,
+  undo: <><path d="m9 7-4 4 4 4"/><path d="M5 11h8a6 6 0 0 1 6 6"/></>,
   warning: <><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17h.01"/></>,
   error: <><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></>,
   empty: <><path d="M4 8h16v11H4zM7 8l2-4h6l2 4"/><path d="M9 13h6"/></>,

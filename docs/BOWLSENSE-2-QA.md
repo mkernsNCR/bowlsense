@@ -13,9 +13,9 @@ In progress. The final browser matrix completed 106 route/viewport checks with n
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Frontend lint | Pass | `npm run lint` |
-| Scoring regressions | Pass | `npm test`: 10 Node tests plus six detailed physical-pin scenarios |
+| Frontend regressions | Pass | `npm test`: 29 declared Node tests, six detailed physical-pin scenarios, and eight rendered Today behavior tests |
 | Production build | Pass | `npm run build`; only Vite's non-blocking 500 kB chunk advisory remains |
-| Backend type-check and auth | Pass | `npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; `npm test` verifies trusted-proxy authorization fails closed for missing, empty, and rejected email allowlists and accepts only an explicitly allowed normalized email. |
+| Backend type-check and auth | Pass | `npx tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; `npm test` verifies trusted-proxy authorization fails closed for missing, empty, and rejected email allowlists and accepts only an explicitly allowed normalized email. |
 | Service-worker syntax | Pass | `node --check public/sw.js` |
 | Patch integrity | Pass | `git diff --check` |
 | Backend runtime | Pass | `npm start` launches `tsx src/server.ts` on port 3003; `/health` returns `{ status: "ok", service: "bowlsense-api" }` |

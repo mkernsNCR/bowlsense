@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { emailIsExplicitlyAllowed } from '../../shared/email-allowlist.ts';
 
 export function secretsMatch(candidate: string, expected: string) {
   const candidateBuffer = Buffer.from(candidate);
@@ -21,15 +22,5 @@ export function trustedProxyEmailIsAllowed({
 }: TrustedProxyAuthorization) {
   if (!configuredProxySecret || !secretsMatch(suppliedProxySecret, configuredProxySecret)) return false;
 
-  const email = authenticatedEmail.trim().toLowerCase();
-  if (!email) return false;
-
-  const allowedEmails = new Set(
-    (configuredAllowedEmails || '')
-      .split(',')
-      .map((allowedEmail) => allowedEmail.trim().toLowerCase())
-      .filter(Boolean),
-  );
-
-  return allowedEmails.size > 0 && allowedEmails.has(email);
+  return emailIsExplicitlyAllowed(authenticatedEmail, configuredAllowedEmails);
 }

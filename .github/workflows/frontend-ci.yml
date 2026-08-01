@@ -68,7 +68,7 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Type-check native backend
-        run: npx --no-install tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts
+        run: npx --no-install tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts
 
       - name: Test native backend authorization
         run: npm test

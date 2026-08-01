@@ -1,4 +1,5 @@
 import { schemaStatements } from "../db/schema";
+import { emailIsExplicitlyAllowed } from "../shared/email-allowlist";
 
 interface D1Result<T = Record<string, unknown>> {
   results?: T[];
@@ -81,13 +82,10 @@ function isPublicApiRequest(method: string, path: string): boolean {
 }
 
 function isAuthorizedRequest(request: Request, env: Env): boolean {
-  const email = (request.headers.get("oai-authenticated-user-email") || "").trim().toLowerCase();
-  if (!email) return false;
-  const allowed = (env.BOWLSENSE_ALLOWED_EMAILS || "")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-  return allowed.length > 0 && allowed.includes(email);
+  return emailIsExplicitlyAllowed(
+    request.headers.get("oai-authenticated-user-email") || "",
+    env.BOWLSENSE_ALLOWED_EMAILS,
+  );
 }
 
 function publicProfileName(env: Env): string | null {

@@ -24,7 +24,7 @@ export default function QuickAdd() {
 
       {savedGame && (
         <SavedGameConfirmation
-          game={savedGame}
+          gameId={savedGame.id}
           headingLevel="h1"
           onStartAnother={() => {
             savedGame.startAnother()

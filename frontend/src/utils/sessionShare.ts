@@ -29,13 +29,15 @@ export async function downloadSessionCard(sessionId: number, filename: string): 
   URL.revokeObjectURL(url)
 }
 
+export type NativeShareOutcome = 'shared' | 'cancelled' | 'unsupported'
+
 export async function nativeShareSession(opts: {
   sessionId: number
   filename: string
   title: string
   text: string
-}): Promise<boolean> {
-  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return false
+}): Promise<NativeShareOutcome> {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return 'unsupported'
 
   const url = getSessionShareUrl(opts.sessionId)
 
@@ -48,7 +50,7 @@ export async function nativeShareSession(opts: {
         url,
         files: [file],
       })
-      return true
+      return 'shared'
     }
 
     await navigator.share({
@@ -56,8 +58,9 @@ export async function nativeShareSession(opts: {
       text: `${opts.text} ${url}`,
       url,
     })
-    return true
-  } catch {
-    return false
+    return 'shared'
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled'
+    return 'unsupported'
   }
 }

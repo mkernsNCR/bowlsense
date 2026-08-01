@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
+import { createSessionRequest } from '../api/bowling'
 import { useSettings } from '../hooks/useSettings'
 import { Icon } from '../design'
 import { localDateValue } from '../features/scoring/date'
@@ -12,10 +13,6 @@ interface SessionDraft {
   location: string
   lanes: string
   notes: string
-}
-
-interface CreatedSession {
-  id: number
 }
 
 export default function NewSession() {
@@ -32,15 +29,7 @@ export default function NewSession() {
   })
 
   const createSession = useMutation({
-    mutationFn: async (draft: SessionDraft) => {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      if (!response.ok) throw new Error('The session could not be created.')
-      return response.json() as Promise<CreatedSession>
-    },
+    mutationFn: createSessionRequest,
     onSuccess: (session) => {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
       navigate(`/sessions/${session.id}?start=1`)
@@ -49,6 +38,15 @@ export default function NewSession() {
 
   const updateField = (field: keyof SessionDraft, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const submitSession = () => {
+    createSession.mutate({
+      ...form,
+      location: form.location.trim(),
+      lanes: form.lanes.trim(),
+      notes: form.notes.trim(),
+    })
   }
 
   return (
@@ -70,6 +68,10 @@ export default function NewSession() {
         description="Confirm the essentials. You can add conditions if you need them."
         onClose={() => navigate('/sessions')}
       >
+        <form onSubmit={(event) => {
+          event.preventDefault()
+          submitSession()
+        }}>
         <section className="scoring-group" aria-label="Session setup">
           <div className="scoring-field">
             <label htmlFor="session-date">Date</label>
@@ -118,13 +120,13 @@ export default function NewSession() {
         )}
 
         <button
-          type="button"
+          type="submit"
           className="scoring-button primary wide"
           disabled={!form.date || !form.location.trim() || createSession.isPending}
-          onClick={() => createSession.mutate({ ...form, location: form.location.trim() })}
         >
           {createSession.isPending ? 'Starting…' : 'Start bowling'}
         </button>
+        </form>
       </ScoringSheet>
     </div>
   )

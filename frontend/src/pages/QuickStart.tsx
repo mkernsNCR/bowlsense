@@ -31,7 +31,7 @@ export default function QuickStart() {
 
       {savedGame && (
         <SavedGameConfirmation
-          game={savedGame}
+          gameId={savedGame.id}
           headingLevel="h2"
           onStartAnother={() => {
             savedGame.startAnother()

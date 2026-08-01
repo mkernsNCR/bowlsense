@@ -104,6 +104,7 @@ function CompletionSheetBody({
   if (saveStatus === 'saved') {
     return (
       <div className="scoring-status" role="status">
+        <span className="bs-visually-hidden">Game saved.</span>
         <div className="scoring-save-check"><Icon name="check" size={34} /></div>
         <button type="button" className="scoring-button primary" onClick={onDone}>Done</button>
       </div>
@@ -145,7 +146,9 @@ export default function BowlingScorer({
   const [state, setState] = useState<GameState>(restoredGame)
   const [reviewingSavedGame, setReviewingSavedGame] = useState(() => Boolean(initialFrameData && restoredGame.isComplete))
   const [selectedKnocked, setSelectedKnocked] = useState<number[]>([])
-  const [activeView, setActiveView] = useState<'pins' | 'scores'>('pins')
+  const [activeView, setActiveView] = useState<'pins' | 'scores'>(() => (
+    initialFrameData && restoredGame.isComplete ? 'scores' : 'pins'
+  ))
   const [selectedBallId, setSelectedBallId] = useState(defaultBallId ?? '')
   const [editCandidate, setEditCandidate] = useState<number | null>(null)
   const [editSnapshot, setEditSnapshot] = useState<GameState | null>(null)
@@ -471,7 +474,7 @@ export default function BowlingScorer({
           description={initialFrameData
             ? 'The saved game stays unchanged.'
             : `All ${Math.max(state.rolls.length, editSnapshot?.rolls.length ?? 0)} recorded ${Math.max(state.rolls.length, editSnapshot?.rolls.length ?? 0) === 1 ? 'roll' : 'rolls'} will be lost.`}
-          closeLabel="Keep scoring"
+          closeLabel="Close discard confirmation"
           className="scoring-sheet-theme"
         >
           <div className="scoring-sheet-actions">

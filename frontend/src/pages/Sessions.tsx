@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { copyText } from '../features/scoring/copyText'
+import { formatSessionDate } from '../features/scoring/date'
 import { Icon, Sheet } from '../design'
 import { getSessionShareUrl } from '../utils/sessionShare'
 import '../features/scoring/scoring.css'
@@ -29,12 +30,8 @@ type SessionSort = 'date' | 'score'
 
 const PAGE_SIZE = 20
 
-function sessionDate(value: string) {
-  return new Date(`${value}T12:00:00`)
-}
-
 function monthLabel(value: string) {
-  return sessionDate(value).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  return formatSessionDate(value, { month: 'long', year: 'numeric' })
 }
 
 function getSessionCenterName(session: { location: string | null }) {
@@ -188,14 +185,13 @@ export default function Sessions() {
           <h2 className="scoring-section-title" id={`month-${month.replace(/\W+/g, '-').toLowerCase()}`}>{month}</h2>
           <div className="scoring-group">
             {monthSessions.map((session) => {
-              const date = sessionDate(session.date)
               const centerName = getSessionCenterName(session)
               return (
                 <div className="scoring-row" key={session.id}>
                   <Link to={`/sessions/${session.id}`} className="scoring-row-main">
                     <time className="scoring-date" dateTime={session.date}>
-                      <span className="scoring-date-month">{date.toLocaleDateString(undefined, { month: 'short' })}</span>
-                      <span className="scoring-date-day">{date.getDate()}</span>
+                      <span className="scoring-date-month">{formatSessionDate(session.date, { month: 'short' })}</span>
+                      <span className="scoring-date-day">{formatSessionDate(session.date, { day: 'numeric' })}</span>
                     </time>
                     <div className="scoring-row-copy">
                       <p className="scoring-row-title">{centerName}</p>

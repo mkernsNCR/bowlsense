@@ -22,24 +22,31 @@ afterEach(() => {
 })
 
 describe('copyText', () => {
-  it('falls back after Clipboard API rejection and cleans up the focused field', async () => {
+  it('falls back after Clipboard API rejection, positions the field, and restores focus', async () => {
     const writeText = vi.fn().mockRejectedValue(new Error('Permission denied'))
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true })
-    const focus = vi.spyOn(HTMLTextAreaElement.prototype, 'focus')
+    const previous = document.createElement('button')
+    document.body.appendChild(previous)
+    previous.focus()
     const select = vi.spyOn(HTMLTextAreaElement.prototype, 'select')
     const setSelectionRange = vi.spyOn(HTMLTextAreaElement.prototype, 'setSelectionRange')
-    const execCommand = vi.fn(() => true)
+    const execCommand = vi.fn(() => {
+      const field = document.querySelector('textarea')
+      expect(field?.style.top).toBe('0px')
+      expect(field?.style.left).toBe('0px')
+      return true
+    })
     Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand })
 
     await copyText('BowlSense score')
 
     expect(writeText).toHaveBeenCalledWith('BowlSense score')
-    expect(focus).toHaveBeenCalledOnce()
     expect(select).toHaveBeenCalledOnce()
     expect(setSelectionRange).toHaveBeenCalledWith(0, 'BowlSense score'.length)
     expect(execCommand).toHaveBeenCalledWith('copy')
     expect(document.querySelector('textarea')).toBeNull()
+    expect(document.activeElement).toBe(previous)
   })
 
   it('removes the fallback field when copying fails', async () => {
@@ -47,7 +54,12 @@ describe('copyText', () => {
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false })
     Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
 
+    const previous = document.createElement('button')
+    document.body.appendChild(previous)
+    previous.focus()
+
     await expect(copyText('Unavailable')).rejects.toThrow('Clipboard is unavailable')
     expect(document.querySelector('textarea')).toBeNull()
+    expect(document.activeElement).toBe(previous)
   })
 })

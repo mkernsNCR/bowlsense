@@ -2,17 +2,13 @@ import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
-import { fetchBalls, fetchRecentSessions, type Ball, type Session } from '../api/bowling'
+import { createGameRequest, createSessionRequest, fetchBalls, fetchRecentSessions, type Ball, type Session } from '../api/bowling'
 import { Icon } from '../design'
 import { localDateValue } from '../features/scoring/date'
 import '../features/scoring/scoring.css'
 
 interface QuickAddGameProps {
   onDone: (gameId: number, startAnother: () => void) => void
-}
-
-interface CreatedRecord {
-  id: number
 }
 
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
@@ -38,27 +34,11 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   })
 
   const createSession = useMutation({
-    mutationFn: async (payload: { date: string; location: string; lanes: string }) => {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) throw new Error('Session could not be created.')
-      return response.json() as Promise<CreatedRecord>
-    },
+    mutationFn: createSessionRequest,
   })
 
   const createGame = useMutation({
-    mutationFn: async (payload: SavedBowlingGame & { sessionId: number }) => {
-      const response = await fetch('/api/games', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) throw new Error('Game could not be saved.')
-      return response.json() as Promise<CreatedRecord>
-    },
+    mutationFn: createGameRequest,
   })
 
   const recentLocation = sessionsQuery.data?.[0]?.location
@@ -124,14 +104,12 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
         </button>
       </div>
 
-      {showDetails && (
-        <section id={detailsId} className="scoring-group">
-          <div className="scoring-field">
-            <label htmlFor="quick-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
-            <input id="quick-lanes" type="text" disabled={sessionId !== null} value={lanes} onChange={(event) => setLanes(event.target.value)} placeholder="5–6" />
-          </div>
-        </section>
-      )}
+      <section id={detailsId} className="scoring-group" hidden={!showDetails}>
+        <div className="scoring-field">
+          <label htmlFor="quick-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
+          <input id="quick-lanes" type="text" disabled={sessionId !== null} value={lanes} onChange={(event) => setLanes(event.target.value)} placeholder="5–6" />
+        </div>
+      </section>
 
       {(sessionsQuery.isError || ballsQuery.isError) && <p className="scoring-error" role="alert">Some saved details could not be loaded. You can still start scoring.</p>}
 

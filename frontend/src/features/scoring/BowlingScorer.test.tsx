@@ -76,6 +76,29 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.queryByRole('button', { name: 'Confirm retake' })).toBeNull()
   })
 
+  it('opens a completed saved game on score details', () => {
+    const initialFrameData = JSON.stringify({
+      pinSelections: Array.from({ length: 20 }, () => [] as number[]),
+    })
+
+    renderScorer(initialFrameData)
+
+    expect(screen.getByRole('button', { name: 'Score details' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Edit from frame 1' })).toBeTruthy()
+  })
+
+  it('announces successful saves with text in the status region', async () => {
+    const initialFrameData = JSON.stringify({
+      pinSelections: Array.from({ length: 19 }, () => [] as number[]),
+    })
+
+    renderScorer(initialFrameData)
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save game' }))
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Game saved.'))
+  })
+
   it('recalculates the saved split count after editing a completed game', async () => {
     const onSave = vi.fn()
     const initialFrameData = JSON.stringify({
@@ -132,8 +155,9 @@ describe('BowlingScorer completion behavior', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close scorer' }))
 
     expect(screen.getByText('Discard this game?')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Close discard confirmation' })).toBeTruthy()
     expect(onCancel).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByText('Keep scoring', { selector: 'button.scoring-button' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Keep scoring' }))
     expect(screen.queryByText('Discard this game?')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Close scorer' }))

@@ -6,6 +6,7 @@ import QuickAddGame from '../../components/QuickAddGame'
 import NewSession from '../../pages/NewSession'
 import QuickAdd from '../../pages/QuickAdd'
 import QuickStart from '../../pages/QuickStart'
+import { createGameRequest, createSessionRequest } from '../../api/bowling'
 import { readableDate } from './date'
 
 vi.mock('../../components/BowlingScorer', () => ({
@@ -47,12 +48,20 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-function stubQuickFlowFetch() {
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
+}
+
+function stubQuickFlowFetch({ gameResponse }: { gameResponse?: Promise<Response> } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     const method = init?.method ?? 'GET'
     if (method === 'POST' && path === '/api/sessions') return Promise.resolve(jsonResponse({ id: 42 }))
-    if (method === 'POST' && path === '/api/games') return Promise.resolve(jsonResponse({ id: 99 }))
+    if (method === 'POST' && path === '/api/games') return gameResponse ?? Promise.resolve(jsonResponse({ id: 99 }))
     if (path.startsWith('/api/sessions?limit=') && path.endsWith('&offset=0')) {
       return Promise.resolve(jsonResponse([{
         id: 7,
@@ -109,19 +118,37 @@ describe('quick scoring flows', () => {
   })
 
   it('reports completion without scheduling a second save confirmation', async () => {
-    stubQuickFlowFetch()
+    const pendingGame = deferred<Response>()
+    const fetchMock = stubQuickFlowFetch({ gameResponse: pendingGame.promise })
     const onDone = vi.fn()
     renderWithClient(<QuickAddGame onDone={onDone} />)
-    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
 
     fireEvent.click(screen.getByRole('button', { name: 'Start bowling' }))
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save test game' }))
-      for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
-    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save test game' }))
 
-    expect(onDone).toHaveBeenCalledOnce()
-    expect(setTimeoutSpy.mock.calls.some(([, delay]) => typeof delay === 'number' && delay > 0)).toBe(false)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/games', expect.anything()))
+    expect(onDone).not.toHaveBeenCalled()
+
+    pendingGame.resolve(jsonResponse({ id: 99 }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce())
+  })
+
+  it('keeps create request failures specific to their operation', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({}, 500))))
+
+    await expect(createSessionRequest({ date: '2026-08-01', location: 'Home Lanes', lanes: '' }))
+      .rejects.toThrow('Session could not be created.')
+    await expect(createGameRequest({
+      sessionId: 42,
+      gameNumber: 1,
+      score: 100,
+      strikes: 1,
+      spares: 2,
+      splits: 0,
+      ballId: null,
+      frameData: '{}',
+    })).rejects.toThrow('Game could not be saved.')
   })
 
   it('shows one parent confirmation and clears it when scoring restarts', async () => {
@@ -158,7 +185,9 @@ describe('quick scoring flows', () => {
   })
 
   it('navigates after session creation without waiting for query refetches', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ id: 42 }))))
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValue(jsonResponse({ id: 42 }))
+    vi.stubGlobal('fetch', fetchMock)
     const { queryClient } = renderWithClient(
       <Routes>
         <Route path="/sessions/new" element={<NewSession />} />
@@ -169,8 +198,17 @@ describe('quick scoring flows', () => {
     vi.spyOn(queryClient, 'invalidateQueries').mockReturnValue(new Promise(() => undefined))
 
     expect(screen.getByLabelText(/Lanes/i).getAttribute('inputmode')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Start bowling' }))
+    fireEvent.change(screen.getByLabelText('Center'), { target: { value: '  Bowl Center  ' } })
+    fireEvent.change(screen.getByLabelText(/Lanes/i), { target: { value: '  5–6  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add details' }))
+    fireEvent.change(screen.getByLabelText('Notes or conditions'), { target: { value: '  Fresh oil  ' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Start bowling' }).closest('form')!)
 
     expect(await screen.findByText('Session target')).toBeTruthy()
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      location: 'Bowl Center',
+      lanes: '5–6',
+      notes: 'Fresh oil',
+    })
   })
 })

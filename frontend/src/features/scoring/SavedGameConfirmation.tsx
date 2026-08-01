@@ -7,12 +7,12 @@ export interface SavedQuickGame {
 }
 
 interface SavedGameConfirmationProps {
-  game: SavedQuickGame
+  gameId: number
   headingLevel: 'h1' | 'h2'
   onStartAnother: () => void
 }
 
-export default function SavedGameConfirmation({ game, headingLevel, onStartAnother }: SavedGameConfirmationProps) {
+export default function SavedGameConfirmation({ gameId, headingLevel, onStartAnother }: SavedGameConfirmationProps) {
   const Heading = headingLevel
 
   return (
@@ -24,7 +24,7 @@ export default function SavedGameConfirmation({ game, headingLevel, onStartAnoth
         <button type="button" className="scoring-button primary" onClick={onStartAnother}>
           <Icon name="plus" /> Add another
         </button>
-        <Link to={`/score/${game.id}`} className="scoring-button secondary">Open score</Link>
+        <Link to={`/score/${gameId}`} className="scoring-button secondary">Open score</Link>
         <Link to="/sessions" className="scoring-button secondary">View sessions</Link>
       </div>
     </div>

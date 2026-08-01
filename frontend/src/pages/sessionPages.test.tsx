@@ -7,11 +7,13 @@ import SessionDetail from './SessionDetail'
 import Sessions from './Sessions'
 
 vi.mock('../hooks/useSettings', () => ({
-  useSettings: () => ({ settings: { defaultBallId: '' } }),
+  useSettings: () => ({ settings: { defaultBallId: '42' } }),
 }))
 
 vi.mock('../components/BowlingScorer', () => ({
-  default: ({ gameNumber }: { gameNumber: number }) => <div data-testid="bowling-scorer">Game {gameNumber}</div>,
+  default: ({ gameNumber, defaultBallId }: { gameNumber: number; defaultBallId?: string }) => (
+    <div data-testid="bowling-scorer" data-default-ball={defaultBallId ?? 'none'}>Game {gameNumber}</div>
+  ),
 }))
 
 afterEach(() => {
@@ -144,6 +146,46 @@ describe('session detail review fixes', () => {
     await waitFor(() => expect(detailRequests).toBeGreaterThan(1))
     expect(screen.queryByRole('button', { name: 'Close game actions' })).toBeNull()
   })
+
+  it('builds stored ribbons from physical frame data instead of stale serialized frames', async () => {
+    const staleFrames = Array.from({ length: 10 }, () => ({
+      ball1: 1,
+      ball2: 1,
+      ball3: null,
+      score: 2,
+      cumulative: 2,
+      isStrike: false,
+      isSpare: false,
+    }))
+    const ribbonDetail = {
+      ...detail,
+      games: [{
+        ...detail.games[0],
+        frameData: JSON.stringify({ frames: staleFrames, pinSelections: [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]] }),
+      }],
+    }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(
+      String(input) === '/api/balls' ? jsonResponse([]) : jsonResponse(ribbonDetail),
+    )))
+
+    renderSessionDetail('/sessions/7')
+
+    expect(await screen.findByLabelText('Frame 1, strike, Rolls X')).toBeTruthy()
+    expect(screen.queryByLabelText('Frame 1, open, Rolls 1, 1, cumulative score 2')).toBeNull()
+  })
+
+  it('does not apply the settings default ball when editing a game with no stored ball', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(
+      String(input) === '/api/balls' ? jsonResponse([]) : jsonResponse(detail),
+    )))
+    const user = userEvent.setup()
+
+    renderSessionDetail('/sessions/7')
+    await user.click(await screen.findByRole('button', { name: 'Actions for game 1' }))
+    await user.click(screen.getByRole('button', { name: 'Edit score' }))
+
+    expect((screen.getByTestId('bowling-scorer') as HTMLElement).dataset.defaultBall).toBe('none')
+  })
 })
 
 describe('session list review fixes', () => {
@@ -193,12 +235,16 @@ describe('session list review fixes', () => {
   })
 
   it('returns to the preceding page after deleting the only trailing session', async () => {
+    let deleted = false
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
-      if (init?.method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }))
+      if (init?.method === 'DELETE') {
+        deleted = true
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
       const page = new URL(path, 'https://bowlsense.test').searchParams.get('page') ?? '1'
       const session = { id: Number(page), date: '2026-07-20', location: `Page ${page}`, lanes: '', notes: '', gameCount: 1, avgScore: 200, highScore: 200, perfectGames: 0 }
-      return Promise.resolve(jsonResponse({ sessions: [session], total: 41, limit: 20, offset: (Number(page) - 1) * 20 }))
+      return Promise.resolve(jsonResponse({ sessions: [session], total: deleted ? 40 : 41, limit: 20, offset: (Number(page) - 1) * 20 }))
     })
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
@@ -219,5 +265,6 @@ describe('session list review fixes', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => (
       init?.method !== 'DELETE' && new URL(String(input), 'https://bowlsense.test').searchParams.get('page') === '2'
     ))).toBe(true))
+    expect(await screen.findByText('Page 2 of 2')).toBeTruthy()
   })
 })

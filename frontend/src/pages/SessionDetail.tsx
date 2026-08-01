@@ -6,9 +6,10 @@ import BowlingScorer, { type SavedBowlingGame } from '../components/BowlingScore
 import ShareCard from '../components/ShareCard'
 import { FrameRibbon, Icon, Sheet } from '../design'
 import { copyText } from '../features/scoring/copyText'
+import { formatSessionDate } from '../features/scoring/date'
 import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
 import type { ScoringBall } from '../features/scoring/types'
-import { type Frame, gameFromFrameData } from '../utils/bowlingScore'
+import { gameFromFrameData } from '../utils/bowlingScore'
 import { downloadSessionCard, getSessionShareUrl, nativeShareSession } from '../utils/sessionShare'
 import { getGameShareUrl, shareOnX } from '../utils/gameShare'
 import '../features/scoring/scoring.css'
@@ -42,40 +43,6 @@ interface SessionForm {
 
 interface CreatedGame {
   id: number
-}
-
-function frameValue(value: unknown): number | null {
-  return typeof value === 'number' ? value : null
-}
-
-function storedFrames(frameData?: string | null): Frame[] {
-  if (!frameData) return gameFromFrameData().frames
-  try {
-    const parsed: unknown = JSON.parse(frameData)
-    if (!parsed || typeof parsed !== 'object') return gameFromFrameData(frameData).frames
-    const rawFrames = (parsed as { frames?: unknown }).frames
-    if (!Array.isArray(rawFrames) || rawFrames.length !== 10) return gameFromFrameData(frameData).frames
-    return rawFrames.map((raw) => {
-      const frame = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
-      return {
-        ball1: frameValue(frame.ball1),
-        ball2: frameValue(frame.ball2),
-        ball3: frameValue(frame.ball3),
-        score: frameValue(frame.score),
-        cumulative: frameValue(frame.cumulative),
-        isStrike: frame.isStrike === true,
-        isSpare: frame.isSpare === true,
-      }
-    })
-  } catch {
-    return gameFromFrameData(frameData).frames
-  }
-}
-
-function displayDate(value: string) {
-  return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
-    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-  })
 }
 
 function getNextGameNumber(games: ReadonlyArray<{ gameNumber: number }>) {
@@ -235,13 +202,13 @@ export default function SessionDetail() {
     if (!session) return
     setShareStatus('busy')
     try {
-      const shared = await nativeShareSession({
+      const outcome = await nativeShareSession({
         sessionId,
         filename: `bowlsense-session-${sessionId}.png`,
         title: 'BowlSense session',
         text: `${session.location?.trim() || 'Center not named'} · ${session.date}`,
       })
-      if (!shared) {
+      if (outcome === 'unsupported') {
         await copyText(getSessionShareUrl(sessionId))
         setShareStatus('copied')
         window.setTimeout(() => setShareStatus('idle'), 1400)
@@ -312,7 +279,7 @@ export default function SessionDetail() {
     <div className="scoring-flow scoring-page">
       <div className="scoring-page-header">
         <div>
-          <p className="scoring-eyebrow">{displayDate(session.date)}</p>
+          <p className="scoring-eyebrow">{formatSessionDate(session.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
           <h1 className="scoring-large-title">{session.location || 'Session'}</h1>
           <p className="scoring-subtitle">
             {session.lanes ? `Lanes ${session.lanes}` : 'Lanes not recorded'}{session.notes ? ` · ${session.notes}` : ''}
@@ -351,7 +318,7 @@ export default function SessionDetail() {
                 </div>
                 <button type="button" className="scoring-row-action" onClick={() => { setActionGame(game); setConfirmDeleteGame(false) }} aria-label={`Actions for game ${game.gameNumber}`}><Icon name="more" /></button>
                 <div style={{ flexBasis: '100%', minWidth: 0 }}>
-                  <FrameRibbon frames={toFrameRibbonFrames(storedFrames(game.frameData))} label={`Game ${game.gameNumber}, score ${game.score}`} compact />
+                  <FrameRibbon frames={toFrameRibbonFrames(gameFromFrameData(game.frameData).frames)} label={`Game ${game.gameNumber}, score ${game.score}`} compact />
                 </div>
               </article>
             )
@@ -376,7 +343,7 @@ export default function SessionDetail() {
             key={editingGame.id}
             gameNumber={editingGame.gameNumber}
             balls={balls}
-            defaultBallId={editingGame.ballId ? String(editingGame.ballId) : settings.defaultBallId}
+            defaultBallId={editingGame.ballId == null ? undefined : String(editingGame.ballId)}
             initialFrameData={editingGame.frameData}
             initialSplits={editingGame.splits}
             onSave={async (game) => {

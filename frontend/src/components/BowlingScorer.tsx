@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   gameFromFrameData,
   type GameState,
@@ -46,6 +46,67 @@ function activeFrameLabel(state: GameState) {
   return `Frame ${state.currentFrame + 1} · Ball ${state.currentBall + 1}`
 }
 
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+interface CompletionSheetBodyProps {
+  saveStatus: SaveStatus
+  isSaving: boolean
+  canRestore: boolean
+  confirmRetake: boolean
+  perfectGameElements?: ReactNode
+  saveButtonText: string
+  retakeHint: string
+  onDone: () => void
+  onRestore: () => void
+  onUndo: () => void
+  onRetake: () => void
+  onSave: () => void | Promise<void>
+}
+
+function CompletionSheetBody({
+  saveStatus,
+  isSaving,
+  canRestore,
+  confirmRetake,
+  perfectGameElements,
+  saveButtonText,
+  retakeHint,
+  onDone,
+  onRestore,
+  onUndo,
+  onRetake,
+  onSave,
+}: CompletionSheetBodyProps) {
+  if (saveStatus === 'saved') {
+    return (
+      <div className="scoring-status" role="status">
+        <div className="scoring-save-check"><Icon name="check" size={34} /></div>
+        <button type="button" className="scoring-button primary" onClick={onDone}>Done</button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {perfectGameElements}
+      {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
+      {canRestore && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={onRestore}>Restore original game</button>}
+      <div className="scoring-sheet-actions">
+        <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={onUndo}>
+          <Icon name="undo" size={18} /> Undo last roll
+        </button>
+        <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={onRetake}>
+          {confirmRetake ? 'Confirm retake' : 'Retake'}
+        </button>
+        <button type="button" className="scoring-button primary" autoFocus disabled={isSaving} onClick={onSave}>
+          {isSaving ? 'Saving…' : saveButtonText}
+        </button>
+      </div>
+      {confirmRetake && <p className="scoring-subtitle">{retakeHint}</p>}
+    </>
+  )
+}
+
 export default function BowlingScorer({
   gameNumber,
   balls,
@@ -55,8 +116,9 @@ export default function BowlingScorer({
   onSave,
   onCancel,
 }: BowlingScorerProps) {
-  const [state, setState] = useState<GameState>(() => gameFromFrameData(initialFrameData))
-  const [reviewingSavedGame, setReviewingSavedGame] = useState(() => Boolean(initialFrameData && gameFromFrameData(initialFrameData).isComplete))
+  const restoredGame = useMemo(() => gameFromFrameData(initialFrameData), [initialFrameData])
+  const [state, setState] = useState<GameState>(restoredGame)
+  const [reviewingSavedGame, setReviewingSavedGame] = useState(() => Boolean(initialFrameData && restoredGame.isComplete))
   const [selectedKnocked, setSelectedKnocked] = useState<number[]>([])
   const [activeView, setActiveView] = useState<'pins' | 'scores'>('pins')
   const [selectedBallId, setSelectedBallId] = useState(defaultBallId ?? '')
@@ -65,7 +127,7 @@ export default function BowlingScorer({
   const [editingFromFrame, setEditingFromFrame] = useState<number | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [confirmRetake, setConfirmRetake] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const isSaving = saving || saveStatus === 'saving'
 
   useEffect(() => {
@@ -113,6 +175,7 @@ export default function BowlingScorer({
     setReviewingSavedGame(false)
     setState((current) => knockPins(current, pins))
     setSelectedKnocked([])
+    setConfirmRetake(false)
     setSaveStatus('idle')
   }
 
@@ -141,6 +204,7 @@ export default function BowlingScorer({
     setReviewingSavedGame(false)
     setState((current) => undoLastRoll(current))
     setSelectedKnocked([])
+    setConfirmRetake(false)
     setSaveStatus('idle')
   }
 
@@ -187,7 +251,11 @@ export default function BowlingScorer({
   }
 
   const allStanding = state.pinsStanding.length === 10
-  const completeRackLabel = allStanding ? 'Strike' : 'Spare'
+  const completeRackLabel = allStanding
+    ? 'Strike'
+    : state.currentFrame === 9 && state.frames[9]?.isStrike
+      ? 'Clear rack'
+      : 'Spare'
   const selectedCount = selectedKnocked.length
 
   return (
@@ -335,29 +403,19 @@ export default function BowlingScorer({
           closeLabel={saveStatus === 'saved' ? 'Done' : 'Close completed game'}
           className="scoring-sheet-theme"
         >
-          {saveStatus === 'saved' ? (
-            <div className="scoring-status" role="status">
-              <div className="scoring-save-check"><Icon name="check" size={34} /></div>
-              <button type="button" className="scoring-button primary" onClick={onCancel}>Done</button>
-            </div>
-          ) : (
-            <>
-              {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
-              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={restoreBeforeEdit}>Restore original game</button>}
-              <div className="scoring-sheet-actions">
-                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleUndo}>
-                  <Icon name="undo" size={18} /> Undo last roll
-                </button>
-                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleRetake}>
-                  {confirmRetake ? 'Confirm retake' : 'Retake'}
-                </button>
-                <button type="button" className="scoring-button primary" autoFocus disabled={isSaving} onClick={handleSave}>
-                  {isSaving ? 'Saving…' : 'Save game'}
-                </button>
-              </div>
-              {confirmRetake && <p className="scoring-subtitle">Retaking clears every recorded roll. Tap “Confirm retake” to continue.</p>}
-            </>
-          )}
+          <CompletionSheetBody
+            saveStatus={saveStatus}
+            isSaving={isSaving}
+            canRestore={Boolean(editSnapshot)}
+            confirmRetake={confirmRetake}
+            saveButtonText="Save game"
+            retakeHint="Retaking clears every recorded roll. Tap “Confirm retake” to continue."
+            onDone={onCancel}
+            onRestore={restoreBeforeEdit}
+            onUndo={handleUndo}
+            onRetake={handleRetake}
+            onSave={handleSave}
+          />
         </Sheet>
       )}
 
@@ -409,25 +467,25 @@ export default function BowlingScorer({
           className="scoring-sheet-theme perfect-lane"
           backdropClassName="perfect-lane-backdrop"
         >
-          {saveStatus === 'saved' ? (
-            <div className="scoring-status" role="status">
-              <div className="scoring-save-check"><Icon name="check" size={34} /></div>
-              <button type="button" className="scoring-button primary" onClick={onCancel}>Done</button>
-            </div>
-          ) : (
-            <>
-              <p className="scoring-eyebrow">Twelve strikes</p>
-              <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
-              {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
-              {editSnapshot && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={restoreBeforeEdit}>Restore original game</button>}
-              <div className="scoring-sheet-actions">
-                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleUndo}><Icon name="undo" size={18} /> Undo last roll</button>
-                <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={handleRetake}>{confirmRetake ? 'Confirm retake' : 'Retake'}</button>
-                <button type="button" className="scoring-button primary" autoFocus disabled={isSaving} onClick={handleSave}>{isSaving ? 'Saving…' : 'Save 300'}</button>
-              </div>
-              {confirmRetake && <p className="scoring-subtitle">Retaking clears the perfect game. Tap “Confirm retake” to continue.</p>}
-            </>
-          )}
+          <CompletionSheetBody
+            saveStatus={saveStatus}
+            isSaving={isSaving}
+            canRestore={Boolean(editSnapshot)}
+            confirmRetake={confirmRetake}
+            perfectGameElements={(
+              <>
+                <p className="scoring-eyebrow">Twelve strikes</p>
+                <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
+              </>
+            )}
+            saveButtonText="Save 300"
+            retakeHint="Retaking clears the perfect game. Tap “Confirm retake” to continue."
+            onDone={onCancel}
+            onRestore={restoreBeforeEdit}
+            onUndo={handleUndo}
+            onRetake={handleRetake}
+            onSave={handleSave}
+          />
         </Sheet>
       )}
     </div>

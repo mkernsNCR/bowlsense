@@ -40,8 +40,8 @@ export default function NewSession() {
       if (!response.ok) throw new Error('The session could not be created.')
       return response.json() as Promise<CreatedSession>
     },
-    onSuccess: async (session) => {
-      await queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    onSuccess: (session) => {
+      void queryClient.invalidateQueries({ queryKey: ['sessions'] })
       navigate(`/sessions/${session.id}?start=1`)
     },
   })
@@ -87,7 +87,7 @@ export default function NewSession() {
           </div>
           <div className="scoring-field">
             <label htmlFor="session-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
-            <input id="session-lanes" type="text" inputMode="numeric" placeholder="5–6" value={form.lanes} onChange={(event) => updateField('lanes', event.target.value)} />
+            <input id="session-lanes" type="text" placeholder="5–6" value={form.lanes} onChange={(event) => updateField('lanes', event.target.value)} />
           </div>
         </section>
 

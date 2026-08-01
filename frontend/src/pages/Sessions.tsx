@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { copyText } from '../features/scoring/copyText'
 import { Icon, Sheet } from '../design'
+import { getSessionShareUrl } from '../utils/sessionShare'
 import '../features/scoring/scoring.css'
 
 interface Session {
@@ -24,6 +25,10 @@ interface SessionsResponse {
   offset: number
 }
 
+type SessionSort = 'date' | 'score'
+
+const PAGE_SIZE = 20
+
 function sessionDate(value: string) {
   return new Date(`${value}T12:00:00`)
 }
@@ -32,8 +37,23 @@ function monthLabel(value: string) {
   return sessionDate(value).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 }
 
-function shareUrl(id: number) {
-  return `${window.location.origin}/sessions/${id}/share`
+function getSessionCenterName(session: { location: string }) {
+  return session.location.trim() || 'Center not named'
+}
+
+function getSessionGroups<T extends { date: string }>(sessions: readonly T[], sort: SessionSort): Array<[string, T[]]> {
+  if (sort === 'score') return [['Highest scores', [...sessions]]]
+
+  const grouped = new Map<string, T[]>()
+  sessions.forEach((session) => {
+    const label = monthLabel(session.date)
+    grouped.set(label, [...(grouped.get(label) ?? []), session])
+  })
+  return [...grouped.entries()]
+}
+
+function clampSessionPage(page: number, total: number, limit = PAGE_SIZE) {
+  return Math.min(page, Math.max(1, Math.ceil(total / limit)))
 }
 
 export default function Sessions() {
@@ -41,12 +61,12 @@ export default function Sessions() {
   const navigate = useNavigate()
   const [actionSession, setActionSession] = useState<Session | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [sort, setSort] = useState<'date' | 'score'>('date')
+  const [sort, setSort] = useState<SessionSort>('date')
   const [page, setPage] = useState(1)
   const [locationQuery, setLocationQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [shareError, setShareError] = useState(false)
-  const limit = 20
+  const limit = PAGE_SIZE
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -75,14 +95,7 @@ export default function Sessions() {
   const sessions = useMemo(() => sessionsQuery.data?.sessions ?? [], [sessionsQuery.data])
   const total = sessionsQuery.data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / limit))
-  const groups = useMemo(() => {
-    const grouped = new Map<string, Session[]>()
-    sessions.forEach((session) => {
-      const label = monthLabel(session.date)
-      grouped.set(label, [...(grouped.get(label) ?? []), session])
-    })
-    return [...grouped.entries()]
-  }, [sessions])
+  const groups = useMemo(() => getSessionGroups(sessions, sort), [sessions, sort])
 
   const deleteSession = useMutation({
     mutationFn: async (id: number) => {
@@ -92,6 +105,7 @@ export default function Sessions() {
     onSuccess: async () => {
       setActionSession(null)
       setConfirmDelete(false)
+      setPage((current) => clampSessionPage(current, Math.max(0, total - 1), limit))
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['sessions'] }),
         queryClient.invalidateQueries({ queryKey: ['stats'] }),
@@ -109,11 +123,12 @@ export default function Sessions() {
   }
 
   const handleShare = async (session: Session) => {
-    const url = shareUrl(session.id)
+    const url = getSessionShareUrl(session.id)
+    const centerName = getSessionCenterName(session)
     setShareError(false)
     if (navigator.share) {
       try {
-        await navigator.share({ title: `${session.location} bowling session`, url })
+        await navigator.share({ title: `${centerName} bowling session`, url })
         setActionSession(null)
         return
       } catch (error) {
@@ -142,7 +157,7 @@ export default function Sessions() {
       <div className="scoring-toolbar">
         <label className="scoring-search">
           <Icon name="search" size={18} />
-          <span className="sr-only">Filter sessions by center</span>
+          <span className="bs-visually-hidden">Filter sessions by center</span>
           <input value={locationQuery} onChange={(event) => setLocationQuery(event.target.value)} placeholder="Search centers" />
         </label>
         <div className="scoring-segments" role="group" aria-label="Sort sessions">
@@ -174,6 +189,7 @@ export default function Sessions() {
           <div className="scoring-group">
             {monthSessions.map((session) => {
               const date = sessionDate(session.date)
+              const centerName = getSessionCenterName(session)
               return (
                 <div className="scoring-row" key={session.id}>
                   <Link to={`/sessions/${session.id}`} className="scoring-row-main">
@@ -182,7 +198,7 @@ export default function Sessions() {
                       <span className="scoring-date-day">{date.getDate()}</span>
                     </time>
                     <div className="scoring-row-copy">
-                      <p className="scoring-row-title">{session.location || 'Center not named'}</p>
+                      <p className="scoring-row-title">{centerName}</p>
                       <p className="scoring-row-meta">
                         {session.gameCount} {session.gameCount === 1 ? 'game' : 'games'}
                         {session.gameCount > 0 ? ` · ${session.avgScore} average · ${session.highScore} high` : ' · No games yet'}
@@ -191,7 +207,7 @@ export default function Sessions() {
                     </div>
                   </Link>
                   {session.perfectGames > 0 && <span className="scoring-row-value" aria-label={`${session.perfectGames} perfect games`}>300</span>}
-                  <button type="button" className="scoring-row-action" onClick={() => { setActionSession(session); setConfirmDelete(false); setShareError(false) }} aria-label={`Actions for ${session.location}`}>
+                  <button type="button" className="scoring-row-action" onClick={() => { setActionSession(session); setConfirmDelete(false); setShareError(false) }} aria-label={`Actions for ${centerName}`}>
                     <Icon name="more" />
                   </button>
                 </div>
@@ -213,7 +229,7 @@ export default function Sessions() {
         <Sheet
           open
           onClose={() => setActionSession(null)}
-          title={actionSession.location}
+          title={getSessionCenterName(actionSession)}
           description="Session actions"
           closeLabel="Close session actions"
           className="scoring-sheet-theme"

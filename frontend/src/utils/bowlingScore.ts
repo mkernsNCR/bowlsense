@@ -245,7 +245,7 @@ export function gameFromFrameData(frameData?: string | null): GameState {
     if (!parsed || typeof parsed !== 'object') return initGame()
     const saved = parsed as { pinSelections?: unknown; rolls?: unknown }
     const selections = saved.pinSelections
-    if (!Array.isArray(selections)) {
+    if (!Array.isArray(selections) || selections.length === 0) {
       if (!Array.isArray(saved.rolls)) return initGame()
       const rolls = saved.rolls.filter((roll): roll is number => typeof roll === 'number' && Number.isFinite(roll))
       return replayRollCounts(rolls)

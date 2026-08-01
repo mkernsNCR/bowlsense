@@ -9,6 +9,7 @@
   --score-gold: var(--strike-gold, #b87700);
   --score-green: var(--spare-green, #1d7e55);
   --score-line: var(--separator, var(--border, rgba(22, 24, 28, 0.12)));
+
   color: var(--score-ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   width: 100%;
@@ -142,7 +143,7 @@
 .live-summary-row.scoring-row-action { justify-content: flex-start; width: 100%; }
 .live-summary-row + .live-summary-row::before { background: var(--score-line); content: ""; height: 1px; left: 14px; position: absolute; right: 0; top: 0; }
 .live-summary-row span:first-child { color: var(--score-secondary); flex: 1; }
-.live-summary-row strong { font-family: ui-monospace, "SFMono-Regular", monospace; }
+.live-summary-row strong { font-family: ui-monospace, SFMono-Regular, monospace; }
 
 .scoring-save-check { align-items: center; animation: scoring-check-in 440ms cubic-bezier(.2,.9,.3,1.25); background: var(--score-green); border-radius: 50%; color: #fff; display: flex; height: 64px; justify-content: center; margin: 0 auto 16px; width: 64px; }
 .perfect-lane-backdrop { background: radial-gradient(circle at 50% 25%, rgba(184,119,0,.28), rgba(5,7,10,.86) 56%); }

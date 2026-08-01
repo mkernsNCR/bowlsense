@@ -42,7 +42,7 @@ function getTakeaway(stats: FullStats) {
   const baseline = stats.trend?.last20Avg ?? 0
   const difference = Math.round(recent - baseline)
 
-  if (recent > 0 && baseline > 0 && Math.abs(difference) >= 2) {
+  if (stats.overall.totalGames >= 20 && recent > 0 && baseline > 0 && Math.abs(difference) >= 2) {
     return difference > 0
       ? {
           headline: `Your last five are ${difference} pins ahead of your 20-game pace.`,
@@ -93,11 +93,9 @@ export default function Stats() {
   if (statsQuery.isLoading) {
     return (
       <InsightsWorkspace description="Turn scores and leaves into one useful next move.">
-        <section className="insights-state" aria-busy="true" aria-live="polite">
-          <span className="insights-state-mark" aria-hidden="true" />
-          <h2>Reading your scorebook</h2>
-          <p>Pulling together your scoring pace, ranges, and recent trend.</p>
-        </section>
+        <InsightState title="Reading your scorebook" status="loading">
+          Pulling together your scoring pace, ranges, and recent trend.
+        </InsightState>
       </InsightsWorkspace>
     )
   }
@@ -134,6 +132,11 @@ export default function Stats() {
   const trend = stats.trend ?? { last5Avg: 0, last10Avg: 0, last20Avg: 0 }
   const locations = stats.breakdown?.byLocation ?? []
   const months = stats.breakdown?.byMonth ?? []
+  const trendGameCount = trendQuery.data?.games.length ?? 0
+  const availableTrendWindows = TREND_WINDOWS.filter(({ size }) => size <= trendGameCount)
+  const activeTrendWindow = availableTrendWindows.some(({ size }) => size === trendWindow)
+    ? trendWindow
+    : (availableTrendWindows[availableTrendWindows.length - 1]?.size ?? 5)
 
   return (
     <InsightsWorkspace description="Turn scores and leaves into one useful next move.">
@@ -155,21 +158,21 @@ export default function Stats() {
             </div>
           </div>
         </section>
-      ) : trendQuery.data && trendQuery.data.games.length >= 3 ? (
+      ) : trendQuery.data && trendQuery.data.games.length >= 5 ? (
         <section className="insights-trend-block" aria-label="Scoring trend">
           <div className="insights-window-switch" role="group" aria-label="Rolling average window">
-            {TREND_WINDOWS.map(({ size: windowSize }) => (
+            {availableTrendWindows.map(({ size: windowSize }) => (
               <button
                 key={windowSize}
                 type="button"
-                aria-pressed={trendWindow === windowSize}
+                aria-pressed={activeTrendWindow === windowSize}
                 onClick={() => setTrendWindow(windowSize)}
               >
                 {windowSize} games
               </button>
             ))}
           </div>
-          <ScoreTrendChart data={trendQuery.data} windowSize={trendWindow} />
+          <ScoreTrendChart data={trendQuery.data} windowSize={activeTrendWindow} />
         </section>
       ) : trendQuery.isError ? (
         <section className="insights-panel" aria-live="polite">
@@ -185,8 +188,8 @@ export default function Stats() {
         <section className="insights-panel">
           <div className="insights-panel-header">
             <div>
-              <h2>Trend starts after three games</h2>
-              <p>Log {Math.max(0, 3 - (trendQuery.data?.games.length ?? 0))} more to plot a useful line.</p>
+              <h2>Trend starts after five games</h2>
+              <p>Log {Math.max(0, 5 - (trendQuery.data?.games.length ?? 0))} more to plot a complete five-game average.</p>
             </div>
           </div>
         </section>
@@ -202,9 +205,18 @@ export default function Stats() {
             </div>
           </div>
           <ol className="insights-ranked-list">
-            <li><div><strong>Last 5</strong><span>Most responsive to a recent change</span></div><b>{trend.last5Avg || '—'}</b></li>
-            <li><div><strong>Last 10</strong><span>Smooths a short hot or cold streak</span></div><b>{trend.last10Avg || '—'}</b></li>
-            <li><div><strong>Last 20</strong><span>Your established scoring pace</span></div><b>{trend.last20Avg || '—'}</b></li>
+            <li>
+              <div><strong>Last 5</strong><span>{stats.overall.totalGames >= 5 ? 'Most responsive to a recent change' : `Needs ${5 - stats.overall.totalGames} more games`}</span></div>
+              <b>{stats.overall.totalGames >= 5 ? trend.last5Avg : '—'}</b>
+            </li>
+            <li>
+              <div><strong>Last 10</strong><span>{stats.overall.totalGames >= 10 ? 'Smooths a short hot or cold streak' : `Needs ${10 - stats.overall.totalGames} more games`}</span></div>
+              <b>{stats.overall.totalGames >= 10 ? trend.last10Avg : '—'}</b>
+            </li>
+            <li>
+              <div><strong>Last 20</strong><span>{stats.overall.totalGames >= 20 ? 'Your established scoring pace' : `Needs ${20 - stats.overall.totalGames} more games`}</span></div>
+              <b>{stats.overall.totalGames >= 20 ? trend.last20Avg : '—'}</b>
+            </li>
           </ol>
         </section>
       </div>

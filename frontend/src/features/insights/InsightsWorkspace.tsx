@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import { EmptyState, Metric } from '../../design'
 import './insights.css'
 
 const sections = [
@@ -43,18 +44,20 @@ export function InsightsWorkspace({ children, description }: InsightsWorkspacePr
 interface InsightStateProps {
   action?: ReactNode
   children: ReactNode
+  status?: 'empty' | 'loading' | 'error'
   title: string
   tone?: 'default' | 'error'
 }
 
-export function InsightState({ action, children, title, tone = 'default' }: InsightStateProps) {
+export function InsightState({ action, children, status, title, tone = 'default' }: InsightStateProps) {
   return (
-    <section className={`insights-state${tone === 'error' ? ' is-error' : ''}`} aria-live="polite">
-      <span className="insights-state-mark" aria-hidden="true" />
-      <h2>{title}</h2>
-      <p>{children}</p>
-      {action}
-    </section>
+    <EmptyState
+      action={action}
+      className="insights-state"
+      description={children}
+      status={status ?? (tone === 'error' ? 'error' : 'empty')}
+      title={title}
+    />
   )
 }
 
@@ -83,11 +86,5 @@ interface MetricProps {
 }
 
 export function InsightMetric({ label, value, note }: MetricProps) {
-  return (
-    <div className="insights-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {note && <small>{note}</small>}
-    </div>
-  )
+  return <Metric className="insights-metric" detail={note} label={label} value={value} />
 }

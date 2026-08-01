@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from '../components/BowlingScorer'
-import { ActionIcon, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { Icon } from '../design'
+import { CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { formatFrameMarks } from '../features/scoring/frameMarks'
 import {
   copyTournamentShareLink,
   downloadTournamentCard,
@@ -41,6 +43,7 @@ interface Tournament {
   prizeFund: number | null
   placement: number | null
   notes: string | null
+  active: number
   createdAt?: number
   totalGames?: number
   series?: number
@@ -70,33 +73,6 @@ interface TournamentBracketStanding {
 interface TournamentBracket {
   blocks: TournamentBracketBlock[]
   standings: TournamentBracketStanding[]
-}
-
-interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
-
-function frameMarks(frameData?: string | null): string | null {
-  if (!frameData) return null
-  try {
-    const parsed = JSON.parse(frameData) as { frames?: StoredFrame[] }
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames.map((f, idx: number) => {
-      const b1 = f?.ball1, b2 = f?.ball2, b3 = f?.ball3
-      const strike = b1 === 10
-      const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
-      const mark = (v: number | null | undefined) => v == null ? '' : v === 10 ? 'X' : v === 0 ? '-' : String(v)
-      if (idx < 9) {
-        if (strike) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return `${mark(b1)}${spare ? '/' : mark(b2)}`
-      }
-      const second = b2 != null ? (b1 !== 10 && b1! + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${mark(b1)}${second}${third}`
-    }).filter(Boolean).join(' ')
-  } catch {
-    return null
-  }
 }
 
 const emptyForm = {
@@ -147,8 +123,19 @@ export default function TournamentsPage() {
 function TournamentList() {
   const { data: tournaments, isLoading, isError, refetch } = useQuery<Tournament[]>({
     queryKey: ['tournaments'],
-    queryFn: () => requestJson('/api/tournaments'),
+    queryFn: () => requestJson('/api/tournaments?includeArchived=1'),
   })
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const activeTournaments = tournaments?.filter((tournament) => tournament.active !== 0) || []
+  const upcomingTournaments = activeTournaments
+    .filter((tournament) => (tournament.endDate || tournament.date) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name))
+  const pastTournaments = activeTournaments
+    .filter((tournament) => (tournament.endDate || tournament.date) < today)
+    .sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name))
+  const archivedTournaments = (tournaments?.filter((tournament) => tournament.active === 0) || [])
+    .sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name))
 
   return (
     <div>
@@ -156,7 +143,7 @@ function TournamentList() {
         area="tournaments"
         title="Tournaments"
         detail="Events, squads, series, and finish."
-        action={<Link to="/tournaments/new" className="btn btn-primary"><ActionIcon name="add" /> New tournament</Link>}
+        action={<Link to="/tournaments/new" className="btn btn-primary"><Icon className="competition-action-icon" name="plus" /> New tournament</Link>}
       />
 
       {isLoading && <div className="muted">Loading tournaments...</div>}
@@ -168,31 +155,46 @@ function TournamentList() {
         </div>
       )}
 
-      {!isLoading && !isError && !tournaments?.length && (
+      {!isLoading && !isError && !activeTournaments.length && (
         <div className="card" style={{ textAlign: 'center' }}>
-          <div className="muted">No tournaments yet.</div>
-          <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create your first tournament</Link>
+          <div className="muted">No active tournaments.</div>
+          <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create a tournament</Link>
         </div>
       )}
 
+      <TournamentListSection id="upcoming-tournaments" title="Upcoming tournaments" tournaments={upcomingTournaments} />
+      <TournamentListSection id="past-tournaments" title="Past tournaments" tournaments={pastTournaments} />
+      <TournamentListSection id="archived-tournaments" title="Archived tournaments" tournaments={archivedTournaments} archived />
+    </div>
+  )
+}
+
+function TournamentListSection({ id, title, tournaments, archived = false }: { id: string; title: string; tournaments: Tournament[]; archived?: boolean }) {
+  if (!tournaments.length) return null
+  return (
+    <section aria-labelledby={id} style={{ marginTop: 24 }}>
+      <h2 id={id} style={{ fontSize: 16, marginBottom: 10 }}>{title}</h2>
+      {archived && <p className="muted" style={{ fontSize: 13 }}>Results are preserved. Open a tournament to restore it.</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {tournaments?.map((t) => (
-          <Link key={t.id} to={`/tournaments/${t.id}`} className="card card-accent-top" style={{ textDecoration: 'none', color: 'inherit' }}>
+        {tournaments.map((tournament) => (
+          <Link key={tournament.id} to={`/tournaments/${tournament.id}`} className="card card-accent-top" style={{ textDecoration: 'none', color: 'inherit', opacity: archived ? 0.78 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 750, fontSize: 18 }}>{t.name}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{[t.date, t.location, t.format].filter(Boolean).join(' · ')}</div>
+                <div style={{ fontWeight: 750, fontSize: 18 }}>{tournament.name}</div>
+                <div className="muted" style={{ fontSize: 13 }}>{[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ')}</div>
               </div>
-              <div style={{ fontSize: 20 }}>{placementBadge(t.placement)}</div>
+              <div style={{ fontSize: archived ? 13 : 20, color: archived ? 'var(--accent)' : undefined }}>
+                {archived ? 'Archived' : placementBadge(tournament.placement)}
+              </div>
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <MiniPill label="Games" value={t.totalGames ?? 0} />
-              <MiniPill label="Series" value={t.series ?? 0} />
+              <MiniPill label="Games" value={tournament.totalGames ?? 0} />
+              <MiniPill label="Series" value={tournament.series ?? 0} />
             </div>
           </Link>
         ))}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -261,6 +263,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   })
 
   const [rescoringGameId, setRescoringGameId] = useState<number | null>(null)
+  const [archiveSheetOpen, setArchiveSheetOpen] = useState(false)
 
   const updateGame = useMutation({
     mutationFn: ({ gameId, data }: { gameId: number; data: object }) =>
@@ -271,11 +274,13 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
     },
   })
 
-  const deleteTournament = useMutation({
-    mutationFn: () => requestJson(`/api/tournaments/${id}`, { method: 'DELETE' }),
+  const setArchiveState = useMutation({
+    mutationFn: (restore: boolean) =>
+      requestJson(`/api/tournaments/${id}/${restore ? 'unarchive' : 'archive'}`, { method: 'POST' }),
     onSuccess: () => {
+      setArchiveSheetOpen(false)
+      qc.invalidateQueries({ queryKey: ['tournament', id] })
       qc.invalidateQueries({ queryKey: ['tournaments'] })
-      navigate('/tournaments')
     },
   })
 
@@ -386,7 +391,9 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
         area="tournaments"
         title={tournament.name}
         detail={[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ') || 'Tournament competition'}
-        action={<button className="btn btn-primary" onClick={() => setShowScorer(true)}><ActionIcon name="add" /> Add game</button>}
+        action={tournament.active === 0
+          ? <button className="btn btn-primary" onClick={() => setArchiveSheetOpen(true)}>Restore tournament</button>
+          : <button className="btn btn-primary" onClick={() => setShowScorer(true)}><Icon className="competition-action-icon" name="plus" /> Add game</button>}
       />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', marginBottom: 14 }}>
           <button
@@ -395,7 +402,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
             aria-expanded={shareMenuOpen}
             style={{ minHeight: 44, padding: '6px 14px', fontWeight: 700 }}
           >
-            <ActionIcon name="share" /> {copiedLink ? 'Copied' : sharing ? 'Sharing…' : 'Share'}
+            <Icon className="competition-action-icon" name="share" /> {copiedLink ? 'Copied' : sharing ? 'Sharing…' : 'Share'}
           </button>
           {shareMenuOpen && (
             <div
@@ -452,9 +459,38 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
             </div>
           )}
           <a href={`/tournaments/${id}/standings`} className="btn btn-ghost" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Standings</a>
-          <button className="btn btn-ghost" onClick={onEdit}><ActionIcon name="edit" /> Edit</button>
-          <button className="btn btn-danger" onClick={() => { if (confirm('Delete this tournament and all games?')) deleteTournament.mutate() }}>Delete</button>
+          <button className="btn btn-ghost" onClick={onEdit}><Icon className="competition-action-icon" name="edit" /> Edit</button>
+          {tournament.active !== 0 && (
+            <button className="btn btn-ghost" onClick={() => setArchiveSheetOpen(true)}>Archive tournament</button>
+          )}
       </div>
+
+      {archiveSheetOpen && (
+        <CompetitionSheet
+          title={tournament.active === 0 ? 'Restore tournament?' : 'Archive tournament?'}
+          closeTo={`/tournaments/${id}`}
+          onClose={() => setArchiveSheetOpen(false)}
+        >
+          <div className="card" style={{ display: 'grid', gap: 14 }}>
+            <p style={{ margin: 0 }}>
+              {tournament.active === 0
+                ? 'This tournament will return to your active schedule. All games and results are already preserved.'
+                : 'This tournament will move out of your active schedule. All games and results will be preserved, and you can restore it later.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className={tournament.active === 0 ? 'btn btn-primary' : 'btn btn-danger'}
+                disabled={setArchiveState.isPending}
+                onClick={() => setArchiveState.mutate(tournament.active === 0)}
+              >
+                {setArchiveState.isPending ? 'Saving…' : tournament.active === 0 ? 'Restore tournament' : 'Archive tournament'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setArchiveSheetOpen(false)}>Cancel</button>
+            </div>
+            {setArchiveState.isError && <div role="alert" style={{ color: 'var(--danger)' }}>Could not update this tournament. Please try again.</div>}
+          </div>
+        </CompetitionSheet>
+      )}
 
       <div style={{ width: '100%', overflowX: 'auto', marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 10, paddingBottom: 2 }}>
@@ -486,7 +522,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
           <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
             {(tournament.games || []).map((g) => {
               const ballName = balls?.find((b) => b.id === g.ballId)?.name
-              const marks = frameMarks(g.frameData)
+              const marks = formatFrameMarks(g.frameData)
               return (
                 <div key={g.id} className="card" style={{ padding: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -514,8 +550,10 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                         balls={balls || []}
                         defaultBallId={g.ballId ? String(g.ballId) : undefined}
                         initialFrameData={g.frameData}
+                        shareContext={{ location: tournament.location, date: tournament.date }}
                         onSave={async (result) => {
                           await updateGame.mutateAsync({ gameId: g.id, data: { ...result, squad: g.squad } })
+                          setRescoringGameId(null)
                         }}
                         onCancel={() => setRescoringGameId(null)}
                       />
@@ -527,7 +565,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
             })}
           </div>
 
-          {!showScorer ? (
+          {tournament.active !== 0 && (!showScorer ? (
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setShowScorer(true)}>
               Bowl a game
             </button>
@@ -546,15 +584,17 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 gameNumber={nextGameNumber}
                 balls={balls || []}
                 defaultBallId={undefined}
+                shareContext={{ location: tournament.location, date: tournament.date }}
                 onSave={async (game) => {
                   await addGame.mutateAsync({ ...game, squad })
                   setSquad('')
+                  setShowScorer(false)
                 }}
                 onCancel={() => setShowScorer(false)}
               />
             </div>
             </CompetitionSheet>
-          )}
+          ))}
         </>
       )}
 

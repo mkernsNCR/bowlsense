@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import ShareCard from '../components/ShareCard'
 import { copyGameShareLink, downloadGameImage, nativeShareGame, shareOnX } from '../utils/gameShare'
 import QuickAddGame from '../components/QuickAddGame'
+import { parseFrameMarks } from '../features/scoring/frameMarks'
 
 interface PerfectGame {
   id: number
@@ -22,46 +23,12 @@ interface PerfectGame {
   lanes: string
 }
 
-interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
-
-function parseFrames(frameData?: string | null): string[] {
-  if (!frameData) return []
-  try {
-    const parsed = JSON.parse(frameData)
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    const mark = (v: number | null | undefined) => {
-      if (v == null) return ''
-      if (v === 10) return 'X'
-      if (v === 0) return '-'
-      return String(v)
-    }
-    return (frames as StoredFrame[]).map((f, idx: number) => {
-      const b1 = f?.ball1
-      const b2 = f?.ball2
-      const b3 = f?.ball3
-      if (idx < 9) {
-        void idx
-        if (b1 === 10) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return b1 + b2 === 10 ? `${mark(b1)}/` : `${mark(b1)}${mark(b2)}`
-      }
-      const first = mark(b1)
-      const second = b2 != null ? (typeof b1 === 'number' && b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${first}${second}${third}`
-    })
-  } catch {
-    return []
-  }
-}
-
 function PerfectGameCard({ game }: { game: PerfectGame }) {
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const marks = parseFrames(game.frameData)
+  const marks = parseFrameMarks(game.frameData)
   const year = game.date ? new Date(game.date + 'T00:00:00').getFullYear() : '—'
   const imageFileName = `bowlsense-300-${game.date || 'game'}-${game.id}.png`
 

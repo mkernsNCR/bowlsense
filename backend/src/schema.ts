@@ -89,6 +89,7 @@ export const tournaments = sqliteTable('tournaments', {
   prizeFund: real('prize_fund'),
   placement: integer('placement'),
   notes: text('notes'),
+  active: integer('active').default(1),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 

@@ -22,6 +22,7 @@ afterEach(() => {
   } else {
     delete (Element.prototype as { scrollIntoView?: Element['scrollIntoView'] }).scrollIntoView
   }
+  vi.restoreAllMocks()
 })
 
 function renderScorer(
@@ -46,7 +47,56 @@ function renderScorer(
   )
 }
 
+function finishPerfectGame() {
+  for (let roll = 0; roll < 12; roll += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+  }
+}
+
 describe('BowlingScorer completion behavior', () => {
+  it('offers a managed score-card share flow after twelve strikes', () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    renderScorer()
+
+    finishPerfectGame()
+
+    expect(screen.getByRole('dialog', { name: 'Perfect game' })).toBeTruthy()
+    expect(screen.getByLabelText('Perfect score 300')).toBeTruthy()
+    expect(screen.getByText('Twelve strikes')).toBeTruthy()
+    expect(document.querySelectorAll('.perfect-lane-spotlight span')).toHaveLength(10)
+    expect(screen.getByRole('button', { name: 'Share 300' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save 300' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retake' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share 300' }))
+
+    expect(screen.getByRole('dialog', { name: 'Share game 300' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Perfect game' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close score card' }))
+    expect(screen.getByRole('dialog', { name: 'Perfect game' })).toBeTruthy()
+  })
+
+  it('saves and can retake a perfect game from the real scorer flow', async () => {
+    const onSave = vi.fn()
+    renderScorer(undefined, { onSave })
+
+    finishPerfectGame()
+    fireEvent.click(screen.getByRole('button', { name: 'Save 300' }))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({ score: 300, strikes: 12, spares: 0 })
+
+    cleanup()
+    renderScorer()
+    finishPerfectGame()
+    fireEvent.click(screen.getByRole('button', { name: 'Retake' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm retake' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Perfect game' })).toBeNull()
+    expect(screen.getByText('Frame 1 · Ball 1')).toBeTruthy()
+    expect(screen.getByText('0', { selector: '.live-score-total strong' })).toBeTruthy()
+  })
+
   it('labels a full rack after a gutter as a spare opportunity', () => {
     renderScorer(JSON.stringify({ pinSelections: [[]] }))
 

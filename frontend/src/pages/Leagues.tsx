@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import BowlingScorer from '../components/BowlingScorer'
-import { ActionIcon, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { Icon } from '../design'
+import { CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { formatFrameMarks } from '../features/scoring/frameMarks'
 
 interface Ball { id: number; name: string }
 interface LeagueGame {
@@ -47,6 +49,7 @@ interface League {
   startDate: string | null
   endDate: string | null
   notes: string | null
+  active: number
   weekCount?: number
   gamesWon?: number
   gamesLost?: number
@@ -62,33 +65,6 @@ interface WeekGameScore {
   splits: number | null
   ballId: number | null
   frameData?: string | null
-}
-
-interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
-
-function frameMarks(frameData?: string | null): string | null {
-  if (!frameData) return null
-  try {
-    const parsed = JSON.parse(frameData) as { frames?: StoredFrame[] }
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames.map((f, idx: number) => {
-      const b1 = f?.ball1, b2 = f?.ball2, b3 = f?.ball3
-      const strike = b1 === 10
-      const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
-      const mark = (v: number | null | undefined) => v == null ? '' : v === 10 ? 'X' : v === 0 ? '-' : String(v)
-      if (idx < 9) {
-        if (strike) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return `${mark(b1)}${spare ? '/' : mark(b2)}`
-      }
-      const second = b2 != null ? (b1 !== 10 && b1! + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${mark(b1)}${second}${third}`
-    }).filter(Boolean).join(' ')
-  } catch {
-    return null
-  }
 }
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -126,8 +102,10 @@ export default function LeaguesPage() {
 function LeagueList() {
   const { data: leagues, isLoading, isError, refetch } = useQuery<League[]>({
     queryKey: ['leagues'],
-    queryFn: () => requestJson('/api/leagues'),
+    queryFn: () => requestJson('/api/leagues?includeArchived=1'),
   })
+  const activeLeagues = leagues?.filter((league) => league.active !== 0) || []
+  const archivedLeagues = leagues?.filter((league) => league.active === 0) || []
 
   return (
     <div>
@@ -135,7 +113,7 @@ function LeagueList() {
         area="leagues"
         title="Leagues"
         detail="Your weekly competition, in one place."
-        action={<Link to="/leagues/new" className="btn btn-primary"><ActionIcon name="add" /> New league</Link>}
+        action={<Link to="/leagues/new" className="btn btn-primary"><Icon className="competition-action-icon" name="plus" /> New league</Link>}
       />
 
       {isLoading && <div className="muted">Loading leagues...</div>}
@@ -147,33 +125,47 @@ function LeagueList() {
         </div>
       )}
 
-      {!isLoading && !isError && !leagues?.length && (
+      {!isLoading && !isError && !activeLeagues.length && (
         <div className="card" style={{ textAlign: 'center' }}>
-          <div className="muted">No leagues yet.</div>
-          <Link to="/leagues/new" style={{ color: 'var(--accent)' }}>Create your first league</Link>
+          <div className="muted">No active leagues.</div>
+          <Link to="/leagues/new" style={{ color: 'var(--accent)' }}>Create a league</Link>
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {leagues?.map((league) => (
-          <Link key={league.id} to={`/leagues/${league.id}`} className="card card-accent-top" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 750, fontSize: 18 }}>{league.name}</div>
-                <div className="muted" style={{ fontSize: 13 }}>
-                  {[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ') || 'League'}
-                </div>
-              </div>
-              <span style={{ color: 'var(--accent)', fontSize: 14 }} aria-hidden="true">View</span>
-            </div>
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <MiniPill label="Weeks" value={league.weekCount ?? 0} />
-              <MiniPill label="W-L" value={`${league.gamesWon ?? 0}-${league.gamesLost ?? 0}`} />
-            </div>
-          </Link>
-        ))}
+        {activeLeagues.map((league) => <LeagueListCard key={league.id} league={league} />)}
       </div>
+
+      {!!archivedLeagues.length && (
+        <section aria-labelledby="archived-leagues-heading" style={{ marginTop: 24 }}>
+          <h2 id="archived-leagues-heading" style={{ fontSize: 16, marginBottom: 10 }}>Archived leagues</h2>
+          <p className="muted" style={{ fontSize: 13 }}>History is preserved. Open a league to restore it.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {archivedLeagues.map((league) => <LeagueListCard key={league.id} league={league} archived />)}
+          </div>
+        </section>
+      )}
     </div>
+  )
+}
+
+function LeagueListCard({ league, archived = false }: { league: League; archived?: boolean }) {
+  return (
+    <Link to={`/leagues/${league.id}`} className="card card-accent-top" style={{ textDecoration: 'none', color: 'inherit', opacity: archived ? 0.78 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 750, fontSize: 18 }}>{league.name}</div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            {[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ') || 'League'}
+          </div>
+        </div>
+        <span style={{ color: 'var(--accent)', fontSize: 14 }}>{archived ? 'Archived' : 'View'}</span>
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <MiniPill label="Weeks" value={league.weekCount ?? 0} />
+        <MiniPill label="W-L" value={`${league.gamesWon ?? 0}-${league.gamesLost ?? 0}`} />
+      </div>
+    </Link>
   )
 }
 
@@ -243,6 +235,7 @@ function LeagueDetail({ id }: { id: string }) {
   const [editingWeekId, setEditingWeekId] = useState<number | null>(null)
   const [rescoringGameId, setRescoringGameId] = useState<number | null>(null)
   const [editingLeague, setEditingLeague] = useState(false)
+  const [archiveSheetOpen, setArchiveSheetOpen] = useState(false)
   const [leagueForm, setLeagueForm] = useState({ name: '', location: '', season: '', dayOfWeek: '', gamesPerWeek: '', startDate: '', endDate: '', notes: '' })
   const [weekForm, setWeekForm] = useState({ date: '', opponent: '', gamesWon: '', gamesLost: '', notes: '' })
 
@@ -283,11 +276,13 @@ function LeagueDetail({ id }: { id: string }) {
     },
   })
 
-  const deleteLeague = useMutation({
-    mutationFn: () => requestJson(`/api/leagues/${id}`, { method: 'DELETE' }),
+  const setArchiveState = useMutation({
+    mutationFn: (restore: boolean) =>
+      requestJson(`/api/leagues/${id}/${restore ? 'unarchive' : 'archive'}`, { method: 'POST' }),
     onSuccess: () => {
+      setArchiveSheetOpen(false)
+      qc.invalidateQueries({ queryKey: ['league', id] })
       qc.invalidateQueries({ queryKey: ['leagues'] })
-      navigate('/leagues')
     },
   })
 
@@ -312,7 +307,9 @@ function LeagueDetail({ id }: { id: string }) {
         area="leagues"
         title={league.name}
         detail={[league.location, league.season, league.dayOfWeek].filter(Boolean).join(' · ') || 'League competition'}
-        action={<button className="btn btn-primary" onClick={() => setShowLogWeek(true)}><ActionIcon name="add" /> Log this week</button>}
+        action={league.active === 0
+          ? <button className="btn btn-primary" onClick={() => setArchiveSheetOpen(true)}>Restore league</button>
+          : <button className="btn btn-primary" onClick={() => setShowLogWeek(true)}><Icon className="competition-action-icon" name="plus" /> Log this week</button>}
       />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <button
@@ -328,7 +325,7 @@ function LeagueDetail({ id }: { id: string }) {
             style={{ minHeight: 44, padding: '6px 12px', fontSize: 13 }}
             onClick={() => navigate(`/leagues/${league.id}/share`)}
           >
-            <ActionIcon name="share" /> Share league
+            <Icon className="competition-action-icon" name="share" /> Share league
           </button>
 
           <button
@@ -351,9 +348,40 @@ function LeagueDetail({ id }: { id: string }) {
               notes: league.notes || '',
             })
             setEditingLeague(true)
-          }}><ActionIcon name="edit" /> Edit</button>
-          <button className="btn btn-danger" style={{ minHeight: 44, padding: '6px 12px', fontSize: 13 }} onClick={() => { if (confirm('Delete this league and all logged weeks/games?')) deleteLeague.mutate() }}>Delete</button>
+          }}><Icon className="competition-action-icon" name="edit" /> Edit</button>
+          {league.active !== 0 && (
+            <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 12px', fontSize: 13 }} onClick={() => setArchiveSheetOpen(true)}>
+              Archive league
+            </button>
+          )}
       </div>
+
+      {archiveSheetOpen && (
+        <CompetitionSheet
+          title={league.active === 0 ? 'Restore league?' : 'Archive league?'}
+          closeTo={`/leagues/${id}`}
+          onClose={() => setArchiveSheetOpen(false)}
+        >
+          <div className="card" style={{ display: 'grid', gap: 14 }}>
+            <p style={{ margin: 0 }}>
+              {league.active === 0
+                ? 'This league will return to your active leagues. All weeks and games are already preserved.'
+                : 'This league will move out of your active list. All weeks and games will be preserved, and you can restore it later.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className={league.active === 0 ? 'btn btn-primary' : 'btn btn-danger'}
+                disabled={setArchiveState.isPending}
+                onClick={() => setArchiveState.mutate(league.active === 0)}
+              >
+                {setArchiveState.isPending ? 'Saving…' : league.active === 0 ? 'Restore league' : 'Archive league'}
+              </button>
+              <button className="btn btn-ghost" onClick={() => setArchiveSheetOpen(false)}>Cancel</button>
+            </div>
+            {setArchiveState.isError && <div role="alert" style={{ color: 'var(--danger)' }}>Could not update this league. Please try again.</div>}
+          </div>
+        </CompetitionSheet>
+      )}
 
       {editingLeague && (
         <CompetitionSheet title="Edit league" closeTo={`/leagues/${id}`} onClose={() => setEditingLeague(false)}>
@@ -403,15 +431,16 @@ function LeagueDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      {!showLogWeek && <button className="btn btn-primary" style={{ width: '100%', marginBottom: 12 }} onClick={() => setShowLogWeek(true)}><ActionIcon name="add" /> Log this week</button>}
+      {league.active !== 0 && !showLogWeek && <button className="btn btn-primary" style={{ width: '100%', marginBottom: 12 }} onClick={() => setShowLogWeek(true)}><Icon className="competition-action-icon" name="plus" /> Log this week</button>}
 
-      {showLogWeek && (
+      {league.active !== 0 && showLogWeek && (
         <CompetitionSheet title={`Log week ${nextWeekNumber}`} closeTo={`/leagues/${id}`} onClose={() => setShowLogWeek(false)}>
           <LogWeekForm
             leagueId={league.id}
             gamesPerWeek={league.gamesPerWeek || 3}
             nextWeekNumber={nextWeekNumber}
             balls={balls || []}
+            location={league.location}
             onSaved={() => {
               setShowLogWeek(false)
               qc.invalidateQueries({ queryKey: ['league', id] })
@@ -494,7 +523,7 @@ function LeagueDetail({ id }: { id: string }) {
                   <div style={{ display: 'grid', gap: 8 }}>
                     {(week.games || []).map((g) => {
                       const ballName = balls?.find((b) => b.id === g.ballId)?.name
-                      const marks = frameMarks(g.frameData)
+                      const marks = formatFrameMarks(g.frameData)
                       return (
                         <div key={g.id} style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 12, padding: 10 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -524,8 +553,10 @@ function LeagueDetail({ id }: { id: string }) {
                                 balls={balls || []}
                                 defaultBallId={g.ballId ? String(g.ballId) : undefined}
                                 initialFrameData={g.frameData}
+                                shareContext={{ location: league.location, date: week.date }}
                                 onSave={async (result) => {
                                   await updateGame.mutateAsync({ gameId: g.id, data: result })
+                                  setRescoringGameId(null)
                                 }}
                                 onCancel={() => setRescoringGameId(null)}
                               />
@@ -549,7 +580,7 @@ function LeagueDetail({ id }: { id: string }) {
   )
 }
 
-function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }: { leagueId: number; gamesPerWeek: number; nextWeekNumber: number; balls: Ball[]; onSaved: () => void }) {
+function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, onSaved }: { leagueId: number; gamesPerWeek: number; nextWeekNumber: number; balls: Ball[]; location?: string | null; onSaved: () => void }) {
   // Pre-fill date from URL ?date=YYYY-MM-DD if present (set by Dashboard "Log This Week")
   const initialDate = (() => {
     if (typeof window === 'undefined') return new Date().toISOString().slice(0, 10)
@@ -607,7 +638,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
 
         {weekGames.map((game) => {
           const ballName = balls.find((b) => b.id === game.ballId)?.name
-          const marks = frameMarks(game.frameData)
+          const marks = formatFrameMarks(game.frameData)
           return (
             <div key={game.gameNumber} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--surface)' }}>
               <div style={{ fontWeight: 650 }}>Game {game.gameNumber}: {game.score ?? '-'}</div>
@@ -633,6 +664,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, onSaved }:
             gameNumber={scoringGame}
             balls={balls}
             defaultBallId={undefined}
+            shareContext={{ location, date }}
             onSave={(game) => {
               setWeekGames((prev) => [...prev.filter((g) => g.gameNumber !== game.gameNumber), game].sort((a, b) => a.gameNumber - b.gameNumber))
               setScoringGame(null)

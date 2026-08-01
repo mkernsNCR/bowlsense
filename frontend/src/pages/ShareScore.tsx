@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ActionIcon, PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { Icon } from '../design'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
 import { copyText } from '../features/scoring/copyText'
 
@@ -126,7 +127,7 @@ export default function ShareScore() {
       eyebrow="Game result"
       title={data.player?.name ? `${data.player.name} rolled ${data.game.score}` : `A ${data.game.score} game`}
       detail={[data.session.location, data.session.date, data.session.lanes ? `Lanes ${data.session.lanes}` : null].filter(Boolean).join(' · ')}
-      action={<button type="button" onClick={copyLink} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share result'}</button>}
+      action={<button type="button" onClick={copyLink} className="btn btn-primary"><Icon className="competition-action-icon" name="share" /> {copied ? 'Link copied' : 'Share result'}</button>}
     >
       <PublicResult
         score={data.game.score}

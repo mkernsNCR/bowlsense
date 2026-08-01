@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ActionIcon, PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { Icon } from '../design'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
 import { copyText } from '../features/scoring/copyText'
 
@@ -66,7 +67,7 @@ export default function PublicProfile() {
       eyebrow="Public profile"
       title={profileTitle}
       detail={`${stats.totalGames} games tracked${generatedAt ? ` · Stats current as of ${generatedAt}` : ''}`}
-      action={<button onClick={copyShareLink} className="btn btn-primary"><ActionIcon name="share" /> {copied ? 'Link copied' : 'Share profile'}</button>}
+      action={<button onClick={copyShareLink} className="btn btn-primary"><Icon className="competition-action-icon" name="share" /> {copied ? 'Link copied' : 'Share profile'}</button>}
     >
       <PublicResult
         score={Math.round(stats.average)}

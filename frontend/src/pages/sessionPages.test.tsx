@@ -98,6 +98,24 @@ describe('session detail review fixes', () => {
     await user.click(screen.getByRole('button', { name: 'Edit details' }))
     expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('2026-07-20')
   })
+
+  it('normalizes nullable imported session fields before editing', async () => {
+    const user = userEvent.setup()
+    const importedDetail = { ...detail, location: null, lanes: null, notes: null }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(
+      String(input) === '/api/balls' ? jsonResponse([]) : jsonResponse(importedDetail),
+    )))
+
+    renderSessionDetail('/sessions/7')
+
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }))
+    await user.click(screen.getByRole('button', { name: 'Edit details' }))
+
+    expect((screen.getByLabelText('Center') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Lanes') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('')
+    expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).disabled).toBe(true)
+  })
 })
 
 describe('session list review fixes', () => {
@@ -105,7 +123,7 @@ describe('session list review fixes', () => {
     const scoreOrdered = [
       { id: 1, date: '2026-07-20', location: 'Alpha', lanes: '', notes: '', gameCount: 1, avgScore: 230, highScore: 230, perfectGames: 0 },
       { id: 2, date: '2026-06-20', location: 'Beta', lanes: '', notes: '', gameCount: 1, avgScore: 220, highScore: 220, perfectGames: 0 },
-      { id: 3, date: '2026-07-10', location: '  ', lanes: '', notes: '', gameCount: 1, avgScore: 210, highScore: 210, perfectGames: 0 },
+      { id: 3, date: '2026-07-10', location: null, lanes: '', notes: '', gameCount: 1, avgScore: 210, highScore: 210, perfectGames: 0 },
     ]
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ sessions: scoreOrdered, total: 3, limit: 20, offset: 0 }))))
     const user = userEvent.setup()
@@ -119,6 +137,18 @@ describe('session list review fixes', () => {
     expect(sessionLinks.map((link) => link.getAttribute('href'))).toEqual(['/sessions/1', '/sessions/2', '/sessions/3'])
     expect(screen.getByText('Center not named')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Actions for Center not named' })).toBeTruthy()
+  })
+
+  it('does not render an empty score group alongside the empty state', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ sessions: [], total: 0, limit: 20, offset: 0 }))))
+    const user = userEvent.setup()
+
+    renderSessions()
+    await screen.findByText('No sessions yet')
+    await user.click(screen.getByRole('button', { name: 'Score' }))
+
+    expect(await screen.findByText('No sessions yet')).toBeTruthy()
+    expect(screen.queryByText('Highest scores')).toBeNull()
   })
 
   it('returns to the preceding page after deleting the only trailing session', async () => {

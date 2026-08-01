@@ -83,6 +83,7 @@ class D1Mock {
 
 const database = new DatabaseSync(":memory:");
 database.exec(`${packagedMigration}\n${packagedTournamentActiveMigration}\n${packagedBallIndexesMigration}\n${packagedLeagueRetryMigration}`);
+database.exec("PRAGMA foreign_keys = ON");
 assert.ok(database.prepare("PRAGMA index_list(league_weeks)").all().some((index) => index.name === "league_weeks_league_number_unique" && index.unique === 1));
 assert.ok(database.prepare("PRAGMA index_list(league_games)").all().some((index) => index.name === "league_games_week_number_unique" && index.unique === 1));
 const indexHtml = `<!doctype html><html><head><title>BowlSense</title><meta name="description" content="generic"><meta property="og:title" content="generic"><meta property="og:description" content="generic"><meta property="og:image" content="generic"><meta name="twitter:title" content="generic"><meta name="twitter:description" content="generic"><meta name="twitter:image" content="generic"></head><body><div id="root"></div></body></html>`;
@@ -178,7 +179,7 @@ const backup = exportPath
   ? JSON.parse(await readFile(exportPath, "utf8"))
   : {
       sessions: [{ id: 1, date: "2026-07-20", location: "Test Center", notes: "private session note" }],
-      games: [{ id: 1, sessionId: 1, gameNumber: 1, score: 200, strikes: 5, spares: 3, frameData: JSON.stringify({ frames: [{ isSpare: true }] }), pinLeaves: JSON.stringify([[1,2,3,4,5,6,7,8,9], [10]]) }],
+      games: [{ id: 1, sessionId: 1, gameNumber: 1, score: 200, strikes: 5, spares: 3, ballId: 1, frameData: JSON.stringify({ frames: [{ isSpare: true }] }), pinLeaves: JSON.stringify([[1,2,3,4,5,6,7,8,9], [10]]) }],
       balls: [{ id: 1, name: "Test Ball", brand: "BowlSense" }],
       leagues: [{ id: 1, name: "Test League", location: "Test Center", notes: "private league note" }],
       leagueWeeks: [{ id: 1, leagueId: 1, weekNumber: 1, date: "2026-07-20", opponent: "Lane Kings", gamesWon: 2, gamesLost: 1 }],
@@ -600,6 +601,8 @@ assert.equal((await response.json()).games.length, 2);
 
 response = await request(`/api/sessions/${createdSession.id}`, { method: "DELETE" });
 assert.equal(response.status, 204);
+response = await request(`/api/sessions/${createdSession.id}`, { method: "DELETE" });
+assert.equal(response.status, 404);
 
 let csvForm = new FormData();
 csvForm.set("file", new File([`date,location,game_number,score,strikes,spares,splits\n2026-07-21,"Center, East",1,210,6,2,0\n2026-07-21,"Center, East",2,220,7,2,0\n`], "scores.csv", { type: "text/csv" }));

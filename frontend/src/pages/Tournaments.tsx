@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from '../components/BowlingScorer'
@@ -292,6 +292,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   const [squad, setSquad] = useState('')
   const [view, setView] = useState<'games' | 'standings'>('games')
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
+  const shareTriggerRef = useRef<HTMLButtonElement>(null)
   const [copiedLink, setCopiedLink] = useState(false)
   const [sharing, setSharing] = useState(false)
 
@@ -386,10 +387,12 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
           if (event.key === 'Escape' && shareMenuOpen) {
             event.preventDefault()
             setShareMenuOpen(false)
+            requestAnimationFrame(() => shareTriggerRef.current?.focus())
           }
         }}
       >
           <button
+            ref={shareTriggerRef}
             className="btn btn-primary"
             onClick={() => setShareMenuOpen((v) => !v)}
             aria-expanded={shareMenuOpen}

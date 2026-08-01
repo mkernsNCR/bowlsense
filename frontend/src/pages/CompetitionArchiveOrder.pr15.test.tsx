@@ -182,4 +182,20 @@ describe('PR 15 competition archive and ordering', () => {
     expect(scorerMock.props?.initialFrameData).toBe('{"frames":[]}')
     expect(scorerMock.props?.initialSplits).toBe(2)
   })
+
+  it('restores focus to the tournament share trigger after Escape', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(jsonResponse(String(input) === '/api/balls' ? [] : {
+      id: 5, name: 'Share Open', location: null, date: '2026-01-01', endDate: null,
+      format: null, entryFee: null, prizeFund: null, placement: null, notes: null,
+      active: 1, games: [], stats: { totalGames: 0, series: 0, average: 0, high: 0, placement: null },
+    }))))
+    const user = userEvent.setup()
+    renderPage('/tournaments/5', 'tournaments')
+    const share = await screen.findByRole('button', { name: 'Share' })
+    await user.click(share)
+    const action = screen.getByRole('button', { name: 'Copy link' })
+    action.focus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(document.activeElement).toBe(share))
+  })
 })

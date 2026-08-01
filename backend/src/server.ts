@@ -2724,10 +2724,10 @@ fastify.get('/leagues/weeks/:weekId', async (request, reply) => {
 
 fastify.put('/leagues/weeks/:weekId', async (request) => {
   const { weekId } = request.params as any;
-  const { date, opponent, gamesWon, gamesLost, notes } = request.body as any;
+  const { date, opponent, gamesWon, gamesLost, gamesTied, notes } = request.body as any;
   sqlite.prepare(
-    'UPDATE league_weeks SET date=?, opponent=?, games_won=?, games_lost=?, notes=? WHERE id=?'
-  ).run(date, opponent, gamesWon ?? 0, gamesLost ?? 0, notes ?? null, parseInt(weekId));
+    'UPDATE league_weeks SET date=?, opponent=?, games_won=?, games_lost=?, games_tied=?, notes=? WHERE id=?'
+  ).run(date, opponent, gamesWon ?? 0, gamesLost ?? 0, gamesTied ?? 0, notes ?? null, parseInt(weekId));
   return sqlite.prepare('SELECT * FROM league_weeks WHERE id=?').get(parseInt(weekId));
 });
 

@@ -980,7 +980,7 @@ async function pinLeaves(db: D1Database): Promise<Row> {
 }
 
 const exportTables: Array<[string, string]> = [
-  ["sessions", "sessions"], ["games", "games"], ["balls", "balls"], ["leagues", "leagues"],
+  ["balls", "balls"], ["sessions", "sessions"], ["games", "games"], ["leagues", "leagues"],
   ["leagueWeeks", "league_weeks"], ["leagueGames", "league_games"], ["tournaments", "tournaments"],
   ["tournamentGames", "tournament_games"], ["arsenals", "arsenals"], ["arsenalBalls", "arsenal_balls"],
 ];
@@ -1429,6 +1429,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     if (method === "PUT") return updateResponse(db, "sessions", id, await body(request), "Session");
     if (method === "DELETE") {
+      if (!(await first(db, "SELECT id FROM sessions WHERE id = ?", id))) return error("Session not found", 404);
       await db.batch([db.prepare("DELETE FROM games WHERE session_id = ?").bind(id), db.prepare("DELETE FROM sessions WHERE id = ?").bind(id)]);
       return new Response(null, { status: 204 });
     }

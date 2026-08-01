@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { requestJson } from '../api/requestJson'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
 import { useCopyLink } from '../features/competition/useCopyLink'
@@ -196,19 +197,19 @@ export default function PublicLeague() {
 
   const { data: stats } = useQuery<LeagueStats>({
     queryKey: ['public-league-stats', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}/stats`).then(r => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${leagueId}/stats`),
     enabled: !isNaN(leagueId),
   })
 
   const { data: standings } = useQuery<LeagueStandings>({
     queryKey: ['public-league-standings', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}/standings`).then(r => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${leagueId}/standings`),
     enabled: !isNaN(leagueId),
   })
 
-  const { data: leaderboard } = useQuery<LeagueLeaderboard>({
+  const { data: leaderboard, isLoading: leaderboardLoading, isError: leaderboardError, refetch: refetchLeaderboard } = useQuery<LeagueLeaderboard>({
     queryKey: ['public-league-leaderboard', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}/leaderboard`).then(r => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${leagueId}/leaderboard`),
     enabled: !isNaN(leagueId),
   })
 
@@ -491,8 +492,11 @@ export default function PublicLeague() {
         </div>
       )}
 
-      {activeTab === 'leaderboard' && leaderboard && (
+      {activeTab === 'leaderboard' && (
         <div role="tabpanel" id="league-leaderboard-panel" aria-labelledby="league-leaderboard-tab">
+          {leaderboardLoading && <div className="card muted">Loading leaderboard…</div>}
+          {leaderboardError && <div className="card" role="alert"><p>The leaderboard could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchLeaderboard()}>Try again</button></div>}
+          {leaderboard && (
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
               <div>
@@ -529,6 +533,7 @@ export default function PublicLeague() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 

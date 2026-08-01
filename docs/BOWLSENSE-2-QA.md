@@ -14,7 +14,7 @@ In progress. The final browser matrix completed 106 route/viewport checks with n
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Frontend lint | Pass | `npm run lint` |
-| Frontend regressions | Pass | `npm test`: 40 Node tests and 90 Vitest checks, including detailed physical-pin, rendered Today, public-layout, and service-worker cache-isolation scenarios |
+| Frontend regressions | Pass | `npm test`: 49 Node tests and 94 Vitest checks, including detailed physical-pin, rendered Today, public-layout, and service-worker cache-isolation scenarios |
 | Production build | Pass | `npm run build`; only Vite's non-blocking 500 kB chunk advisory remains |
 | Backend type-check and auth | Pass | `npx tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; 19 backend tests run under CI's Node 24 and verify trusted-proxy authorization, legacy schema convergence, retry idempotency, archives, restore, and public metadata. |
 | Service-worker syntax and cache isolation | Pass | `node --check public/sw.js`; Node tests prove every public share route, including `/score/:id` and `/perfect-games/:id`, cannot replace the generic cached app shell while private navigations can refresh it. |

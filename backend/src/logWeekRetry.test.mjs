@@ -42,6 +42,10 @@ test('log-week retries upsert one week and one game after ambiguous responses', 
     gamesTied: 2,
   })
 
+  const updatedWeek = await fastify.inject({ method: 'PUT', url: `/api/leagues/weeks/${firstWeek.json().id}`, payload: { date: '2026-08-02', opponent: 'Edited', gamesWon: 1, gamesLost: 1, gamesTied: 3 } })
+  assert.equal(updatedWeek.statusCode, 200, updatedWeek.body)
+  assert.equal(sqlite.prepare('SELECT games_tied AS gamesTied FROM league_weeks WHERE id = ?').get(firstWeek.json().id).gamesTied, 3)
+
   const weekId = firstWeek.json().id
   const firstGame = await fastify.inject({
     method: 'POST',

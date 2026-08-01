@@ -46,6 +46,15 @@ function activeFrameLabel(state: GameState) {
   return `Frame ${state.currentFrame + 1} · Ball ${state.currentBall + 1}`
 }
 
+function completeRackActionLabel(state: GameState) {
+  const frame = state.frames[state.currentFrame]
+  if (state.currentFrame < 9) return state.currentBall === 0 ? 'Strike' : 'Spare'
+  if (state.currentBall === 0) return 'Strike'
+  if (state.currentBall === 1) return frame?.isStrike ? 'Strike' : 'Spare'
+  if (frame?.isStrike && frame.ball2 != null && frame.ball2 < 10) return 'Clear rack'
+  return 'Strike'
+}
+
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 interface CompletionSheetBodyProps {
@@ -250,12 +259,7 @@ export default function BowlingScorer({
     setSaveStatus('idle')
   }
 
-  const allStanding = state.pinsStanding.length === 10
-  const completeRackLabel = allStanding
-    ? 'Strike'
-    : state.currentFrame === 9 && state.frames[9]?.isStrike
-      ? 'Clear rack'
-      : 'Spare'
+  const completeRackLabel = completeRackActionLabel(state)
   const selectedCount = selectedKnocked.length
 
   return (

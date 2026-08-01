@@ -34,6 +34,20 @@ interface OpenSheet {
 
 const openSheets: OpenSheet[] = []
 
+function syncSheetAccessibility() {
+  const topmostId = openSheets.at(-1)?.id
+  openSheets.forEach((sheet) => {
+    if (!sheet.panel) return
+    if (sheet.id === topmostId) {
+      sheet.panel.removeAttribute('aria-hidden')
+      sheet.panel.removeAttribute('inert')
+      return
+    }
+    sheet.panel.setAttribute('aria-hidden', 'true')
+    sheet.panel.setAttribute('inert', '')
+  })
+}
+
 function lockBodyScroll() {
   if (activeBodyScrollLocks === 0) {
     bodyOverflowBeforeLock = document.body.style.overflow
@@ -55,6 +69,7 @@ function isTopmostSheet(id: symbol) {
 
 function registerSheet(sheet: OpenSheet) {
   openSheets.push(sheet)
+  syncSheetAccessibility()
 }
 
 function unregisterSheet(id: symbol) {
@@ -63,6 +78,7 @@ function unregisterSheet(id: symbol) {
 
   const wasTopmost = index === openSheets.length - 1
   const [removed] = openSheets.splice(index, 1)
+  syncSheetAccessibility()
   const nextNestedSheet = openSheets[index]
 
   if (

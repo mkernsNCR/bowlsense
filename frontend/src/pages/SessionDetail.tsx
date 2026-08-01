@@ -27,9 +27,9 @@ interface Game {
 interface SessionWithGames {
   id: number
   date: string
-  location: string
-  lanes: string
-  notes: string
+  location: string | null
+  lanes: string | null
+  notes: string | null
   games: Game[]
 }
 
@@ -215,7 +215,12 @@ export default function SessionDetail() {
 
   const openEditSession = () => {
     if (!session) return
-    setSessionForm({ date: session.date, location: session.location, lanes: session.lanes, notes: session.notes })
+    setSessionForm({
+      date: session.date,
+      location: session.location ?? '',
+      lanes: session.lanes ?? '',
+      notes: session.notes ?? '',
+    })
     setShowSessionActions(false)
     setShowEditSession(true)
   }
@@ -234,7 +239,7 @@ export default function SessionDetail() {
         sessionId,
         filename: `bowlsense-session-${sessionId}.png`,
         title: 'BowlSense session',
-        text: `${session.location} · ${session.date}`,
+        text: `${session.location?.trim() || 'Center not named'} · ${session.date}`,
       })
       if (!shared) {
         await copyText(getSessionShareUrl(sessionId))
@@ -435,7 +440,7 @@ export default function SessionDetail() {
           <div className="scoring-fields">
             <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => { setEditingGame(actionGame); setActionGame(null) }}><span className="scoring-row-copy">Edit score</span><Icon name="chevron-right" /></button>
             <button type="button" className="scoring-row scoring-row-action" onClick={() => { setShareGame(actionGame); setActionGame(null) }}><Icon name="share" /><span className="scoring-row-copy">Share score card</span><Icon name="chevron-right" /></button>
-            <button type="button" className="scoring-row scoring-row-action" onClick={() => shareOnX(actionGame.id, actionGame.score, session.location)}><span className="scoring-row-copy">Share on X</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => shareOnX(actionGame.id, actionGame.score, session.location?.trim() || 'Center not named')}><span className="scoring-row-copy">Share on X</span><Icon name="chevron-right" /></button>
             <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleCopyGameLink(actionGame.id)}><span className="scoring-row-copy">Copy public link</span><Icon name="chevron-right" /></button>
             <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteGame(true)}><Icon name="trash" /><span className="scoring-row-copy">Delete game</span><Icon name="chevron-right" /></button>
           </div>
@@ -456,7 +461,7 @@ export default function SessionDetail() {
       {shareGame && (
         <ShareCard
           game={shareGame}
-          session={{ location: session.location, date: session.date, lanes: session.lanes }}
+          session={{ location: session.location?.trim() || 'Center not named', date: session.date, lanes: session.lanes ?? '' }}
           ballName={balls.find((ball) => ball.id === shareGame.ballId)?.name}
           onClose={() => setShareGame(null)}
         />

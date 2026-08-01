@@ -1,9 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { copyText } from './copyText'
 
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+const secureContextDescriptor = Object.getOwnPropertyDescriptor(window, 'isSecureContext')
+const execCommandDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand')
+
+function restoreProperty(target: object, key: PropertyKey, descriptor?: PropertyDescriptor) {
+  if (descriptor) {
+    Object.defineProperty(target, key, descriptor)
+  } else {
+    Reflect.deleteProperty(target, key)
+  }
+}
+
 afterEach(() => {
   document.body.replaceChildren()
   vi.restoreAllMocks()
+  restoreProperty(navigator, 'clipboard', clipboardDescriptor)
+  restoreProperty(window, 'isSecureContext', secureContextDescriptor)
+  restoreProperty(document, 'execCommand', execCommandDescriptor)
 })
 
 describe('copyText', () => {

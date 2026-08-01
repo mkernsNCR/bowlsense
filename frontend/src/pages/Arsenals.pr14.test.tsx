@@ -77,6 +77,12 @@ describe('Arsenals PR 14 regressions', () => {
     expect(submit.disabled).toBe(true)
     fireEvent.change(capacity, { target: { value: '13' } })
     expect(submit.disabled).toBe(true)
+    fireEvent.change(capacity, { target: { value: '' } })
+    expect(submit.disabled).toBe(true)
+    fireEvent.change(capacity, { target: { value: '1' } })
+    expect(submit.disabled).toBe(false)
+    fireEvent.change(capacity, { target: { value: '12' } })
+    expect(submit.disabled).toBe(false)
     fireEvent.change(capacity, { target: { value: '3' } })
     expect(submit.disabled).toBe(false)
     await user.click(submit)
@@ -85,6 +91,74 @@ describe('Arsenals PR 14 regressions', () => {
       if (init?.method !== 'POST') return false
       return JSON.parse(String(init.body)).maxSize === 3
     })).toBe(true))
+  })
+
+  it('persists bag notes, slot reassignment, and entry notes without losing saved state', async () => {
+    const user = userEvent.setup()
+    let currentDetail = {
+      ...detail,
+      maxSize: 3,
+      balls: [balls[0]],
+    }
+    apiMocks.arsenalJson.mockImplementation((suffix = '') => {
+      if (suffix) return Promise.resolve(currentDetail)
+      return Promise.resolve([])
+    })
+    apiMocks.arsenalRequest.mockImplementation((suffix: string, init?: RequestInit) => {
+      const payload = init?.body ? JSON.parse(String(init.body)) : null
+      if (suffix === '/7') currentDetail = { ...currentDetail, notes: payload.notes }
+      if (suffix === '/balls/1') {
+        currentDetail = {
+          ...currentDetail,
+          balls: currentDetail.balls.map((entry) => entry.id === 1 ? { ...entry, ...payload } : entry),
+        }
+      }
+      return Promise.resolve(undefined)
+    })
+
+    renderArsenals('/arsenals/7')
+
+    expect(await screen.findByText('1 of 3 slots filled')).toBeTruthy()
+    const notes = screen.getByLabelText('Arsenal notes')
+    const saveNotes = screen.getByRole('button', { name: 'Save notes' }) as HTMLButtonElement
+    expect(saveNotes.disabled).toBe(true)
+    await user.type(notes, 'Move left after game two')
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+    expect(saveNotes.disabled).toBe(false)
+    await user.click(saveNotes)
+
+    await waitFor(() => expect(apiMocks.arsenalRequest).toHaveBeenCalledWith('/7', expect.objectContaining({
+      method: 'PUT',
+      body: expect.stringContaining('Move left after game two'),
+    })))
+    await waitFor(() => expect(screen.getByText('Saved')).toBeTruthy())
+
+    await user.click(screen.getByRole('button', { name: 'Edit slot 1, Ball A' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.selectOptions(within(dialog).getByLabelText('Slot'), '2')
+    await user.type(within(dialog).getByLabelText('Notes'), 'Fresh only')
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(apiMocks.arsenalRequest).toHaveBeenCalledWith('/balls/1', expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ role: 'Benchmark', slotOrder: 2, notes: 'Fresh only' }),
+    })))
+  })
+
+  it('announces labels with each per-ball performance value', async () => {
+    apiMocks.arsenalJson.mockImplementation((suffix = '') => suffix ? Promise.resolve({
+      ...detail,
+      stats: {
+        ...detail.stats,
+        byBall: [{ ballId: 11, ballName: 'Ball A', role: 'Benchmark', gamesPlayed: 4, averageScore: 188, highGame: 211 }],
+      },
+    }) : Promise.resolve([]))
+
+    renderArsenals('/arsenals/7')
+
+    expect((await screen.findByTitle('Games')).textContent).toBe('Games: 4g')
+    expect(screen.getByTitle('Average').textContent).toBe('Average: 188')
+    expect(screen.getByTitle('High game').textContent).toBe('High game: 211')
   })
 
   it('normalizes capacity before allocation and renders every overflow ball in order with recovery actions', async () => {
@@ -108,7 +182,8 @@ describe('Arsenals PR 14 regressions', () => {
   })
 
   it('keeps critical Arsenal slot, role, and chip labels at 12px or larger', () => {
-    const css = readFileSync('src/features/gear/gear.css', 'utf8')
+    const cssUrl = new URL(['..', 'features', 'gear', 'gear.css'].join('/'), import.meta.url)
+    const css = readFileSync(decodeURIComponent(cssUrl.pathname), 'utf8')
     const selectors = [
       '.gear-chip',
       '.gear-capacity > span',
@@ -121,14 +196,14 @@ describe('Arsenals PR 14 regressions', () => {
     ]
 
     for (const selector of selectors) {
-      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const rules = [...css.matchAll(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'g'))]
-      const size = rules
-        .map((match) => match[1]?.match(/font-size:\s*([0-9.]+)(px|rem)/))
-        .find((match) => Boolean(match))
-      expect(size, selector).toBeTruthy()
-      const pixels = Number(size?.[1]) * (size?.[2] === 'rem' ? 16 : 1)
-      expect(pixels, selector).toBeGreaterThanOrEqual(12)
+      const declarations = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter((match) => match[1]?.split(',').some((candidate) => candidate.trim() === selector))
+        .flatMap((match) => [...(match[2] || '').matchAll(/font-size:\s*([0-9.]+)(px|rem)/g)])
+      expect(declarations.length, selector).toBeGreaterThan(0)
+      for (const declaration of declarations) {
+        const pixels = Number(declaration[1]) * (declaration[2] === 'rem' ? 16 : 1)
+        expect(pixels, selector).toBeGreaterThanOrEqual(12)
+      }
     }
   })
 })

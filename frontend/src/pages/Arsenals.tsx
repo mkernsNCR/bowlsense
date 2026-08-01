@@ -108,7 +108,10 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
   const capacity = normalizeCapacity(arsenal.maxSize)
 
   const ballsQuery = useQuery<GearBall[]>({ queryKey: ['balls'], queryFn: () => requestJson<GearBall[]>('/api/balls') })
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['arsenal', arsenal.id] })
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['arsenal', arsenal.id] })
+    void queryClient.invalidateQueries({ queryKey: ['arsenals'] })
+  }
 
   const addBall = useMutation({
     mutationFn: (payload: object) => arsenalRequest(`/${arsenal.id}/balls`, {
@@ -261,7 +264,7 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
         </div>
         {performance.length ? (
           <div className="gear-performance" style={{ marginTop: 10 }}>
-            {performance.map((ball) => <div className="gear-performance__row" key={`${ball.ballId}-${ball.role || 'none'}`}><span><strong>{ball.ballName}</strong>{ball.role && <span className="gear-chip">{ball.role}</span>}</span>{ball.gamesPlayed > 0 ? <><span title="Games">{ball.gamesPlayed}g</span><span title="Average">{ball.averageScore}</span><span title="High game">{ball.highGame}</span></> : <span className="gear-performance__unused">Never used</span>}</div>)}
+            {performance.map((ball) => <div className="gear-performance__row" key={`${ball.ballId}-${ball.role || 'none'}`}><span><strong>{ball.ballName}</strong>{ball.role && <span className="gear-chip">{ball.role}</span>}</span>{ball.gamesPlayed > 0 ? <><span title="Games"><span className="sr-only">Games: </span>{ball.gamesPlayed}g</span><span title="Average"><span className="sr-only">Average: </span>{ball.averageScore}</span><span title="High game"><span className="sr-only">High game: </span>{ball.highGame}</span></> : <span className="gear-performance__unused">Never used</span>}</div>)}
           </div>
         ) : <p className="gear-result-count" style={{ marginTop: 12 }}>Performance appears after games are logged with these balls.</p>}
       </section>

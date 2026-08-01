@@ -24,12 +24,13 @@
 .competition-header__detail { margin: 7px 0 0; color: var(--muted, #746f7c); }
 .competition-header__action { flex: none; padding-bottom: 2px; }
 .competition-switcher { display: flex; gap: 24px; margin-top: 22px; }
-.competition-switcher a { position: relative; padding: 0 1px 11px; color: var(--muted, #746f7c); font-weight: 700; text-decoration: none; }
+.competition-switcher a { position: relative; display: inline-flex; min-height: 44px; align-items: center; padding: 0 1px 11px; color: var(--muted, #746f7c); font-weight: 700; text-decoration: none; }
 .competition-switcher a[aria-current="page"] { color: var(--text, #17131f); }
 .competition-switcher a[aria-current="page"]::after { content: ''; position: absolute; inset: auto 0 -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent, #7653c7); }
 .competition-switcher a:focus-visible, .public-scorecard a:focus-visible, .public-scorecard button:focus-visible { outline: 3px solid rgba(118, 83, 199, .45); outline: 3px solid color-mix(in srgb, var(--accent, #7653c7) 45%, transparent); outline-offset: 3px; }
 
 .bs-sheet.competition-sheet-panel { width: min(100%, 620px); max-height: min(88vh, 780px); color: var(--text, #17131f); background: var(--surface, #fff); border-color: var(--border, #ded9e8); }
+.competition-sheet-panel .bs-sheet__header { border-color: var(--border, #ded9e8); }
 .competition-sheet-panel .bs-sheet__body { padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); }
 .competition-action-icon { width: 20px; height: 20px; }
 .competition-sheet-panel .card { margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
@@ -38,7 +39,7 @@
 
 .public-scorecard { --public-ink: #17131f; --public-muted: #625d69; --public-paper: #fbfaff; --public-rule: #ded9e8; --public-accent: #6941b5; min-height: 100vh; color: var(--public-ink); background: var(--public-paper); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 .public-scorecard__header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; padding: 0 max(18px, calc((100vw - 1040px) / 2)); border-bottom: 1px solid var(--public-rule); }
-.public-scorecard__brand { display: inline-flex; align-items: center; gap: 9px; color: inherit; font-weight: 800; letter-spacing: -.02em; text-decoration: none; }
+.public-scorecard__brand { display: inline-flex; min-height: 44px; align-items: center; gap: 9px; color: inherit; font-weight: 800; letter-spacing: -.02em; text-decoration: none; }
 .public-scorecard__mark { width: 16px; height: 16px; border: 5px double var(--public-accent); border-radius: 50%; }
 .public-scorecard__read-only { color: var(--public-muted); font: 700 .75rem/1 ui-monospace, SFMono-Regular, monospace; letter-spacing: .1em; text-transform: uppercase; }
 .public-scorecard__content { width: min(100% - 32px, 1040px); margin: 0 auto; padding: 26px 0 34px; }

@@ -9,10 +9,14 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3003',
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/sessions': {
         target: 'http://localhost:3003',
+        bypass: (request) => {
+          if (request.headers.accept?.includes('text/html')) {
+            return '/index.html'
+          }
+        },
       },
     },
   },

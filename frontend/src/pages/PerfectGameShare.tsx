@@ -225,45 +225,23 @@ export default function PerfectGameShare() {
       </div>
 
       {showShareCard && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.75)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: 16,
-        }}>
-          <div style={{ background: '#12122a', borderRadius: 20, padding: 24, maxWidth: 480, width: '100%', border: '1px solid rgba(167,139,250,0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>Customize Share Card</span>
-              <button
-                onClick={() => setShowShareCard(false)}
-                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 20 }}
-              >
-                ×
-              </button>
-            </div>
-            <ShareCard
-              game={{
-                gameNumber: data.game.gameNumber,
-                score: data.game.score,
-                strikes: data.game.strikes,
-                spares: data.game.spares,
-                splits: data.game.splits,
-                frameData: data.game.frameData,
-              }}
-              session={{
-                location: data.session.location,
-                date: data.session.date,
-                lanes: data.session.lanes || '',
-              }}
-              ballName={data.game.ballName || undefined}
-              onClose={() => setShowShareCard(false)}
-            />
-          </div>
-        </div>
+        <ShareCard
+          game={{
+            gameNumber: data.game.gameNumber,
+            score: data.game.score,
+            strikes: data.game.strikes,
+            spares: data.game.spares,
+            splits: data.game.splits,
+            frameData: data.game.frameData,
+          }}
+          session={{
+            location: data.session.location,
+            date: data.session.date,
+            lanes: data.session.lanes || '',
+          }}
+          ballName={data.game.ballName || undefined}
+          onClose={() => setShowShareCard(false)}
+        />
       )}
 
       {/* Back link */}

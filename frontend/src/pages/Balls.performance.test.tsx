@@ -38,7 +38,7 @@ describe('Balls performance', () => {
       const path = String(input)
       requestedPaths.push(path)
       if (path === '/api/balls') return Promise.resolve(jsonResponse(balls))
-      if (path === '/stats/by-ball') {
+      if (path === '/api/stats/by-ball') {
         return Promise.resolve(jsonResponse([{
           ballId: 1,
           ballName: 'Used Ball',
@@ -57,14 +57,14 @@ describe('Balls performance', () => {
     expect(usedBall?.textContent).toContain('4 games · 188 average')
     expect(freshBall?.textContent).toContain('Never used in a logged game')
     expect(requestedPaths).toContain('/api/balls')
-    expect(requestedPaths).toContain('/stats/by-ball')
+    expect(requestedPaths).toContain('/api/stats/by-ball')
   })
 
   it('shows usage failures instead of claiming a ball was never used', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
       if (path === '/api/balls') return Promise.resolve(jsonResponse([{ id: 1, name: 'Test Ball', brand: null }]))
-      if (path === '/stats/by-ball') return Promise.reject(new Error('stats unavailable'))
+      if (path === '/api/stats/by-ball') return Promise.reject(new Error('stats unavailable'))
       return Promise.resolve(jsonResponse([]))
     }))
 
@@ -78,7 +78,7 @@ describe('Balls performance', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
       if (path === '/api/balls') return Promise.resolve(jsonResponse([{ id: 1, name: 'Patient Ball', brand: null }]))
-      if (path === '/stats/by-ball') return new Promise<Response>(() => undefined)
+      if (path === '/api/stats/by-ball') return new Promise<Response>(() => undefined)
       return Promise.resolve(jsonResponse([]))
     }))
 
@@ -96,7 +96,7 @@ describe('Balls performance', () => {
         { id: 1, name: 'Pitch Black', brand: 'Storm', color: null, coverstockType: 'Solid Urethane' },
         { id: 2, name: 'Reactive Mix', brand: null, color: null, coverstockType: 'Reactive Urethane Solid' },
       ]))
-      if (path === '/stats/by-ball') return Promise.resolve(jsonResponse([]))
+      if (path === '/api/stats/by-ball') return Promise.resolve(jsonResponse([]))
       return Promise.resolve(jsonResponse([]))
     }))
 
@@ -120,7 +120,7 @@ describe('Balls performance', () => {
         return Promise.resolve(new Response('save failed', { status: 500 }))
       }
       if (path === '/api/balls') return Promise.resolve(jsonResponse([]))
-      if (path === '/stats/by-ball') return Promise.resolve(jsonResponse([]))
+      if (path === '/api/stats/by-ball') return Promise.resolve(jsonResponse([]))
       if (path.startsWith('/balls/search?')) return Promise.resolve(jsonResponse([]))
       return Promise.resolve(jsonResponse([]))
     }))

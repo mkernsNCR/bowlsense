@@ -49,6 +49,22 @@ describe('nativeShareSession', () => {
     }))
   })
 
+  it('includes the generated card when native file sharing is supported', async () => {
+    const share = vi.fn().mockResolvedValue(undefined)
+    const canShare = vi.fn(() => true)
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share })
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: canShare })
+    stubCardFetch()
+
+    await expect(nativeShareSession(options)).resolves.toBe('shared')
+    expect(canShare).toHaveBeenCalledWith({ files: [expect.any(File)] })
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'BowlSense Session',
+      url: `${window.location.origin}/sessions/7/share`,
+      files: [expect.objectContaining({ name: 'session.png', type: 'image/png' })],
+    }))
+  })
+
   it('returns cancelled when the user dismisses the native share sheet', async () => {
     const share = vi.fn().mockRejectedValue(new DOMException('Share cancelled', 'AbortError'))
     Object.defineProperty(navigator, 'share', { configurable: true, value: share })

@@ -24,5 +24,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Node-run .test.ts/.mjs files are excluded; rendered .test.tsx files are
+  // intentionally typechecked with the application before Vitest runs them.
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.mjs"
+  ]
 }

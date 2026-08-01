@@ -10,6 +10,7 @@ import NewSession from './pages/NewSession.tsx'
 import Balls from './pages/Balls.tsx'
 import Stats from './pages/Stats.tsx'
 import HelpPage from './pages/Help.tsx'
+import SettingsPage from './pages/Settings.tsx'
 import LeaguesPage from './pages/Leagues.tsx'
 import PublicLeague from './pages/PublicLeague.tsx'
 import PublicLeagueLeaderboard from './pages/PublicLeagueLeaderboard.tsx'
@@ -34,16 +35,16 @@ import TournamentStandingsShare from './pages/TournamentStandingsShare.tsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
-function SessionDetailWithKey() {
+export function SessionDetailWithKey() {
   const { id } = useParams()
   return <SessionDetail key={id} />
 }
 
 const queryClient = new QueryClient()
 
-function Root() {
+export function Root() {
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
+    if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch((error) => {
         console.warn('Service worker registration failed:', error)
       })
@@ -85,6 +86,7 @@ function Root() {
               <Route path="/score-calculator" element={<ScoreCalculatorPage />} />
               <Route path="/stats" element={<Stats />} />
               <Route path="/help" element={<HelpPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/bowl" element={<PublicProfile />} />
               <Route path="/score/:gameId" element={<ShareScore />} />
               <Route path="/sessions/:id/share" element={<SessionShare />} />

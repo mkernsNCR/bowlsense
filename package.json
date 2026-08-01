@@ -1,0 +1,17 @@
+{
+  "name": "bowlsense-sites",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix frontend run build && node scripts/build-sites.mjs",
+    "typecheck": "tsc -p tsconfig.sites.json --noEmit",
+    "test": "npm run typecheck && npm run build && node scripts/test-sites-worker.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=24.3.0 <25"
+  }
+}

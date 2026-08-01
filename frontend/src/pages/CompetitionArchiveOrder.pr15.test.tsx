@@ -74,7 +74,7 @@ describe('PR 15 competition archive and ordering', () => {
     expect((await screen.findByRole('link', { name: /Tuesday Classic/ })).getAttribute('href')).toBe('/leagues/1')
     const archived = screen.getByRole('heading', { name: 'Archived leagues' }).closest('section')!
     expect(within(archived).getByRole('link', { name: /Retired Scratch/ }).getAttribute('href')).toBe('/leagues/2')
-    expect(fetch).toHaveBeenCalledWith('/api/leagues?includeArchived=1')
+    expect(fetch).toHaveBeenCalledWith('/api/leagues?includeArchived=1', expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
   it('orders upcoming tournaments nearest-first and separates past and archived events', async () => {
@@ -97,20 +97,20 @@ describe('PR 15 competition archive and ordering', () => {
     expect(past.getByText('Recent Past Open')).toBeTruthy()
     expect(past.getByText('Undated Open')).toBeTruthy()
     expect(within(screen.getByRole('heading', { name: 'Archived tournaments' }).closest('section')!).getByText('Archived Open')).toBeTruthy()
-    expect(fetch).toHaveBeenCalledWith('/api/tournaments?includeArchived=1')
+    expect(fetch).toHaveBeenCalledWith('/api/tournaments?includeArchived=1', expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
   it('renders a league-list error instead of an empty state for a failed response', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ error: 'Unavailable' }, 503))))
     renderPage('/leagues', 'leagues')
-    expect((await screen.findByRole('alert')).textContent).toContain('Could not load leagues right now.')
+    expect((await screen.findByRole('alert')).textContent).toContain('Leagues could not be loaded.')
     expect(screen.queryByText('No active leagues.')).toBeNull()
   })
 
   it('renders a tournament-list error instead of an empty state for a failed response', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ error: 'Unavailable' }, 503))))
     renderPage('/tournaments', 'tournaments')
-    expect((await screen.findByRole('alert')).textContent).toContain('Could not load tournaments right now.')
+    expect((await screen.findByRole('alert')).textContent).toContain('Tournaments could not be loaded.')
     expect(screen.queryByText('No active tournaments.')).toBeNull()
   })
 
@@ -181,5 +181,21 @@ describe('PR 15 competition archive and ordering', () => {
 
     expect(scorerMock.props?.initialFrameData).toBe('{"frames":[]}')
     expect(scorerMock.props?.initialSplits).toBe(2)
+  })
+
+  it('restores focus to the tournament share trigger after Escape', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(jsonResponse(String(input) === '/api/balls' ? [] : {
+      id: 5, name: 'Share Open', location: null, date: '2026-01-01', endDate: null,
+      format: null, entryFee: null, prizeFund: null, placement: null, notes: null,
+      active: 1, games: [], stats: { totalGames: 0, series: 0, average: 0, high: 0, placement: null },
+    }))))
+    const user = userEvent.setup()
+    renderPage('/tournaments/5', 'tournaments')
+    const share = await screen.findByRole('button', { name: 'Share' })
+    await user.click(share)
+    const action = screen.getByRole('button', { name: 'Copy link' })
+    action.focus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(document.activeElement).toBe(share))
   })
 })

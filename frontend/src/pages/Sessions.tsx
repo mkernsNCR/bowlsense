@@ -67,11 +67,13 @@ export default function Sessions() {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setDebouncedQuery(locationQuery)
-      setPage(1)
+      if (locationQuery !== debouncedQuery) {
+        setDebouncedQuery(locationQuery)
+        setPage(1)
+      }
     }, 200)
     return () => window.clearTimeout(timeout)
-  }, [locationQuery])
+  }, [debouncedQuery, locationQuery])
 
   const sessionsQuery = useQuery<SessionsResponse>({
     queryKey: ['sessions', sort, page, debouncedQuery],

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { requestJson } from '../api/requestJson'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
 import { useCopyLink } from '../features/competition/useCopyLink'
@@ -170,11 +171,12 @@ export default function PublicLeague() {
   const tabParam = searchParams.get('tab')
   const activeTab = tabParam === 'standings' || tabParam === 'leaderboard' ? tabParam : 'overview'
 
-  const { data: league, isLoading: leagueLoading } = useQuery<League>({
+  const { data: league, isLoading: leagueLoading, isError: leagueError, refetch: refetchLeague } = useQuery<League | null>({
     queryKey: ['public-league', leagueId],
     queryFn: async () => {
       const response = await fetch(`/api/leagues/${leagueId}/share`)
-      if (!response.ok) throw new Error('League not found')
+      if (response.status === 404) return null
+      if (!response.ok) throw new Error('League unavailable')
       const payload = await response.json() as ShareLeaguePayload
       return {
         ...payload.league,
@@ -194,21 +196,21 @@ export default function PublicLeague() {
     enabled: !isNaN(leagueId),
   })
 
-  const { data: stats } = useQuery<LeagueStats>({
+  const { data: stats, isError: statsError, refetch: refetchStats } = useQuery<LeagueStats>({
     queryKey: ['public-league-stats', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}/stats`).then(r => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${leagueId}/stats`),
     enabled: !isNaN(leagueId),
   })
 
-  const { data: standings } = useQuery<LeagueStandings>({
+  const { data: standings, isLoading: standingsLoading, isError: standingsError, refetch: refetchStandings } = useQuery<LeagueStandings>({
     queryKey: ['public-league-standings', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}/standings`).then(r => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${leagueId}/standings`),
     enabled: !isNaN(leagueId),
   })
 
-  const { data: leaderboard } = useQuery<LeagueLeaderboard>({
+  const { data: leaderboard, isLoading: leaderboardLoading, isError: leaderboardError, refetch: refetchLeaderboard } = useQuery<LeagueLeaderboard>({
     queryKey: ['public-league-leaderboard', leagueId],
-    queryFn: () => fetch(`/api/leagues/${leagueId}/leaderboard`).then(r => r.json()),
+    queryFn: () => requestJson(`/api/leagues/${leagueId}/leaderboard`),
     enabled: !isNaN(leagueId),
   })
 
@@ -237,6 +239,12 @@ export default function PublicLeague() {
     )
   }
 
+  if (leagueError) {
+    return (
+      <PublicShell eyebrow="League result" title="League unavailable"><div role="alert"><p>The shared league could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchLeague()}>Try again</button></div></PublicShell>
+    )
+  }
+
   if (!league) {
     return (
       <PublicShell eyebrow="League result" title="League not found"><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
@@ -261,12 +269,12 @@ export default function PublicLeague() {
     <PublicShell eyebrow="League result" title={league.name} detail={publicDetail || 'Shared result'} action={<button className="btn btn-primary" onClick={copyLink}>{copied ? 'Link copied' : 'Share league'}</button>}>
       <div className="public-legacy-content">
       <PublicResult score={stats?.average ?? '—'} label="League average" accessibleLabel={`League average ${stats?.average ?? 'not available'}`} facts={[
-        { label: 'Record', value: `${stats?.gamesWon ?? 0}W – ${stats?.gamesLost ?? 0}L` },
+        { label: 'Record', value: stats ? `${stats.gamesWon}W – ${stats.gamesLost}L` : '—' },
         { label: 'Weeks', value: stats?.totalWeeks ?? sortedWeeks.length },
         { label: 'High game', value: stats?.high ?? '—' },
       ]} />
 
-      <div style={{
+      <div className="public-tabs" role="tablist" aria-label="League result views" style={{
         display: 'inline-flex',
         background: '#111126',
         border: '1px solid rgba(255,255,255,0.12)',
@@ -279,7 +287,25 @@ export default function PublicLeague() {
           return (
             <button
               key={tab}
+              id={`league-${tab}-tab`}
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`league-${tab}-panel`}
+              tabIndex={selected ? 0 : -1}
               onClick={() => setTab(tab)}
+              onKeyDown={(event) => {
+                const tabs = ['overview', 'standings', 'leaderboard'] as const
+                const current = tabs.indexOf(tab)
+                const next = event.key === 'Home' ? 0
+                  : event.key === 'End' ? tabs.length - 1
+                    : event.key === 'ArrowRight' ? (current + 1) % tabs.length
+                      : event.key === 'ArrowLeft' ? (current - 1 + tabs.length) % tabs.length
+                        : -1
+                if (next < 0) return
+                event.preventDefault()
+                setTab(tabs[next])
+                document.getElementById(`league-${tabs[next]}-tab`)?.focus()
+              }}
               style={{
                 border: 'none',
                 borderRadius: 8,
@@ -297,8 +323,8 @@ export default function PublicLeague() {
         })}
       </div>
 
-      {activeTab === 'overview' && (
-        <>
+      <div role="tabpanel" id="league-overview-panel" aria-labelledby="league-overview-tab" hidden={activeTab !== 'overview'}>
+          {statsError && <div className="card" role="alert"><p>League statistics could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStats()}>Try again</button></div>}
           {/* Weekly trend */}
           {trendData.filter(d => d.average > 0).length >= 2 && (
             <div className="card" style={{ marginBottom: 20 }}>
@@ -398,11 +424,12 @@ export default function PublicLeague() {
               )
             })}
           </div>
-        </>
-      )}
+      </div>
 
-      {activeTab === 'standings' && (
-        <>
+      <div role="tabpanel" id="league-standings-panel" aria-labelledby="league-standings-tab" hidden={activeTab !== 'standings'}>
+          {standingsLoading && <div className="card" role="status">Loading league standings...</div>}
+          {standingsError && <div className="card" role="alert"><p>League standings could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStandings()}>Try again</button></div>}
+          {!standingsLoading && !standingsError && <>
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div>
@@ -470,11 +497,13 @@ export default function PublicLeague() {
               <div style={{ padding: 12, color: 'var(--muted)', fontSize: 13 }}>No standings data yet.</div>
             )}
           </div>
-        </>
-      )}
+          </>}
+      </div>
 
-      {activeTab === 'leaderboard' && leaderboard && (
-        <>
+      <div role="tabpanel" id="league-leaderboard-panel" aria-labelledby="league-leaderboard-tab" hidden={activeTab !== 'leaderboard'}>
+          {leaderboardLoading && <div className="card muted">Loading leaderboard…</div>}
+          {leaderboardError && <div className="card" role="alert"><p>The leaderboard could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchLeaderboard()}>Try again</button></div>}
+          {leaderboard && (
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
               <div>
@@ -511,8 +540,8 @@ export default function PublicLeague() {
               </div>
             )}
           </div>
-        </>
-      )}
+          )}
+      </div>
 
       </div>
     </PublicShell>

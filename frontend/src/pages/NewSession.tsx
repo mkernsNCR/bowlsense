@@ -5,6 +5,7 @@ import { createSessionRequest } from '../api/bowling'
 import { useSettings } from '../hooks/useSettings'
 import { Icon } from '../design'
 import { localDateValue } from '../features/scoring/date'
+import ScoringSheet from '../features/scoring/ScoringSheet'
 import '../features/scoring/scoring.css'
 
 interface SessionDraft {
@@ -61,10 +62,16 @@ export default function NewSession() {
         </Link>
       </div>
 
-      <form onSubmit={(event) => {
-        event.preventDefault()
-        submitSession()
-      }}>
+      <ScoringSheet
+        open
+        title="Session setup"
+        description="Confirm the essentials. You can add conditions if you need them."
+        onClose={() => navigate('/sessions')}
+      >
+        <form onSubmit={(event) => {
+          event.preventDefault()
+          submitSession()
+        }}>
         <section className="scoring-group" aria-label="Session setup">
           <div className="scoring-field">
             <label htmlFor="session-date">Date</label>
@@ -119,7 +126,8 @@ export default function NewSession() {
         >
           {createSession.isPending ? 'Starting…' : 'Start bowling'}
         </button>
-      </form>
+        </form>
+      </ScoringSheet>
     </div>
   )
 }

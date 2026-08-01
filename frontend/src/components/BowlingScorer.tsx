@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   gameFromFrameData,
   type GameState,
@@ -173,6 +173,8 @@ export default function BowlingScorer({
     initialFrameData && restoredGame.isComplete ? 'scores' : 'pins'
   ))
   const [selectedBallId, setSelectedBallId] = useState(defaultBallId ?? '')
+  const keepScoreRef = useRef<HTMLButtonElement>(null)
+  const keepScoringRef = useRef<HTMLButtonElement>(null)
   const [editCandidate, setEditCandidate] = useState<number | null>(null)
   const [editSnapshot, setEditSnapshot] = useState<GameState | null>(null)
   const [editingFromFrame, setEditingFromFrame] = useState<number | null>(null)
@@ -476,13 +478,15 @@ export default function BowlingScorer({
           open
           closeDisabled={isSaving}
           onClose={() => setEditCandidate(null)}
+          role="alertdialog"
           title={`Edit from frame ${editCandidate + 1}?`}
           description={`This temporarily removes frame ${editCandidate + 1} and every later roll so bonuses stay correct. You can restore the original game at any time.`}
-          closeLabel="Keep score"
+          closeLabel="Close edit confirmation"
           className="scoring-sheet-theme"
+          initialFocusRef={keepScoreRef}
         >
           <div className="scoring-sheet-actions">
-            <button type="button" className="scoring-button secondary" autoFocus onClick={() => setEditCandidate(null)}>Keep score</button>
+            <button ref={keepScoreRef} type="button" className="scoring-button secondary" onClick={() => setEditCandidate(null)}>Keep score</button>
             <button type="button" className="scoring-button primary" onClick={beginFrameEdit}>Edit from here</button>
           </div>
         </Sheet>
@@ -492,15 +496,17 @@ export default function BowlingScorer({
         <Sheet
           open
           onClose={() => setConfirmCancel(false)}
+          role="alertdialog"
           title={initialFrameData ? 'Discard changes?' : 'Discard this game?'}
           description={initialFrameData
             ? 'The saved game stays unchanged.'
             : `All ${Math.max(state.rolls.length, editSnapshot?.rolls.length ?? 0)} recorded ${Math.max(state.rolls.length, editSnapshot?.rolls.length ?? 0) === 1 ? 'roll' : 'rolls'} will be lost.`}
           closeLabel="Close discard confirmation"
           className="scoring-sheet-theme"
+          initialFocusRef={keepScoringRef}
         >
           <div className="scoring-sheet-actions">
-            <button type="button" className="scoring-button secondary" autoFocus onClick={() => setConfirmCancel(false)}>Keep scoring</button>
+            <button ref={keepScoringRef} type="button" className="scoring-button secondary" onClick={() => setConfirmCancel(false)}>Keep scoring</button>
             <button type="button" className="scoring-button danger" onClick={onCancel}>{initialFrameData ? 'Discard changes' : 'Discard game'}</button>
           </div>
         </Sheet>
@@ -515,6 +521,7 @@ export default function BowlingScorer({
           description={saveStatus === 'saved' ? undefined : 'Every frame held. This one belongs in your history.'}
           closeLabel={saveStatus === 'saved' ? 'Done' : 'Close perfect game'}
           className="scoring-sheet-theme perfect-lane"
+          backdropClassName="perfect-lane-backdrop"
         >
           <CompletionSheetBody
             saveStatus={saveStatus}

@@ -101,6 +101,7 @@ export function isSessionsTabActive(pathname: string) {
 export function isInsightsTabActive(pathname: string) {
   return isItemActive(pathname, navItems.statistics.path)
     || isItemActive(pathname, navItems.pinLeaves.path)
+    || isItemActive(pathname, navItems.scoreCalculator.path)
 }
 
 export function isMoreTabActive(pathname: string) {
@@ -114,15 +115,15 @@ export function isMoreTabActive(pathname: string) {
 export function isPublicRoute(pathname: string) {
   pathname = normalizePath(pathname)
   return pathname === '/bowl'
-    || pathname.startsWith('/score/')
-    || /^\/sessions\/[^/]+\/share\/?$/.test(pathname)
-    || /^\/perfect-games\/[^/]+\/?$/.test(pathname)
-    || /^\/leagues\/[^/]+\/(public|leaderboard|share)\/?$/.test(pathname)
-    || /^\/leagues\/[^/]+\/recap\/share\/?$/.test(pathname)
-    || /^\/leagues\/[^/]+\/week\/[^/]+\/share\/?$/.test(pathname)
-    || /^\/tournaments\/[^/]+\/share\/?$/.test(pathname)
-    || /^\/tournaments\/[^/]+\/standings\/?$/.test(pathname)
-    || /^\/tournaments\/[^/]+\/standings\/share\/?$/.test(pathname)
+    || /^\/score\/\d+\/?$/.test(pathname)
+    || /^\/sessions\/\d+\/share\/?$/.test(pathname)
+    || /^\/perfect-games\/\d+\/?$/.test(pathname)
+    || /^\/leagues\/\d+\/(public|leaderboard|share)\/?$/.test(pathname)
+    || /^\/leagues\/\d+\/recap\/share\/?$/.test(pathname)
+    || /^\/leagues\/\d+\/week\/\d+\/share\/?$/.test(pathname)
+    || /^\/tournaments\/\d+\/share\/?$/.test(pathname)
+    || /^\/tournaments\/\d+\/standings\/?$/.test(pathname)
+    || /^\/tournaments\/\d+\/standings\/share\/?$/.test(pathname)
 }
 
 export function getShellTitle(pathname: string) {

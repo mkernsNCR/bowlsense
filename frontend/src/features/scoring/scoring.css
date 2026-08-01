@@ -146,6 +146,7 @@
 .live-summary-row strong { font-family: ui-monospace, SFMono-Regular, monospace; }
 
 .scoring-save-check { align-items: center; animation: scoring-check-in 440ms cubic-bezier(.2,.9,.3,1.25); background: var(--score-green); border-radius: 50%; color: #fff; display: flex; height: 64px; justify-content: center; margin: 0 auto 16px; width: 64px; }
+.perfect-lane-backdrop { background: radial-gradient(circle at 50% 25%, rgba(184,119,0,.28), rgba(5,7,10,.86) 56%); }
 .perfect-lane { overflow: hidden; position: relative; text-align: center; }
 .perfect-lane::before { background: repeating-linear-gradient(90deg, rgba(184,119,0,.11) 0 30px, rgba(184,119,0,.03) 30px 60px); content: ""; inset: 0; mask-image: linear-gradient(to bottom, #000, transparent 70%); pointer-events: none; position: absolute; }
 .perfect-lane > * { position: relative; }

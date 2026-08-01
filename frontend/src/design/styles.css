@@ -737,6 +737,10 @@ a.bs-list-row:hover {
   min-height: 3.5rem;
 }
 
+.bs-frame-ribbon--compact .bs-frame-ribbon__action {
+  min-height: 3.5rem;
+}
+
 @keyframes bs-backdrop-in {
   from { opacity: 0; }
 }

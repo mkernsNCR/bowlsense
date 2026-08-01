@@ -69,7 +69,6 @@ export default function App({ children, inspector }: AppProps) {
       {moreOpen && (
         <MoreSheet
           onClose={closeMore}
-          restoreFocusRef={moreButtonRef}
         />
       )}
     </div>

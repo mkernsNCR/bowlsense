@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './Icon'
 
 export interface SheetProps {
   open: boolean
-  onClose: () => void
+  onClose?: () => void
   title: ReactNode
   description?: ReactNode
   children: ReactNode
@@ -12,6 +12,11 @@ export interface SheetProps {
   closeLabel?: string
   closeDisabled?: boolean
   className?: string
+  backdropClassName?: string
+  id?: string
+  role?: 'dialog' | 'alertdialog'
+  dismissible?: boolean
+  initialFocusRef?: RefObject<HTMLElement | null>
 }
 
 const focusableSelector = [
@@ -23,22 +28,19 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
-let activeBodyScrollLocks = 0
-let bodyOverflowBeforeLock = ''
-
-interface OpenSheet {
-  id: symbol
-  panel: HTMLDivElement | null
+type OpenSheet = {
+  panel: HTMLElement
   returnFocus: HTMLElement | null
 }
 
 const openSheets: OpenSheet[] = []
+let bodyLockCount = 0
+let bodyOverflowBeforeLock = ''
 
 function syncSheetAccessibility() {
-  const topmostId = openSheets.at(-1)?.id
+  const topmostPanel = openSheets.at(-1)?.panel
   openSheets.forEach((sheet) => {
-    if (!sheet.panel) return
-    if (sheet.id === topmostId) {
+    if (sheet.panel === topmostPanel) {
       sheet.panel.removeAttribute('aria-hidden')
       sheet.panel.removeAttribute('inert')
       return
@@ -48,32 +50,33 @@ function syncSheetAccessibility() {
   })
 }
 
-function lockBodyScroll() {
-  if (activeBodyScrollLocks === 0) {
+function lockBody() {
+  if (bodyLockCount === 0) {
     bodyOverflowBeforeLock = document.body.style.overflow
     document.body.style.overflow = 'hidden'
   }
-  activeBodyScrollLocks += 1
+  bodyLockCount += 1
 }
 
-function unlockBodyScroll() {
-  activeBodyScrollLocks = Math.max(0, activeBodyScrollLocks - 1)
-  if (activeBodyScrollLocks === 0) {
+function unlockBody() {
+  bodyLockCount = Math.max(0, bodyLockCount - 1)
+  if (bodyLockCount === 0) {
     document.body.style.overflow = bodyOverflowBeforeLock
   }
 }
 
-function isTopmostSheet(id: symbol) {
-  return openSheets.at(-1)?.id === id
+function isTopSheet(panel: HTMLElement) {
+  return openSheets.at(-1)?.panel === panel
 }
 
-function registerSheet(sheet: OpenSheet) {
-  openSheets.push(sheet)
+function registerSheet(panel: HTMLElement, returnFocus: HTMLElement | null) {
+  openSheets.push({ panel, returnFocus })
   syncSheetAccessibility()
+  lockBody()
 }
 
-function unregisterSheet(id: symbol) {
-  const index = openSheets.findIndex((sheet) => sheet.id === id)
+function unregisterSheet(panel: HTMLElement) {
+  const index = openSheets.findIndex((entry) => entry.panel === panel)
   if (index === -1) return
 
   const wasTopmost = index === openSheets.length - 1
@@ -81,14 +84,13 @@ function unregisterSheet(id: symbol) {
   syncSheetAccessibility()
   const nextNestedSheet = openSheets[index]
 
-  if (
-    nextNestedSheet &&
-    removed.panel?.contains(nextNestedSheet.returnFocus)
-  ) {
+  if (nextNestedSheet && removed.panel.contains(nextNestedSheet.returnFocus)) {
     nextNestedSheet.returnFocus = removed.returnFocus
   }
 
+  unlockBody()
   if (!wasTopmost) return
+
   if (removed.returnFocus?.isConnected) {
     removed.returnFocus.focus()
     return
@@ -99,78 +101,104 @@ function unregisterSheet(id: symbol) {
   ;(firstControl ?? activePanel)?.focus()
 }
 
-export function Sheet({ open, onClose, title, description, children, footer, closeLabel = 'Close', closeDisabled = false, className = '' }: SheetProps) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  closeLabel = 'Close',
+  closeDisabled = false,
+  className = '',
+  backdropClassName = '',
+  id,
+  role = 'dialog',
+  dismissible = Boolean(onClose),
+  initialFocusRef,
+}: SheetProps) {
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
   const closeDisabledRef = useRef(closeDisabled)
-  const sheetIdRef = useRef(Symbol('sheet'))
+  const dismissibleRef = useRef(dismissible)
+  const initialFocusRefRef = useRef(initialFocusRef)
 
   useEffect(() => {
     onCloseRef.current = onClose
     closeDisabledRef.current = closeDisabled
-  }, [closeDisabled, onClose])
+    dismissibleRef.current = dismissible
+    initialFocusRefRef.current = initialFocusRef
+  }, [closeDisabled, dismissible, initialFocusRef, onClose])
 
   useEffect(() => {
     if (!open) return
 
     const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const panel = panelRef.current
-    const sheetId = sheetIdRef.current
-    lockBodyScroll()
-    registerSheet({ id: sheetId, panel, returnFocus })
+    if (!panel) return
+    registerSheet(panel, returnFocus)
 
     const focusFrame = requestAnimationFrame(() => {
-      if (!isTopmostSheet(sheetId)) return
-      const firstControl = panel?.querySelector<HTMLElement>(focusableSelector)
-      ;(firstControl ?? panel)?.focus()
+      if (!isTopSheet(panel)) return
+      const requestedControl = initialFocusRefRef.current?.current
+      if (requestedControl && panel.contains(requestedControl)) {
+        requestedControl.focus()
+        return
+      }
+      if (!initialFocusRefRef.current && panel.contains(document.activeElement)) return
+      const firstControl = panel.querySelector<HTMLElement>(focusableSelector)
+      ;(firstControl ?? panel).focus()
     })
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!isTopmostSheet(sheetId)) return
-      if (event.key === 'Escape') {
+      if (!isTopSheet(panel)) return
+      if (event.key === 'Escape' && dismissibleRef.current && onCloseRef.current) {
         event.preventDefault()
+        event.stopImmediatePropagation()
         if (!closeDisabledRef.current) onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !panel) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
 
       const controls = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector))
         .filter((control) => !control.hasAttribute('disabled') && control.getAttribute('aria-hidden') !== 'true')
       if (controls.length === 0) {
-        event.preventDefault()
         panel.focus()
         return
       }
-      const first = controls[0]
-      const last = controls[controls.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last?.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first?.focus()
-      }
+      const activeIndex = controls.indexOf(document.activeElement as HTMLElement)
+      const nextIndex = activeIndex === -1
+        ? (event.shiftKey ? controls.length - 1 : 0)
+        : (activeIndex + (event.shiftKey ? -1 : 1) + controls.length) % controls.length
+      controls[nextIndex]?.focus()
     }
 
-    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', onKeyDown, true)
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keydown', onKeyDown, true)
       cancelAnimationFrame(focusFrame)
-      unregisterSheet(sheetId)
-      unlockBodyScroll()
+      unregisterSheet(panel)
     }
   }, [open])
 
   if (!open) return null
 
   return createPortal(
-    <div className="bs-sheet-backdrop" onPointerDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose() }}>
+    <div
+      className={`bs-sheet-backdrop${backdropClassName ? ` ${backdropClassName}` : ''}`}
+      onPointerDown={(event) => {
+        if (dismissible && onClose && !closeDisabled && event.target === event.currentTarget) onClose()
+      }}
+    >
       <div
         ref={panelRef}
+        id={id}
         className={`bs-sheet ${className}`.trim()}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
@@ -182,9 +210,11 @@ export function Sheet({ open, onClose, title, description, children, footer, clo
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          <button className="bs-sheet__close" type="button" onClick={onClose} aria-label={closeLabel} disabled={closeDisabled}>
-            <Icon name="close" size={20} />
-          </button>
+          {dismissible && onClose ? (
+            <button className="bs-sheet__close" type="button" onClick={onClose} aria-label={closeLabel} disabled={closeDisabled}>
+              <Icon name="close" size={20} />
+            </button>
+          ) : null}
         </header>
         <div className="bs-sheet__body">{children}</div>
         {footer ? <footer className="bs-sheet__footer">{footer}</footer> : null}

@@ -65,8 +65,8 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
     <div
       className="card"
       style={{
-        border: '1px solid rgba(251,191,36,0.25)',
-        background: 'linear-gradient(160deg, #12122a 0%, #0d0d1a 100%)',
+        border: '1px solid color-mix(in srgb, var(--strike-gold) 25%, transparent)',
+        background: 'linear-gradient(160deg, var(--surface) 0%, var(--canvas) 100%)',
         borderRadius: 20,
         padding: '20px 18px',
         position: 'relative',
@@ -80,7 +80,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
         right: -30,
         width: 120,
         height: 120,
-        background: 'radial-gradient(circle, rgba(251,191,36,0.12) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, color-mix(in srgb, var(--strike-gold) 12%, transparent) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
 
@@ -88,9 +88,9 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
         <div style={{ minWidth: 0 }}>
           <div style={{
             display: 'inline-block',
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.4)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 40%, transparent)',
+            color: 'var(--strike-gold)',
             borderRadius: 999,
             fontSize: 11,
             fontWeight: 800,
@@ -104,7 +104,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             {game.location || 'Unknown Alley'} · {game.date}
           </div>
           {game.ballName && (
-            <div style={{ fontSize: 12, color: 'rgba(167,139,250,0.8)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--ink-secondary)', marginTop: 2 }}>
               🎳 {game.ballName}
             </div>
           )}
@@ -115,8 +115,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             fontSize: 48,
             fontWeight: 900,
             lineHeight: 1,
-            color: '#fbbf24',
-            textShadow: '0 0 30px rgba(251,191,36,0.4)',
+            color: 'var(--strike-gold)',
           }}>
             {game.score}
           </div>
@@ -129,7 +128,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
         display: 'grid',
         gridTemplateColumns: 'repeat(10, 1fr)',
         gap: 3,
-        background: '#09091a',
+        background: 'var(--canvas)',
         borderRadius: 12,
         padding: '10px 8px',
         marginBottom: 14,
@@ -139,16 +138,16 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
           return (
             <div key={i} style={{ textAlign: 'center' }}>
               <div style={{
-                background: 'rgba(255,255,255,0.06)',
+                background: 'color-mix(in srgb, var(--ink) 6%, transparent)',
                 borderRadius: isLast ? '8px' : '6px',
                 padding: isLast ? '6px 4px' : '6px 2px',
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid color-mix(in srgb, var(--ink) 8%, transparent)',
               }}>
                 <div style={{
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                   fontSize: isLast ? 13 : 14,
                   fontWeight: 700,
-                  color: mark === 'X' ? '#a78bfa' : mark.includes('/') ? '#c4b5fd' : '#ffffff',
+                  color: mark === 'X' ? 'var(--ink)' : mark.includes('/') ? 'var(--ink-secondary)' : 'var(--ink)',
                   letterSpacing: -0.5,
                   lineHeight: 1.2,
                   minHeight: 18,
@@ -176,9 +175,9 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             flex: 1,
             minHeight: 44,
             fontSize: 13,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.35)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 35%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 700,
             justifyContent: 'center',
             textDecoration: 'none',
@@ -194,9 +193,9 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             flex: 1,
             minHeight: 44,
             fontSize: 13,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.35)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 35%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 700,
             justifyContent: 'center',
           }}
@@ -214,14 +213,14 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             flex: 1,
             minHeight: 44,
             fontSize: 13,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.35)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 35%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 700,
             justifyContent: 'center',
           }}
         >
-          𝕏 Share on X
+          Share on X
         </button>
         <button
           type="button"
@@ -231,9 +230,9 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             flex: 1,
             minHeight: 44,
             fontSize: 13,
-            background: 'rgba(251,191,36,0.15)',
-            border: '1px solid rgba(251,191,36,0.35)',
-            color: '#fbbf24',
+            background: 'color-mix(in srgb, var(--strike-gold) 15%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--strike-gold) 35%, transparent)',
+            color: 'var(--strike-gold)',
             fontWeight: 700,
             justifyContent: 'center',
           }}
@@ -280,12 +279,12 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
 function TrophyIcon() {
   return (
     <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="48" height="48" rx="16" fill="rgba(251,191,36,0.12)" />
-      <path d="M24 32C24 32 10 26 10 18V12H16V17C16 22 19.5 26 24 26C28.5 26 32 22 32 17V12H38V18C38 26 24 32 24 32Z" fill="#fbbf24" opacity="0.3" />
-      <path d="M24 30C24 30 12 24.5 12 17.5V12H17V17C17 21.4 20 25 24 25C28 25 31 21.4 31 17V12H36V17.5C36 24.5 24 30 24 30Z" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <path d="M17 12H31V14C31 15.1 30.1 16 29 16H19C17.9 16 17 15.1 17 14V12Z" stroke="#fbbf24" strokeWidth="2" strokeLinejoin="round" fill="none" />
-      <path d="M24 32V35" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
-      <path d="M20 35H28V37H20V35Z" stroke="#fbbf24" strokeWidth="2" strokeLinejoin="round" fill="none" />
+      <rect width="48" height="48" rx="16" fill="color-mix(in srgb, var(--strike-gold) 12%, transparent)" />
+      <path d="M24 32C24 32 10 26 10 18V12H16V17C16 22 19.5 26 24 26C28.5 26 32 22 32 17V12H38V18C38 26 24 32 24 32Z" fill="var(--strike-gold)" opacity="0.3" />
+      <path d="M24 30C24 30 12 24.5 12 17.5V12H17V17C17 21.4 20 25 24 25C28 25 31 21.4 31 17V12H36V17.5C36 24.5 24 30 24 30Z" stroke="var(--strike-gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M17 12H31V14C31 15.1 30.1 16 29 16H19C17.9 16 17 15.1 17 14V12Z" stroke="var(--strike-gold)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+      <path d="M24 32V35" stroke="var(--strike-gold)" strokeWidth="2" strokeLinecap="round" />
+      <path d="M20 35H28V37H20V35Z" stroke="var(--strike-gold)" strokeWidth="2" strokeLinejoin="round" fill="none" />
     </svg>
   )
 }
@@ -327,8 +326,8 @@ export default function PerfectGames() {
     <div>
       {/* Hero Header */}
       <div style={{
-        background: 'linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(167,139,250,0.05) 50%, transparent 100%)',
-        border: '1px solid rgba(251,191,36,0.2)',
+        background: 'linear-gradient(135deg, color-mix(in srgb, var(--strike-gold) 8%, transparent) 0%, color-mix(in srgb, var(--ink) 6%, transparent) 50%, transparent 100%)',
+        border: '1px solid color-mix(in srgb, var(--strike-gold) 20%, transparent)',
         borderRadius: 24,
         padding: '24px 20px',
         marginBottom: 24,
@@ -343,7 +342,7 @@ export default function PerfectGames() {
           transform: 'translateX(-50%)',
           width: 200,
           height: 200,
-          background: 'radial-gradient(circle, rgba(251,191,36,0.15) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, color-mix(in srgb, var(--strike-gold) 15%, transparent) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
 
@@ -355,13 +354,13 @@ export default function PerfectGames() {
           fontSize: 'clamp(1.8rem, 6vw, 2.8rem)',
           fontWeight: 900,
           letterSpacing: '-0.03em',
-          color: '#fbbf24',
+          color: 'var(--strike-gold)',
           marginBottom: 6,
           lineHeight: 1.1,
         }}>
           300 Club
         </h1>
-        <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: 500 }}>
+        <div style={{ color: 'color-mix(in srgb, var(--ink) 55%, transparent)', fontSize: 14, fontWeight: 500 }}>
           {total === 0 ? 'No perfect games yet — get in the club!' : `${total} perfect game${total !== 1 ? 's' : ''} on record`}
         </div>
       </div>
@@ -387,19 +386,19 @@ export default function PerfectGames() {
             marginBottom: 24,
           }}>
             <div className="card card-accent-top" style={{ padding: '14px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color: '#fbbf24', lineHeight: 1 }}>{total}</div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--strike-gold)', lineHeight: 1 }}>{total}</div>
               <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Total 300s</div>
             </div>
 
             <div className="card card-accent-top" style={{ padding: '14px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color: '#fbbf24', lineHeight: 1 }}>
+              <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--strike-gold)', lineHeight: 1 }}>
                 {Object.keys(byYear).length}
               </div>
               <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Years</div>
             </div>
 
             <div className="card card-accent-top" style={{ padding: '14px 12px', textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#fbbf24', lineHeight: 1.2, wordBreak: 'break-word' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--strike-gold)', lineHeight: 1.2, wordBreak: 'break-word' }}>
                 {topLocation?.[0] ?? '—'}
               </div>
               <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>Top Alley</div>
@@ -413,16 +412,16 @@ export default function PerfectGames() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {Object.entries(byYear).sort(([a], [b]) => Number(b) - Number(a)).map(([year, count]) => (
                   <div key={year} style={{
-                    background: 'rgba(251,191,36,0.12)',
-                    border: '1px solid rgba(251,191,36,0.3)',
+                    background: 'color-mix(in srgb, var(--strike-gold) 12%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--strike-gold) 30%, transparent)',
                     borderRadius: 999,
                     padding: '4px 12px',
                     display: 'flex',
                     gap: 6,
                     alignItems: 'center',
                   }}>
-                    <span style={{ fontWeight: 800, color: '#fbbf24', fontSize: 15 }}>{count}x</span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{year}</span>
+                    <span style={{ fontWeight: 800, color: 'var(--strike-gold)', fontSize: 15 }}>{count}x</span>
+                    <span style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)', fontSize: 13 }}>{year}</span>
                   </div>
                 ))}
               </div>
@@ -432,8 +431,8 @@ export default function PerfectGames() {
           {/* Most recent banner */}
           {mostRecent && (
             <div style={{
-              background: 'linear-gradient(135deg, rgba(251,191,36,0.1) 0%, rgba(167,139,250,0.05) 100%)',
-              border: '1px solid rgba(251,191,36,0.25)',
+              background: 'linear-gradient(135deg, color-mix(in srgb, var(--strike-gold) 10%, transparent) 0%, color-mix(in srgb, var(--ink) 6%, transparent) 100%)',
+              border: '1px solid color-mix(in srgb, var(--strike-gold) 25%, transparent)',
               borderRadius: 16,
               padding: '14px 16px',
               marginBottom: 20,
@@ -448,7 +447,7 @@ export default function PerfectGames() {
                   {mostRecent.location || 'Unknown Alley'} · {mostRecent.date}
                 </div>
               </div>
-              <div style={{ fontSize: 36, fontWeight: 900, color: '#fbbf24', flexShrink: 0 }}>
+              <div style={{ fontSize: 36, fontWeight: 900, color: 'var(--strike-gold)', flexShrink: 0 }}>
                 {mostRecent.score}
               </div>
             </div>
@@ -480,9 +479,9 @@ export default function PerfectGames() {
               style={{
                 width: '100%',
                 minHeight: 48,
-                background: 'rgba(251,191,36,0.12)',
-                border: '1px solid rgba(251,191,36,0.3)',
-                color: '#fbbf24',
+                background: 'color-mix(in srgb, var(--strike-gold) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--strike-gold) 30%, transparent)',
+                color: 'var(--strike-gold)',
                 fontWeight: 800,
                 fontSize: 15,
                 borderRadius: 12,
@@ -490,7 +489,7 @@ export default function PerfectGames() {
                 marginBottom: 16,
               }}
             >
-              ➕ Log a Perfect 300
+              Log a perfect 300
             </button>
           )}
 

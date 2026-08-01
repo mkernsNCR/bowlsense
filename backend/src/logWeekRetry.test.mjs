@@ -1,0 +1,114 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { buildTestApp } from './test-app.mjs'
+
+test('startup reconciles legacy retry duplicates before adding identities', async (t) => {
+  const { sqlite } = await buildTestApp(t, { legacyLeagueRetries: true })
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM league_weeks WHERE league_id = 1 AND week_number = 1').get().count, 1)
+  assert.deepEqual(sqlite.prepare('SELECT week_id AS weekId, game_number AS gameNumber, score FROM league_games ORDER BY game_number').all(), [
+    { weekId: 2, gameNumber: 1, score: 180 },
+    { weekId: 2, gameNumber: 2, score: 190 },
+  ])
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM pragma_index_list('league_weeks') WHERE name = 'league_weeks_league_number_unique' AND [unique] = 1").get().count, 1)
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM pragma_index_list('league_games') WHERE name = 'league_games_week_number_unique' AND [unique] = 1").get().count, 1)
+})
+
+test('log-week retries upsert one week and one game after ambiguous responses', async (t) => {
+  const { fastify, sqlite } = await buildTestApp(t)
+  const leagueResponse = await fastify.inject({
+    method: 'POST',
+    url: '/api/leagues',
+    payload: { name: 'Retry League', gamesPerWeek: 3 },
+  })
+  assert.equal(leagueResponse.statusCode, 200, leagueResponse.body)
+  const leagueId = leagueResponse.json().id
+
+  const firstWeek = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-01', opponent: 'First attempt', gamesTied: 1 },
+  })
+  assert.equal(firstWeek.statusCode, 200, firstWeek.body)
+  const retriedWeek = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-01', opponent: 'Retry payload', gamesTied: 2 },
+  })
+  assert.equal(retriedWeek.statusCode, 200, retriedWeek.body)
+  assert.equal(retriedWeek.json().id, firstWeek.json().id)
+  assert.deepEqual(sqlite.prepare('SELECT COUNT(*) AS count, MAX(opponent) AS opponent, MAX(games_tied) AS gamesTied FROM league_weeks WHERE league_id = ? AND week_number = ?').get(leagueId, 4), {
+    count: 1,
+    opponent: 'Retry payload',
+    gamesTied: 2,
+  })
+
+  const recordedRetry = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-02', opponent: 'Recorded opponent', gamesWon: 4, gamesLost: 2, gamesTied: 3, notes: 'Recorded notes' },
+  })
+  assert.equal(recordedRetry.statusCode, 200, recordedRetry.body)
+  const sparseRetry = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-03' },
+  })
+  assert.equal(sparseRetry.statusCode, 200, sparseRetry.body)
+  assert.deepEqual(sqlite.prepare('SELECT date, opponent, games_won AS gamesWon, games_lost AS gamesLost, games_tied AS gamesTied, notes FROM league_weeks WHERE id = ?').get(firstWeek.json().id), {
+    date: '2026-08-03',
+    opponent: 'Recorded opponent',
+    gamesWon: 4,
+    gamesLost: 2,
+    gamesTied: 3,
+    notes: 'Recorded notes',
+  })
+  assert.equal(sparseRetry.json().id, firstWeek.json().id)
+
+  const clearingRetry = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-04', opponent: null, gamesWon: 0, gamesLost: 0, gamesTied: 0, notes: null },
+  })
+  assert.equal(clearingRetry.statusCode, 200, clearingRetry.body)
+  assert.equal(clearingRetry.json().id, firstWeek.json().id)
+  assert.deepEqual(sqlite.prepare('SELECT COUNT(*) AS count, MAX(opponent) AS opponent, MAX(games_won) AS gamesWon, MAX(games_lost) AS gamesLost, MAX(games_tied) AS gamesTied, MAX(notes) AS notes FROM league_weeks WHERE league_id = ? AND week_number = ?').get(leagueId, 4), {
+    count: 1,
+    opponent: null,
+    gamesWon: 0,
+    gamesLost: 0,
+    gamesTied: 0,
+    notes: null,
+  })
+
+  const updatedWeek = await fastify.inject({ method: 'PUT', url: `/api/leagues/weeks/${firstWeek.json().id}`, payload: { date: '2026-08-02', opponent: 'Edited', gamesWon: 1, gamesLost: 1, gamesTied: 3 } })
+  assert.equal(updatedWeek.statusCode, 200, updatedWeek.body)
+  assert.equal(sqlite.prepare('SELECT games_tied AS gamesTied FROM league_weeks WHERE id = ?').get(firstWeek.json().id).gamesTied, 3)
+
+  const legacyEdit = await fastify.inject({
+    method: 'PUT',
+    url: `/api/leagues/weeks/${firstWeek.json().id}`,
+    payload: { date: '2026-08-03', opponent: 'Edited without ties', gamesWon: 2, gamesLost: 1 },
+  })
+  assert.equal(legacyEdit.statusCode, 200, legacyEdit.body)
+  assert.equal(sqlite.prepare('SELECT games_tied AS gamesTied FROM league_weeks WHERE id = ?').get(firstWeek.json().id).gamesTied, 3)
+
+  const weekId = firstWeek.json().id
+  const firstGame = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/weeks/${weekId}/games`,
+    payload: { gameNumber: 1, score: 180, strikes: 4 },
+  })
+  assert.equal(firstGame.statusCode, 200, firstGame.body)
+  const retriedGame = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/weeks/${weekId}/games`,
+    payload: { gameNumber: 1, score: 181, strikes: 5 },
+  })
+  assert.equal(retriedGame.statusCode, 200, retriedGame.body)
+  assert.equal(retriedGame.json().id, firstGame.json().id)
+  assert.deepEqual(sqlite.prepare('SELECT COUNT(*) AS count, MAX(score) AS score, MAX(strikes) AS strikes FROM league_games WHERE week_id = ? AND game_number = ?').get(weekId, 1), {
+    count: 1,
+    score: 181,
+    strikes: 5,
+  })
+})

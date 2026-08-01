@@ -1,10 +1,27 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import BowlingScorer, { type SavedBowlingGame } from '../../components/BowlingScorer'
 import { resetPins } from '../../utils/bowlingScore'
 
+const originalScrollIntoView = Element.prototype.scrollIntoView
+
+beforeEach(() => {
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  })
+})
+
 afterEach(() => {
   cleanup()
+  if (originalScrollIntoView) {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: originalScrollIntoView,
+    })
+  } else {
+    delete (Element.prototype as { scrollIntoView?: Element['scrollIntoView'] }).scrollIntoView
+  }
   vi.restoreAllMocks()
 })
 
@@ -136,7 +153,10 @@ describe('BowlingScorer completion behavior', () => {
     renderScorer(initialFrameData)
 
     expect(screen.getByRole('button', { name: 'Score details' }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByRole('button', { name: 'Edit from frame 1' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit from frame 1' }))
+    const closeControl = screen.getByRole('button', { name: 'Close edit confirmation' })
+    const keepControl = screen.getByRole('button', { name: 'Keep score' })
+    expect(closeControl).not.toBe(keepControl)
   })
 
   it('announces successful saves with text in the status region', async () => {

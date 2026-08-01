@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -9,6 +9,10 @@ import { QuickLogSheet } from './QuickLogSheet'
 import { RecentSessions } from './RecentSessions'
 import { TodayFrameRibbon } from './TodayFrameRibbon'
 import { parseFrameRibbonFrames } from './frameMarks'
+
+beforeAll(() => {
+  HTMLElement.prototype.scrollIntoView = vi.fn()
+})
 
 afterEach(() => {
   cleanup()

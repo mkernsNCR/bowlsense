@@ -8,7 +8,6 @@
   --border: var(--separator);
   --accent: var(--oil-violet);
   --accent-soft: color-mix(in srgb, var(--oil-violet) 12%, transparent);
-  --accent-glow: color-mix(in srgb, var(--oil-violet) 22%, transparent);
   --text: var(--ink);
   --text-h: var(--ink);
   --muted: var(--ink-secondary);
@@ -31,7 +30,6 @@
 html {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
   background: var(--canvas);
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -44,7 +42,6 @@ body {
   min-width: 20rem;
   min-height: 100vh;
   margin: 0;
-  overflow-x: hidden;
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-body);
@@ -70,6 +67,40 @@ textarea {
 
 a {
   color: inherit;
+}
+
+code {
+  overflow-wrap: anywhere;
+}
+
+.public-action-target,
+.public-link-target {
+  display: inline-flex;
+  min-height: var(--target-min);
+  align-items: center;
+  justify-content: center;
+}
+
+.public-competition-page :where(a, button) {
+  min-height: var(--target-min);
+}
+
+.public-competition-page {
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.public-tabs {
+  display: grid !important;
+  width: min(100%, 28rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.public-tabs > button {
+  min-width: 0;
+  min-height: var(--target-min);
 }
 
 h1,

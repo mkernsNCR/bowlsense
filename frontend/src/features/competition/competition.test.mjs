@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 test('competition overlays delegate to the shared Sheet primitive', async () => {
   const competition = await readFile(new URL('./CompetitionUI.tsx', import.meta.url), 'utf8')
   const shareCard = await readFile(new URL('../../components/ShareCard.tsx', import.meta.url), 'utf8')
-  assert.match(competition, /import \{ Icon, Sheet/)
+  assert.match(competition, /import \{ Sheet \}/)
   assert.match(competition, /<Sheet[\s\S]*className="competition-sheet-panel"/)
   assert.match(shareCard, /<Sheet[\s\S]*className="share-card-sheet"/)
 })
@@ -18,9 +18,11 @@ test('public standings uses the minimal shell without private competition action
 })
 
 test('perfect-game motion is a pin-deck spotlight with reduced-motion handling', async () => {
-  const celebration = await readFile(new URL('../../components/PerfectGameCelebration.tsx', import.meta.url), 'utf8')
-  assert.match(celebration, /score === 300 && <div className="perfect-result__spotlight"/)
-  assert.match(celebration, /@media \(prefers-reduced-motion: reduce\)[^}]*perfect-result__spotlight[^}]*animation: none/s)
+  const scorer = await readFile(new URL('../../components/BowlingScorer.tsx', import.meta.url), 'utf8')
+  const scoringCss = await readFile(new URL('../scoring/scoring.css', import.meta.url), 'utf8')
+  assert.match(scorer, /state\.totalScore === 300[\s\S]*className="perfect-lane-spotlight"/)
+  assert.match(scorer, /shareButtonText="Share 300"/)
+  assert.match(scoringCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.perfect-lane-spotlight::before \{ animation: none;/)
 })
 
 test('major public result pages share one printable result composition', async () => {

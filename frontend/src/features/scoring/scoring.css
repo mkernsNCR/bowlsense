@@ -149,6 +149,9 @@
 .perfect-lane { overflow: hidden; position: relative; text-align: center; }
 .perfect-lane::before { background: repeating-linear-gradient(90deg, rgba(184,119,0,.11) 0 30px, rgba(184,119,0,.03) 30px 60px); content: ""; inset: 0; mask-image: linear-gradient(to bottom, #000, transparent 70%); pointer-events: none; position: absolute; }
 .perfect-lane > * { position: relative; }
+.perfect-lane-spotlight { height: 150px; margin: -8px auto -32px; max-width: 250px; position: relative; }
+.perfect-lane-spotlight::before { animation: perfect-spotlight-in 900ms ease-out both; background: radial-gradient(circle, color-mix(in srgb, var(--score-gold) 24%, transparent), transparent 68%); content: ""; inset: -28px; position: absolute; }
+.perfect-lane-spotlight span { background: color-mix(in srgb, var(--score-gold) 20%, var(--score-surface)); border: 1px solid color-mix(in srgb, var(--score-gold) 72%, #fff); border-radius: 55% 55% 45% 45%; box-shadow: 0 0 12px color-mix(in srgb, var(--score-gold) 28%, transparent); height: 18px; position: absolute; transform: translate(-50%, -50%); width: 10px; }
 .perfect-lane-score { color: var(--score-gold); font: 850 clamp(5rem, 22vw, 8rem)/.9 ui-rounded, "SF Pro Rounded", system-ui; letter-spacing: -.08em; margin: 18px 0 8px; text-shadow: 0 10px 34px color-mix(in srgb, var(--score-gold) 28%, transparent); }
 .scoring-metrics { background: var(--score-surface); border-radius: 20px; display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 18px; overflow: hidden; }
 .scoring-metric { padding: 14px 8px; position: relative; text-align: center; }
@@ -157,6 +160,7 @@
 .scoring-metric strong { font: 750 1.5rem/1.2 ui-rounded, "SF Pro Rounded", system-ui; }
 
 @keyframes scoring-check-in { from { opacity: 0; transform: scale(.78); } to { opacity: 1; transform: scale(1); } }
+@keyframes perfect-spotlight-in { from { opacity: 0; transform: scale(.72); } }
 
 @media (min-width: 700px) {
   .live-score-sticky { border: 1px solid var(--score-line); border-radius: 18px; margin: 0 0 12px; top: 12px; }
@@ -189,5 +193,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .scoring-save-check { animation: none; }
+  .perfect-lane-spotlight::before { animation: none; }
   .pin-control { transition: none; }
 }

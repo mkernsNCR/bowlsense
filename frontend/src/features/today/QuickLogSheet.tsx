@@ -101,6 +101,7 @@ export function QuickLogSheet({
           balls={balls}
           defaultBallId={defaultBallId}
           saving={status.saving}
+          shareContext={{ location: draft.location, date: draft.date, lanes: draft.lanes }}
           onSave={onSave}
           onCancel={onClose}
         />

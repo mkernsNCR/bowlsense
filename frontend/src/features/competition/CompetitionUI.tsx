@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Icon, Sheet, type IconName } from '../../design'
+import { Sheet } from '../../design'
 import './competition.css'
 
 type CompetitionArea = 'leagues' | 'tournaments'
@@ -131,9 +131,4 @@ export function PublicShell({
       </div>
     </div>
   )
-}
-
-export function ActionIcon({ name }: { name: 'add' | 'share' | 'save' | 'close' | 'edit' }) {
-  const iconName: IconName = name === 'add' ? 'plus' : name
-  return <Icon className="competition-action-icon" name={iconName} />
 }

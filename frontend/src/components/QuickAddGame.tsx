@@ -72,6 +72,7 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
           gameNumber={gameNumber}
           balls={ballsQuery.data ?? []}
           defaultBallId={settings.defaultBallId}
+          shareContext={{ location, date, lanes }}
           onSave={handleSave}
           onCancel={() => setShowScorer(false)}
         />

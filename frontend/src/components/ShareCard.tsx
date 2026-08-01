@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sheet } from '../design'
+import { parseFrameMarks } from '../features/scoring/frameMarks'
 
 interface ShareCardProps {
   game: {
@@ -17,40 +18,6 @@ interface ShareCardProps {
   }
   ballName?: string
   onClose: () => void
-}
-
-interface StoredFrame { ball1?: number | null; ball2?: number | null; ball3?: number | null }
-
-function parseFrames(frameData?: string | null): string[] {
-  if (!frameData) return []
-  try {
-    const parsed = JSON.parse(frameData)
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    const mark = (v: number | null | undefined) => {
-      if (v == null) return ''
-      if (v === 10) return 'X'
-      if (v === 0) return '-'
-      return String(v)
-    }
-
-    return (frames as StoredFrame[]).map((f, idx: number) => {
-      const b1 = f?.ball1
-      const b2 = f?.ball2
-      const b3 = f?.ball3
-      if (idx < 9) {
-        if (b1 === 10) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return b1 + b2 === 10 ? `${mark(b1)}/` : `${mark(b1)}${mark(b2)}`
-      }
-      const first = mark(b1)
-      const second = b2 != null ? (typeof b1 === 'number' && b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${first}${second}${third}`
-    })
-  } catch {
-    return []
-  }
 }
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -71,7 +38,7 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
 export default function ShareCard({ game, session, ballName, onClose }: ShareCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [sharing, setSharing] = useState(false)
-  const marks = useMemo(() => parseFrames(game.frameData), [game.frameData])
+  const marks = useMemo(() => parseFrameMarks(game.frameData), [game.frameData])
 
   useEffect(() => {
     const canvas = canvasRef.current

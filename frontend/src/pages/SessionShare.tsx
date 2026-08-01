@@ -5,7 +5,8 @@ import {
   downloadSessionCard,
   nativeShareSession,
 } from '../utils/sessionShare'
-import { ActionIcon, PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { Icon } from '../design'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
 
 interface PublicSessionPayload {
@@ -129,7 +130,7 @@ export default function SessionShare() {
       eyebrow="Session result"
       title={`${data.summary.series} series`}
       detail={[data.session.location, data.session.date, data.session.lanes ? `Lanes ${data.session.lanes}` : null].filter(Boolean).join(' · ')}
-      action={<button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}><ActionIcon name="share" /> {busy === 'share' ? 'Sharing…' : 'Share result'}</button>}
+      action={<button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}><Icon className="competition-action-icon" name="share" /> {busy === 'share' ? 'Sharing…' : 'Share result'}</button>}
     >
       <PublicResult
         score={data.summary.series}

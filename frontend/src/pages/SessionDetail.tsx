@@ -259,6 +259,7 @@ export default function SessionDetail() {
           gameNumber={getNextGameNumber(games)}
           balls={balls}
           defaultBallId={settings.defaultBallId}
+          shareContext={{ location: session.location, date: session.date, lanes: session.lanes }}
           onSave={async (game) => {
             await addGame.mutateAsync(game)
             setShowScorer(false)
@@ -346,6 +347,7 @@ export default function SessionDetail() {
             defaultBallId={editingGame.ballId == null ? undefined : String(editingGame.ballId)}
             initialFrameData={editingGame.frameData}
             initialSplits={editingGame.splits}
+            shareContext={{ location: session.location, date: session.date, lanes: session.lanes }}
             onSave={async (game) => {
               await updateGame.mutateAsync({ gameId: editingGame.id, game })
               setSavedNotice(`Game ${game.gameNumber} updated`)

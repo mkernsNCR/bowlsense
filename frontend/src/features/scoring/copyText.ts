@@ -1,7 +1,12 @@
 export async function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText && window.isSecureContext) {
-    await navigator.clipboard.writeText(text)
-    return
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      // Some browsers expose the API but reject it when permission is denied.
+      // Fall through to the selection-based copy path.
+    }
   }
 
   const field = document.createElement('textarea')
@@ -10,8 +15,12 @@ export async function copyText(text: string): Promise<void> {
   field.style.position = 'fixed'
   field.style.opacity = '0'
   document.body.appendChild(field)
-  field.select()
-  const copied = document.execCommand('copy')
-  field.remove()
-  if (!copied) throw new Error('Clipboard is unavailable')
+  try {
+    field.focus()
+    field.select()
+    field.setSelectionRange(0, field.value.length)
+    if (!document.execCommand('copy')) throw new Error('Clipboard is unavailable')
+  } finally {
+    field.remove()
+  }
 }

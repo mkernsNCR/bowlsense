@@ -18,6 +18,7 @@ test('allows a pristine scorer to close directly', () => {
 test('keeps lane-side context sticky and touch targets at least 44px', async () => {
   const css = await readFile(new URL('./scoring.css', import.meta.url), 'utf8')
   assert.match(css, /\.live-score-sticky\s*\{[^}]*position:\s*sticky/s)
-  assert.match(css, /min-height:\s*44px/)
-  assert.match(css, /min-width:\s*44px/)
+  const controlRule = css.match(/\.pin-control\s*\{[^}]*\}/s)?.[0] ?? ''
+  assert.match(controlRule, /min-height:\s*44px/)
+  assert.match(controlRule, /min-width:\s*44px/)
 })

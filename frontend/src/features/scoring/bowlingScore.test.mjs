@@ -75,4 +75,11 @@ run('legacy count-only frame data remains editable', () => {
   assert.equal(restored.frames[1].isSpare, true)
 })
 
+run('legacy rolls restore when pin selections are present but empty', () => {
+  const restored = gameFromFrameData(JSON.stringify({ pinSelections: [], rolls: [10, 7, 3] }))
+  assert.deepEqual(restored.rolls, [10, 7, 3])
+  assert.equal(restored.currentFrame, 2)
+  assert.equal(restored.frames[1].isSpare, true)
+})
+
 console.log('All scoring cases passed.')

@@ -208,7 +208,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
           width={800}
           height={460}
           role="img"
-          aria-label={`Share card for game ${game.gameNumber}: score ${game.score} at ${session.location || 'Unknown Alley'}`}
+          aria-label={`Score card for game ${game.gameNumber}: ${game.score} at ${session.location || 'Unknown Alley'}. ${session.date}${session.lanes ? `, lanes ${session.lanes}` : ''}.${ballName ? ` Ball: ${ballName}.` : ''} Frames: ${marks.filter(Boolean).join(', ') || 'not available'}.`}
           style={{ width: 'min(400px, calc(100vw - 32px))', height: 'auto', maxWidth: '100%', borderRadius: 14, display: 'block', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
         />
 

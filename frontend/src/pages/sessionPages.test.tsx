@@ -255,6 +255,8 @@ describe('session list review fixes', () => {
     await screen.findByText('Page 2')
     await user.click(screen.getByRole('button', { name: 'Next' }))
     await screen.findByText('Page 3')
+    await new Promise((resolve) => window.setTimeout(resolve, 250))
+    expect(screen.getByText('Page 3 of 3')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Actions for Page 3' }))
     await user.click(screen.getByRole('button', { name: 'Delete session' }))
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete session' })

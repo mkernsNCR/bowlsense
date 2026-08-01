@@ -32,31 +32,31 @@ describe('toFrameRibbonFrames', () => {
       rolls: [],
       score: null,
       state: 'pending',
-      label: 'Frame 1',
+      ariaLabel: 'Frame 1, pending, Not bowled',
     })
     expect(ribbon[1]).toEqual({
       rolls: ['X'],
       score: 30,
       state: 'strike',
-      label: 'Frame 2, cumulative score 30',
+      ariaLabel: 'Frame 2, strike, Rolls X, cumulative score 30',
     })
     expect(ribbon[2]).toEqual({
       rolls: ['7', '/'],
       score: 50,
       state: 'spare',
-      label: 'Frame 3, cumulative score 50',
+      ariaLabel: 'Frame 3, spare, Rolls 7, /, cumulative score 50',
     })
     expect(ribbon[3]).toEqual({
       rolls: ['8', '1'],
       score: 59,
       state: 'open',
-      label: 'Frame 4, cumulative score 59',
+      ariaLabel: 'Frame 4, open, Rolls 8, 1, cumulative score 59',
     })
     expect(ribbon[9]).toEqual({
       rolls: ['X', '7', '/'],
       score: 179,
       state: 'strike',
-      label: 'Frame 10, cumulative score 179',
+      ariaLabel: 'Frame 10, strike, Rolls X, 7, /, cumulative score 179',
     })
   })
 

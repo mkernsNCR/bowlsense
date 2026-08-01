@@ -24,3 +24,14 @@ it('keeps the selected leaderboard tabpanel present and exposes a retryable load
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
   expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/leaderboard')).length).toBeGreaterThan(1)
 })
+
+it('distinguishes a league load failure from a missing league and offers retry', async () => {
+  const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: 'Unavailable' }), { status: 503, headers: { 'content-type': 'application/json' } })))
+  vi.stubGlobal('fetch', fetchMock)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/leagues/1/public']}><Routes><Route path="/leagues/:id/public" element={<PublicLeague />} /></Routes></MemoryRouter></QueryClientProvider>)
+  expect((await screen.findByRole('alert')).textContent).toContain('shared league could not be loaded')
+  expect(screen.queryByText('League not found')).toBeNull()
+  await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  expect(fetchMock.mock.calls.length).toBeGreaterThan(4)
+})

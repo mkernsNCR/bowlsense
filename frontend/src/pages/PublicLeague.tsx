@@ -171,7 +171,7 @@ export default function PublicLeague() {
   const tabParam = searchParams.get('tab')
   const activeTab = tabParam === 'standings' || tabParam === 'leaderboard' ? tabParam : 'overview'
 
-  const { data: league, isLoading: leagueLoading } = useQuery<League>({
+  const { data: league, isLoading: leagueLoading, isError: leagueError, refetch: refetchLeague } = useQuery<League>({
     queryKey: ['public-league', leagueId],
     queryFn: async () => {
       const response = await fetch(`/api/leagues/${leagueId}/share`)
@@ -195,13 +195,13 @@ export default function PublicLeague() {
     enabled: !isNaN(leagueId),
   })
 
-  const { data: stats } = useQuery<LeagueStats>({
+  const { data: stats, isError: statsError, refetch: refetchStats } = useQuery<LeagueStats>({
     queryKey: ['public-league-stats', leagueId],
     queryFn: () => requestJson(`/api/leagues/${leagueId}/stats`),
     enabled: !isNaN(leagueId),
   })
 
-  const { data: standings } = useQuery<LeagueStandings>({
+  const { data: standings, isError: standingsError, refetch: refetchStandings } = useQuery<LeagueStandings>({
     queryKey: ['public-league-standings', leagueId],
     queryFn: () => requestJson(`/api/leagues/${leagueId}/standings`),
     enabled: !isNaN(leagueId),
@@ -235,6 +235,12 @@ export default function PublicLeague() {
   if (leagueLoading) {
     return (
       <PublicShell eyebrow="League result" title="Loading shared league"><div className="muted">Loading league...</div></PublicShell>
+    )
+  }
+
+  if (leagueError) {
+    return (
+      <PublicShell eyebrow="League result" title="League unavailable"><div role="alert"><p>The shared league could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchLeague()}>Try again</button></div></PublicShell>
     )
   }
 
@@ -318,6 +324,7 @@ export default function PublicLeague() {
 
       {activeTab === 'overview' && (
         <div role="tabpanel" id="league-overview-panel" aria-labelledby="league-overview-tab">
+          {statsError && <div className="card" role="alert"><p>League statistics could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStats()}>Try again</button></div>}
           {/* Weekly trend */}
           {trendData.filter(d => d.average > 0).length >= 2 && (
             <div className="card" style={{ marginBottom: 20 }}>
@@ -422,6 +429,7 @@ export default function PublicLeague() {
 
       {activeTab === 'standings' && (
         <div role="tabpanel" id="league-standings-panel" aria-labelledby="league-standings-tab">
+          {standingsError && <div className="card" role="alert"><p>League standings could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStandings()}>Try again</button></div>}
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div>

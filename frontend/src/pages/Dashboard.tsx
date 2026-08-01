@@ -154,7 +154,7 @@ export default function Dashboard() {
   })
   const sessionsQuery = useQuery<Session[]>({
     queryKey: ['sessions', 'recent'],
-    queryFn: fetchRecentSessions,
+    queryFn: () => fetchRecentSessions(),
   })
   const recentGamesQuery = useQuery<Game[]>({
     queryKey: ['games-recent'],
@@ -250,8 +250,6 @@ export default function Dashboard() {
         queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
       ])
       setQuickLogDraft((draft) => ({ ...draft, saved: true }))
-    } catch {
-      // Mutation state drives the inline retry message; keep the scorer promise handled.
     } finally {
       quickLogSaveInFlight.current = false
       setQuickLogSaving(false)

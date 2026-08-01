@@ -1,16 +1,18 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
 import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useSettings } from '../hooks/useSettings'
-import BowlingScorer from '../components/BowlingScorer'
+import BowlingScorer, { type SavedBowlingGame } from '../components/BowlingScorer'
 import ShareCard from '../components/ShareCard'
-import PerfectGameCelebration from '../components/PerfectGameCelebration'
-import {
-  copySessionShareLink,
-  downloadSessionCard,
-  nativeShareSession,
-} from '../utils/sessionShare'
-import { shareOnX } from '../utils/gameShare'
+import { FrameRibbon, Icon, Sheet } from '../design'
+import { copyText } from '../features/scoring/copyText'
+import { formatSessionDate } from '../features/scoring/date'
+import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
+import type { ScoringBall } from '../features/scoring/types'
+import { gameFromFrameData } from '../utils/bowlingScore'
+import { downloadSessionCard, getSessionShareUrl, nativeShareSession } from '../utils/sessionShare'
+import { getGameShareUrl, shareOnX } from '../utils/gameShare'
+import '../features/scoring/scoring.css'
 
 interface Game {
   id: number
@@ -19,423 +21,421 @@ interface Game {
   strikes: number
   spares: number
   splits: number
-  ballId: number
+  ballId: number | null
   frameData?: string | null
 }
 
 interface SessionWithGames {
   id: number
   date: string
-  location: string
-  lanes: string
-  notes: string
+  location: string | null
+  lanes: string | null
+  notes: string | null
   games: Game[]
 }
 
-interface Ball { id: number; name: string; brand: string; thumbnailImage?: string }
+interface SessionForm {
+  date: string
+  location: string
+  lanes: string
+  notes: string
+}
 
-function frameMarks(frameData?: string | null) {
-  if (!frameData) return null
+interface CreatedGame {
+  id: number
+}
 
-  try {
-    const parsed = JSON.parse(frameData) as any
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames
-      .map((f: any, idx: number) => {
-        const b1 = f?.ball1
-        const b2 = f?.ball2
-        const b3 = f?.ball3
-        const strike = b1 === 10
-        const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
-        const mark = (v: number | null | undefined) => {
-          if (v == null) return ''
-          if (v === 10) return 'X'
-          if (v === 0) return '-'
-          return String(v)
-        }
+function getNextGameNumber(games: ReadonlyArray<{ gameNumber: number }>) {
+  return Math.max(0, ...games.map((game) => game.gameNumber)) + 1
+}
 
-        if (idx < 9) {
-          if (strike) return 'X'
-          if (b1 == null) return ''
-          if (b2 == null) return mark(b1)
-          return `${mark(b1)}${spare ? '/' : mark(b2)}`
-        }
-
-        const first = mark(b1)
-        let second = ''
-        let third = ''
-
-        if (b2 != null) {
-          if (b1 !== 10 && b1 + b2 === 10) {
-            second = '/'
-          } else {
-            second = mark(b2)
-          }
-        }
-
-        if (b3 != null) {
-          if (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10) {
-            third = '/'
-          } else {
-            third = mark(b3)
-          }
-        }
-
-        return `${first}${second}${third}`
-      })
-      .filter(Boolean)
-      .join(' ')
-  } catch {
-    return null
-  }
+function resolveSessionForm(draft: SessionForm | null, session: SessionForm) {
+  return draft ?? session
 }
 
 export default function SessionDetail() {
   const { id } = useParams()
+  const sessionId = Number(id)
   const navigate = useNavigate()
-  const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
   const { settings } = useSettings()
-  const [showScorer, setShowScorer] = useState(false)
-  const [showEditSession, setShowEditSession] = useState(false)
+  const [showScorer, setShowScorer] = useState(() => searchParams.get('start') === '1')
+  const [showSessionActions, setShowSessionActions] = useState(false)
+  const [showEditSession, setShowEditSession] = useState(() => searchParams.get('edit') === '1')
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false)
-  const [editingGameId, setEditingGameId] = useState<number | null>(null)
-  const [shareGameId, setShareGameId] = useState<number | null>(null)
-  const [showPerfectCelebration, setShowPerfectCelebration] = useState(false)
-  const [celebrationGame, setCelebrationGame] = useState<{ game: Game; session: { location: string; date: string; lanes?: string } } | null>(null)
-  const [copiedSessionLink, setCopiedSessionLink] = useState(false)
-  const [sessionShareBusy, setSessionShareBusy] = useState(false)
+  const [actionGame, setActionGame] = useState<Game | null>(null)
+  const [confirmDeleteGame, setConfirmDeleteGame] = useState(false)
+  const [editingGame, setEditingGame] = useState<Game | null>(null)
+  const [shareGame, setShareGame] = useState<Game | null>(null)
+  const [sessionForm, setSessionForm] = useState<SessionForm | null>(null)
+  const [shareStatus, setShareStatus] = useState<'idle' | 'busy' | 'copied' | 'error'>('idle')
+  const [savedNotice, setSavedNotice] = useState<string | null>(null)
 
-  const { data: session } = useQuery<SessionWithGames>({
+  const sessionQuery = useQuery<SessionWithGames>({
     queryKey: ['session', id],
-    queryFn: () => fetch(`/api/sessions/${id}`).then(r => r.json()),
+    enabled: Number.isFinite(sessionId),
+    queryFn: async () => {
+      const response = await fetch(`/api/sessions/${id}`)
+      if (!response.ok) throw new Error('Session could not be loaded.')
+      return response.json() as Promise<SessionWithGames>
+    },
     staleTime: 0,
   })
 
-  const { data: balls } = useQuery<Ball[]>({
+  const ballsQuery = useQuery<ScoringBall[]>({
     queryKey: ['balls'],
-    queryFn: () => fetch('/api/balls').then(r => r.json()),
+    queryFn: async () => {
+      const response = await fetch('/api/balls')
+      if (!response.ok) throw new Error('Balls could not be loaded.')
+      return response.json() as Promise<ScoringBall[]>
+    },
   })
 
-  const [sessionForm, setSessionForm] = useState({ date: '', location: '', lanes: '', notes: '' })
+  const refreshSession = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['session', id] }),
+      queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+      queryClient.invalidateQueries({ queryKey: ['stats'] }),
+    ])
+  }
 
   const addGame = useMutation({
-    mutationFn: (data: object) => fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['session', id] })
-      qc.invalidateQueries({ queryKey: ['sessions'] })
-      qc.invalidateQueries({ queryKey: ['stats'] })
+    mutationFn: async (game: SavedBowlingGame) => {
+      const response = await fetch('/api/games', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, ...game }),
+      })
+      if (!response.ok) throw new Error('Game could not be saved.')
+      return response.json() as Promise<CreatedGame>
     },
+    onSuccess: refreshSession,
   })
 
   const updateSession = useMutation({
-    mutationFn: (data: object) => fetch(`/api/sessions/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
-    onSuccess: () => {
+    mutationFn: async (form: SessionForm) => {
+      const response = await fetch(`/api/sessions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!response.ok) throw new Error('Session could not be updated.')
+    },
+    onSuccess: async () => {
       setShowEditSession(false)
-      qc.invalidateQueries({ queryKey: ['session', id] })
-      qc.invalidateQueries({ queryKey: ['sessions'] })
+      setSessionForm(null)
+      setSearchParams({}, { replace: true })
+      await refreshSession()
     },
   })
 
-  const deleteSession = useMutation({
-    mutationFn: () => fetch(`/api/sessions/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sessions'] })
-      qc.invalidateQueries({ queryKey: ['stats'] })
+  const removeSession = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error('Session could not be deleted.')
+    },
+    onSuccess: async () => {
+      await refreshSession()
       navigate('/sessions')
     },
   })
 
-  const editGame = useMutation({
-    mutationFn: ({ gameId, data }: { gameId: number; data: object }) => fetch(`/api/games/${gameId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['session', id] })
-      qc.invalidateQueries({ queryKey: ['sessions'] })
-      qc.invalidateQueries({ queryKey: ['stats'] })
+  const updateGame = useMutation({
+    mutationFn: async ({ gameId, game }: { gameId: number; game: SavedBowlingGame }) => {
+      const response = await fetch(`/api/games/${gameId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(game),
+      })
+      if (!response.ok) throw new Error('Game could not be updated.')
+    },
+    onSuccess: async () => {
+      setEditingGame(null)
+      await refreshSession()
     },
   })
 
-  const deleteGame = useMutation({
-    mutationFn: (gameId: number) => fetch(`/api/games/${gameId}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['session', id] })
-      qc.invalidateQueries({ queryKey: ['sessions'] })
-      qc.invalidateQueries({ queryKey: ['stats'] })
+  const removeGame = useMutation({
+    mutationFn: async (gameId: number) => {
+      const response = await fetch(`/api/games/${gameId}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error('Game could not be deleted.')
+    },
+    onSuccess: async () => {
+      setActionGame(null)
+      setConfirmDeleteGame(false)
+      await refreshSession()
     },
   })
 
-  const games = session?.games || []
-  const avg = games.length ? Math.round(games.reduce((s, g) => s + (g.score || 0), 0) / games.length) : null
-  const highGame = games.length ? Math.max(...games.map(g => g.score || 0)) : null
+  const session = sessionQuery.data
+  const games = session?.games ?? []
+  const balls = ballsQuery.data ?? []
+  const average = games.length ? Math.round(games.reduce((sum, game) => sum + game.score, 0) / games.length) : null
+  const high = games.length ? Math.max(...games.map((game) => game.score)) : null
+  const activeSessionForm = resolveSessionForm(sessionForm, {
+    date: session?.date ?? '',
+    location: session?.location ?? '',
+    lanes: session?.lanes ?? '',
+    notes: session?.notes ?? '',
+  })
 
-  return (
-    <div>
-      <div className="session-detail-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <h1 style={{ marginBottom: 0 }}>{session?.location || 'Session'}</h1>
-        <div className="session-detail-header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            className="btn btn-ghost"
-            style={{ minHeight: 32, padding: '5px 10px', borderRadius: 10 }}
-            disabled={sessionShareBusy}
-            onClick={async () => {
-              if (!id) return
-              const sessionId = Number(id)
-              if (!Number.isFinite(sessionId)) return
-              setSessionShareBusy(true)
-              const ok = await nativeShareSession({
-                sessionId,
-                filename: `bowlsense-session-${sessionId}.png`,
-                title: 'BowlSense Session',
-                text: `${session?.location || 'Session'} · ${session?.date || ''}`,
-              })
-              setSessionShareBusy(false)
-              if (!ok) {
-                await copySessionShareLink(sessionId)
-                setCopiedSessionLink(true)
-                window.setTimeout(() => setCopiedSessionLink(false), 1200)
-              }
-            }}
-          >
-            {sessionShareBusy ? 'Sharing...' : '📤 Share'}
-          </button>
-          <button
-            className="btn btn-ghost"
-            style={{ minHeight: 32, padding: '5px 10px', borderRadius: 10 }}
-            onClick={() => {
-              setSessionForm({
-                date: session?.date || '',
-                location: session?.location || '',
-                lanes: session?.lanes || '',
-                notes: session?.notes || '',
-              })
-              setShowEditSession(true)
-            }}
-          >
-            Edit
-          </button>
-        </div>
+  const openEditSession = () => {
+    if (!session) return
+    setSessionForm({
+      date: session.date,
+      location: session.location ?? '',
+      lanes: session.lanes ?? '',
+      notes: session.notes ?? '',
+    })
+    setShowSessionActions(false)
+    setShowEditSession(true)
+  }
+
+  const closeEditSession = () => {
+    setShowEditSession(false)
+    setSessionForm(null)
+    setSearchParams({}, { replace: true })
+  }
+
+  const handleSessionShare = async () => {
+    if (!session) return
+    setShareStatus('busy')
+    try {
+      const outcome = await nativeShareSession({
+        sessionId,
+        filename: `bowlsense-session-${sessionId}.png`,
+        title: 'BowlSense session',
+        text: `${session.location?.trim() || 'Center not named'} · ${session.date}`,
+      })
+      if (outcome === 'unsupported') {
+        await copyText(getSessionShareUrl(sessionId))
+        setShareStatus('copied')
+        window.setTimeout(() => setShareStatus('idle'), 1400)
+        return
+      }
+      setShareStatus('idle')
+    } catch {
+      setShareStatus('error')
+    }
+  }
+
+  const handleSessionDownload = async () => {
+    try {
+      await downloadSessionCard(sessionId, `bowlsense-session-${sessionId}.png`)
+      setSavedNotice('Score card downloaded')
+    } catch {
+      setSavedNotice('Score card download failed')
+    }
+    window.setTimeout(() => setSavedNotice(null), 1800)
+  }
+
+  const handleCopyGameLink = async (gameId: number) => {
+    try {
+      await copyText(getGameShareUrl(gameId))
+      setSavedNotice('Public link copied')
+    } catch {
+      setSavedNotice('Public link could not be copied')
+    }
+    setActionGame(null)
+    window.setTimeout(() => setSavedNotice(null), 1800)
+  }
+
+  if (!Number.isFinite(sessionId)) return <div className="scoring-flow scoring-page scoring-error">This session link is not valid.</div>
+  if (sessionQuery.isLoading) return <div className="scoring-flow scoring-page scoring-status">Loading session…</div>
+  if (sessionQuery.isError || !session) {
+    return (
+      <div className="scoring-flow scoring-page scoring-status scoring-error">
+        This session could not be loaded.
+        <button type="button" className="scoring-button quiet" onClick={() => sessionQuery.refetch()}>Try again</button>
       </div>
-      <div className="muted" style={{ marginBottom: 10, fontSize: 13 }}>
-        {session?.date}{session?.lanes ? ` · Lanes ${session.lanes}` : ''}{session?.notes ? ` · ${session.notes}` : ''}
-      </div>
+    )
+  }
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 14 }}>
-        <button
-          className="btn btn-ghost"
-          style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-          onClick={async () => {
-            if (!id) return
-            const sessionId = Number(id)
-            if (!Number.isFinite(sessionId)) return
-            await copySessionShareLink(sessionId)
-            setCopiedSessionLink(true)
-            window.setTimeout(() => setCopiedSessionLink(false), 1200)
-          }}
-        >
-          {copiedSessionLink ? '✅ Copied' : '🔗 Copy Session Link'}
-        </button>
-        <button
-          className="btn btn-ghost"
-          style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-          onClick={async () => {
-            if (!id) return
-            const sessionId = Number(id)
-            if (!Number.isFinite(sessionId)) return
-            await downloadSessionCard(sessionId, `bowlsense-session-${sessionId}.png`)
-          }}
-        >
-          ⬇️ Download Card
-        </button>
-        <button
-          className="btn btn-ghost"
-          style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-          onClick={() => {
-            if (!id) return
-            navigate(`/sessions/${id}/share`)
-          }}
-        >
-          🪄 Open Share Page
-        </button>
-      </div>
-
-      {showEditSession && (
-        <div className="card" style={{ marginBottom: 14, borderColor: 'rgba(167,139,250,0.35)', background: '#121228' }}>
-          <div style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>Editing session...</div>
-          <div style={{ display: 'grid', gap: 8 }}>
-            <input type="date" value={sessionForm.date} onChange={(e) => setSessionForm((f) => ({ ...f, date: e.target.value }))} />
-            <input placeholder="Location" value={sessionForm.location} onChange={(e) => setSessionForm((f) => ({ ...f, location: e.target.value }))} />
-            <input placeholder="Lanes" value={sessionForm.lanes} onChange={(e) => setSessionForm((f) => ({ ...f, lanes: e.target.value }))} />
-            <textarea placeholder="Notes" value={sessionForm.notes} onChange={(e) => setSessionForm((f) => ({ ...f, notes: e.target.value }))} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => updateSession.mutate(sessionForm)}>Save</button>
-              <button className="btn btn-ghost" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => setShowEditSession(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {games.length > 0 && (
-        <div style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden', marginBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 2 }}>
-            {[['Games', games.length], ['Average', avg], ['High', highGame]].map(([l, v]) => (
-              <div key={String(l)} style={{ minWidth: 110, background: '#121228', border: '1px solid var(--border)', borderRadius: 999, padding: '10px 14px', textAlign: 'center' }}>
-                <div className="muted" style={{ fontSize: 11 }}>{l}</div>
-                <div style={{ fontSize: 20, lineHeight: 1.1, fontWeight: 800, color: 'var(--accent)' }}>{v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <h2 style={{ marginBottom: 10 }}>Games</h2>
-      {!games.length && <div className="muted" style={{ marginBottom: 18 }}>No games logged yet.</div>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-        {games.map(g => {
-          const ballName = balls?.find(b => b.id === g.ballId)?.name
-          const marks = frameMarks(g.frameData)
-          return (
-            <div key={g.id} className="card" style={{ padding: 12 }}>
-              <div className="session-game-row" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ color: 'var(--accent)', fontWeight: 800, minWidth: 28 }}>#{g.gameNumber}</div>
-                <div style={{ fontWeight: 800, fontSize: 24, minWidth: 52 }}>{g.score}</div>
-                <div className="muted" style={{ fontSize: 12, lineHeight: 1.2, flex: 1, minWidth: 0 }}>
-                  {marks ? (
-                    <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: 'var(--text)', fontSize: 11 }}>{marks}</div>
-                  ) : (
-                    <div>⚡ {g.strikes ?? 0} · ✅ {g.spares ?? 0} · 🔀 {g.splits ?? 0}</div>
-                  )}
-                  {ballName && <div style={{ marginTop: 2, overflowWrap: 'anywhere' }}>🎳 {ballName}</div>}
-                </div>
-                <button
-                  onClick={() => setEditingGameId(g.id)}
-                  className="btn btn-ghost session-game-action"
-                  style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => setShareGameId(g.id)}
-                  className="btn btn-ghost session-game-action"
-                  style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-                >
-                  Share
-                </button>
-                <button
-                  onClick={() => shareOnX(g.id, g.score, session?.location)}
-                  className="btn session-game-action"
-                  style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10, background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.35)', color: '#fbbf24', fontWeight: 700 }}
-                >
-                  𝕏 Share on X
-                </button>
-                <button
-                  className="btn btn-ghost session-game-action"
-                  onClick={async () => {
-                    const url = `${window.location.origin}/score/${g.id}`
-                    await navigator.clipboard.writeText(url)
-                  }}
-                  style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}
-                >
-                  🔗 Get Share Link
-                </button>
-                <button onClick={() => deleteGame.mutate(g.id)} className="btn btn-danger" style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }}>
-                  Remove
-                </button>
-              </div>
-
-              {editingGameId === g.id && (
-                <div style={{ marginTop: 10 }}>
-                  <BowlingScorer
-                    gameNumber={g.gameNumber}
-                    balls={balls || []}
-                    defaultBallId={g.ballId ? String(g.ballId) : settings.defaultBallId}
-                    onSave={(result) => {
-                      editGame.mutate({ gameId: g.id, data: result })
-                      setEditingGameId(null)
-                    }}
-                    onCancel={() => setEditingGameId(null)}
-                  />
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {shareGameId !== null && (() => {
-        const g = games?.find(g => g.id === shareGameId)
-        if (!g) return null
-        const ballName = balls?.find(b => b.id === g.ballId)?.name
-        return (
-          <ShareCard
-            game={g}
-            session={{ location: session!.location, date: session!.date, lanes: session?.lanes }}
-            ballName={ballName}
-            onClose={() => setShareGameId(null)}
-          />
-        )
-      })()}
-
-      {!showScorer ? (
-        <button onClick={() => setShowScorer(true)} className="btn btn-primary" style={{ width: '100%', marginBottom: 18 }}>
-          🎳 Start New Game
-        </button>
-      ) : (
+  if (showScorer) {
+    return (
+      <div className="scoring-flow scoring-page scoring-page--focused">
         <BowlingScorer
-          gameNumber={games.length + 1}
-          balls={balls || []}
+          gameNumber={getNextGameNumber(games)}
+          balls={balls}
           defaultBallId={settings.defaultBallId}
           onSave={async (game) => {
-            const result = await addGame.mutateAsync({ sessionId: parseInt(id!), ...game })
+            await addGame.mutateAsync(game)
             setShowScorer(false)
-            if (game.score === 300 && result?.id) {
-              setCelebrationGame({
-                game: { ...game, id: result.id, ballId: game.ballId ?? 0 },
-                session: { location: session?.location || '', date: session?.date || '', lanes: session?.lanes },
-              })
-              setShowPerfectCelebration(true)
-            }
+            setSearchParams({}, { replace: true })
+            setSavedNotice(`Game ${game.gameNumber} saved`)
+            window.setTimeout(() => setSavedNotice(null), 1800)
           }}
-          onCancel={() => setShowScorer(false)}
+          onCancel={() => {
+            setShowScorer(false)
+            setSearchParams({}, { replace: true })
+          }}
         />
-      )}
+      </div>
+    )
+  }
 
-      <div style={{ marginBottom: 84 }}>
-        {!confirmDeleteSession ? (
-          <button className="btn btn-danger" style={{ width: '100%' }} onClick={() => setConfirmDeleteSession(true)}>
-            Delete Session
-          </button>
-        ) : (
-          <div className="card" style={{ borderColor: 'rgba(255,120,120,0.35)' }}>
-            <div className="muted" style={{ marginBottom: 8, fontSize: 13 }}>Are you sure? This cannot be undone.</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-danger" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => deleteSession.mutate()}>Confirm Delete</button>
-              <button className="btn btn-ghost" style={{ minHeight: 32, padding: '5px 10px' }} onClick={() => setConfirmDeleteSession(false)}>Cancel</button>
-            </div>
-          </div>
-        )}
+  return (
+    <div className="scoring-flow scoring-page">
+      <div className="scoring-page-header">
+        <div>
+          <p className="scoring-eyebrow">{formatSessionDate(session.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+          <h1 className="scoring-large-title">{session.location || 'Session'}</h1>
+          <p className="scoring-subtitle">
+            {session.lanes ? `Lanes ${session.lanes}` : 'Lanes not recorded'}{session.notes ? ` · ${session.notes}` : ''}
+          </p>
+        </div>
+        <button type="button" className="scoring-icon-button" onClick={() => setShowSessionActions(true)} aria-label="Session actions"><Icon name="more" /></button>
       </div>
 
-      {showPerfectCelebration && celebrationGame && (
-        <PerfectGameCelebration
-          score={celebrationGame.game.score}
-          gameNumber={celebrationGame.game.gameNumber}
-          frameData={celebrationGame.game.frameData ?? ''}
-          session={celebrationGame.session}
-          ballName={balls?.find(b => b.id === celebrationGame.game.ballId)?.name}
-          onShare={() => {
-            setShowPerfectCelebration(false)
-            setShareGameId(celebrationGame.game.id)
-          }}
-          onSave={() => {
-            // already saved
-            setShowPerfectCelebration(false)
-          }}
-          onRetake={() => {
-            setShowPerfectCelebration(false)
-            setShowScorer(true)
-          }}
+      <section className="scoring-metrics" aria-label="Session summary">
+        <div className="scoring-metric"><span>Games</span><strong>{games.length}</strong></div>
+        <div className="scoring-metric"><span>Average</span><strong>{average ?? '—'}</strong></div>
+        <div className="scoring-metric"><span>High</span><strong>{high ?? '—'}</strong></div>
+      </section>
+
+      {savedNotice && (
+        <div className="live-edit-banner" role="status">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Icon name="check" size={18} /> {savedNotice}</span>
+        </div>
+      )}
+
+      <h2 className="scoring-section-title">Games</h2>
+      {games.length === 0 ? (
+        <div className="scoring-group scoring-empty">
+          <strong>No games in this session</strong>
+          <p>Start the scorer and record your first ball.</p>
+        </div>
+      ) : (
+        <div className="scoring-group">
+          {games.map((game) => {
+            const ballName = balls.find((ball) => ball.id === game.ballId)?.name
+            return (
+              <article className="scoring-row" key={game.id} style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <div className="scoring-row-copy" style={{ flexBasis: 'calc(100% - 64px)' }}>
+                  <p className="scoring-row-title">Game {game.gameNumber} <span className="scoring-row-value" style={{ marginLeft: 8 }}>{game.score}</span></p>
+                  <p className="scoring-row-meta">{game.strikes} strikes · {game.spares} spares{ballName ? ` · ${ballName}` : ''}</p>
+                </div>
+                <button type="button" className="scoring-row-action" onClick={() => { setActionGame(game); setConfirmDeleteGame(false) }} aria-label={`Actions for game ${game.gameNumber}`}><Icon name="more" /></button>
+                <div style={{ flexBasis: '100%', minWidth: 0 }}>
+                  <FrameRibbon frames={toFrameRibbonFrames(gameFromFrameData(game.frameData).frames)} label={`Game ${game.gameNumber}, score ${game.score}`} compact />
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      <button type="button" className="scoring-button primary wide" style={{ marginTop: 18, minHeight: 52 }} onClick={() => { setSearchParams({}, { replace: true }); setShowScorer(true) }}>
+        <Icon name="plus" /> Start new game
+      </button>
+
+      {editingGame && (
+        <Sheet
+          open
+          onClose={() => setEditingGame(null)}
+          title={`Edit game ${editingGame.gameNumber}`}
+          description="Open Score details and choose a frame. Later rolls will be held until you confirm the new score."
+          closeLabel="Close game editor"
+          className="scoring-sheet-theme scoring-sheet-wide"
+        >
+          <BowlingScorer
+            key={editingGame.id}
+            gameNumber={editingGame.gameNumber}
+            balls={balls}
+            defaultBallId={editingGame.ballId == null ? undefined : String(editingGame.ballId)}
+            initialFrameData={editingGame.frameData}
+            initialSplits={editingGame.splits}
+            onSave={async (game) => {
+              await updateGame.mutateAsync({ gameId: editingGame.id, game })
+              setSavedNotice(`Game ${game.gameNumber} updated`)
+              window.setTimeout(() => setSavedNotice(null), 1800)
+            }}
+            onCancel={() => setEditingGame(null)}
+          />
+        </Sheet>
+      )}
+
+      {showSessionActions && (
+        <Sheet open onClose={() => setShowSessionActions(false)} title="Actions" description="Session" closeLabel="Close session actions" className="scoring-sheet-theme">
+          <div className="scoring-fields">
+            <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={openEditSession}><span className="scoring-row-copy">Edit details</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" disabled={shareStatus === 'busy'} onClick={handleSessionShare}>
+              <Icon name="share" /><span className="scoring-row-copy">{shareStatus === 'copied' ? 'Link copied' : shareStatus === 'error' ? 'Share failed — retry' : shareStatus === 'busy' ? 'Preparing…' : 'Share session'}</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleSessionDownload()}>
+              <Icon name="download" /><span className="scoring-row-copy">Download score card</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => navigate(`/sessions/${sessionId}/share`)}>
+              <span className="scoring-row-copy">Open share page</span><Icon name="chevron-right" />
+            </button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteSession(true)}>
+              <Icon name="trash" /><span className="scoring-row-copy">Delete session</span><Icon name="chevron-right" />
+            </button>
+          </div>
+          {confirmDeleteSession && (
+            <div role="alert">
+              <p className="scoring-subtitle">Delete this session and all {games.length} {games.length === 1 ? 'game' : 'games'}? This cannot be undone.</p>
+              {removeSession.isError && <p className="scoring-error">The session was not deleted. Try again.</p>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={() => setConfirmDeleteSession(false)}>Keep session</button>
+                <button type="button" className="scoring-button danger" disabled={removeSession.isPending} onClick={() => removeSession.mutate()}>{removeSession.isPending ? 'Deleting…' : 'Delete session'}</button>
+              </div>
+            </div>
+          )}
+          {!confirmDeleteSession && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setShowSessionActions(false)}>Done</button>}
+        </Sheet>
+      )}
+
+      {showEditSession && (
+        <Sheet open onClose={closeEditSession} title="Edit session" closeLabel="Close session editor" className="scoring-sheet-theme">
+          <div className="scoring-fields">
+            <div className="scoring-field"><label htmlFor="edit-session-date">Date</label><input id="edit-session-date" type="date" value={activeSessionForm.date} onChange={(event) => setSessionForm({ ...activeSessionForm, date: event.target.value })} /></div>
+            <div className="scoring-field"><label htmlFor="edit-session-location">Center</label><input id="edit-session-location" value={activeSessionForm.location} onChange={(event) => setSessionForm({ ...activeSessionForm, location: event.target.value })} /></div>
+            <div className="scoring-field"><label htmlFor="edit-session-lanes">Lanes</label><input id="edit-session-lanes" value={activeSessionForm.lanes} onChange={(event) => setSessionForm({ ...activeSessionForm, lanes: event.target.value })} /></div>
+            <div className="scoring-field"><label htmlFor="edit-session-notes">Notes</label><textarea id="edit-session-notes" value={activeSessionForm.notes} onChange={(event) => setSessionForm({ ...activeSessionForm, notes: event.target.value })} /></div>
+          </div>
+          {updateSession.isError && <p className="scoring-error">Changes were not saved. Try again.</p>}
+          <div className="scoring-sheet-actions">
+            <button type="button" className="scoring-button secondary" autoFocus onClick={closeEditSession}>Cancel</button>
+            <button type="button" className="scoring-button primary" disabled={!activeSessionForm.date || !activeSessionForm.location.trim() || updateSession.isPending} onClick={() => updateSession.mutate(activeSessionForm)}>{updateSession.isPending ? 'Saving…' : 'Save changes'}</button>
+          </div>
+        </Sheet>
+      )}
+
+      {actionGame && (
+        <Sheet open onClose={() => setActionGame(null)} title="Game actions" description={`Game ${actionGame.gameNumber} · ${actionGame.score}`} closeLabel="Close game actions" className="scoring-sheet-theme">
+          <div className="scoring-fields">
+            <button type="button" className="scoring-row scoring-row-action" autoFocus onClick={() => { setEditingGame(actionGame); setActionGame(null) }}><span className="scoring-row-copy">Edit score</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => { setShareGame(actionGame); setActionGame(null) }}><Icon name="share" /><span className="scoring-row-copy">Share score card</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => shareOnX(actionGame.id, actionGame.score, session.location?.trim() || 'Center not named')}><span className="scoring-row-copy">Share on X</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => void handleCopyGameLink(actionGame.id)}><span className="scoring-row-copy">Copy public link</span><Icon name="chevron-right" /></button>
+            <button type="button" className="scoring-row scoring-row-action" onClick={() => setConfirmDeleteGame(true)}><Icon name="trash" /><span className="scoring-row-copy">Delete game</span><Icon name="chevron-right" /></button>
+          </div>
+          {confirmDeleteGame && (
+            <div role="alert">
+              <p className="scoring-subtitle">Delete game {actionGame.gameNumber}? Session statistics will update. This cannot be undone.</p>
+              {removeGame.isError && <p className="scoring-error">The game was not deleted. Try again.</p>}
+              <div className="scoring-sheet-actions">
+                <button type="button" className="scoring-button secondary" onClick={() => setConfirmDeleteGame(false)}>Keep game</button>
+                <button type="button" className="scoring-button danger" disabled={removeGame.isPending} onClick={() => removeGame.mutate(actionGame.id)}>{removeGame.isPending ? 'Deleting…' : 'Delete game'}</button>
+              </div>
+            </div>
+          )}
+          {!confirmDeleteGame && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} onClick={() => setActionGame(null)}>Done</button>}
+        </Sheet>
+      )}
+
+      {shareGame && (
+        <ShareCard
+          game={shareGame}
+          session={{ location: session.location?.trim() || 'Center not named', date: session.date, lanes: session.lanes ?? '' }}
+          ballName={balls.find((ball) => ball.id === shareGame.ballId)?.name}
+          onClose={() => setShareGame(null)}
         />
       )}
+
+      <p className="scoring-subtitle" style={{ marginTop: 24 }}><Link to="/sessions">Back to sessions</Link></p>
     </div>
   )
 }

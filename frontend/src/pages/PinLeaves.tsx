@@ -84,11 +84,9 @@ export default function PinLeaves() {
   if (query.isLoading) {
     return (
       <InsightsWorkspace description="Find the leave that deserves your next practice block.">
-        <section className="insights-state" aria-busy="true" aria-live="polite">
-          <span className="insights-state-mark" aria-hidden="true" />
-          <h2>Mapping your pin leaves</h2>
-          <p>Counting repeat leaves and checking how often each one was converted.</p>
-        </section>
+        <InsightState title="Mapping your pin leaves" status="loading">
+          Counting repeat leaves and checking how often each one was converted.
+        </InsightState>
       </InsightsWorkspace>
     )
   }
@@ -203,7 +201,7 @@ export default function PinLeaves() {
           </div>
           {data.byMonth.length > 0 ? (
             <div className="insights-months">
-              {data.byMonth.slice(0, 6).map((month) => (
+              {data.byMonth.slice().reverse().slice(0, 6).map((month) => (
                 <div className="insights-month" key={month.month}>
                   <span>{month.month}</span>
                   <div className="insights-tags">

@@ -66,7 +66,7 @@ export default function ScoreCalculator() {
     if (!Number.isFinite(target) || target < 0 || target > 300) {
       return { kind: 'invalid' as const, target }
     }
-    const required = Math.ceil(target * (validScores.length + 1) - summary.total)
+    const required = Math.ceil((target - 0.5) * (validScores.length + 1) - summary.total)
     if (required <= 0) return { kind: 'achieved' as const, target }
     if (required > 300) return { kind: 'unreachable' as const, target, required }
     return { kind: 'score' as const, target, required }

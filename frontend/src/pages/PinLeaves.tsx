@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { InsightMetric, InsightsWorkspace, InsightState, LeadTakeaway } from '../features/insights/InsightsWorkspace'
+import { fetchJson } from '../features/insights/data'
 
 interface PinLeaveEntry {
   pins: string
@@ -22,58 +24,34 @@ interface PinLeaveData {
   byMonth: MonthLeaves[]
 }
 
-function parsePins(pinsStr: string): number[] {
-  if (!pinsStr) return []
-  return pinsStr.split(',').map(Number).filter(n => !Number.isNaN(n))
+const pinPositions: Record<number, [number, number]> = {
+  7: [18, 18], 8: [39, 18], 9: [61, 18], 10: [82, 18],
+  4: [28, 40], 5: [50, 40], 6: [72, 40],
+  2: [39, 62], 3: [61, 62],
+  1: [50, 82],
 }
 
-// SVG pin deck — dots for standing pins with pin numbers
-function PinDeckDiagram({ highlighted = [], size = 180 }: { highlighted?: string[]; size?: number }) {
-  // Pin positions in viewBox "0 0 100 85" — back row (7,8,9,10) at top
-  const pinPositions: Record<number, [number, number]> = {
-    7: [15, 15], 8: [35, 15], 9: [55, 15], 10: [75, 15],
-    4: [25, 38], 5: [50, 38], 6: [75, 38],
-    2: [38, 60], 3: [63, 60],
-    1: [50, 78],
-  }
-  const cx = size / 2
-  const cy = size / 2
-  const scale = size / 100
+function parsePins(pins: string): number[] {
+  return pins.split(',').map(Number).filter((pin) => Number.isInteger(pin) && pin >= 1 && pin <= 10)
+}
 
-  const highlightedPins = new Set<number>()
-  for (const leave of highlighted) {
-    for (const p of parsePins(leave)) highlightedPins.add(p)
-  }
-
+function PinDeck({ leave }: { leave: string | null }) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const standing = new Set(leave ? parsePins(leave) : [])
+  const description = leave ? `Standing pins ${leave}` : 'No leave selected'
   return (
-    <svg viewBox="0 0 100 95" width={size} height={size * 0.95} style={{ display: 'block' }}>
-      <ellipse cx="50" cy="47" rx="46" ry="43" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1.5" />
-      {[10, 7, 8, 9, 4, 5, 6, 2, 3, 1].map(num => {
-        const [px, py] = pinPositions[num]
-        const isLeft = highlightedPins.has(num)
-        const isHighlighted = highlighted.length > 0 && isLeft
+    <svg viewBox="0 0 100 100" role="img" aria-labelledby={`${titleId} ${descriptionId}`}>
+      <title id={titleId}>Pin deck</title>
+      <desc id={descriptionId}>{description}</desc>
+      <ellipse className="pin-deck-ring" cx="50" cy="50" rx="47" ry="46" />
+      {Object.entries(pinPositions).map(([pinKey, [x, y]]) => {
+        const pin = Number(pinKey)
+        const isStanding = standing.has(pin)
         return (
-          <g key={num}>
-            <circle
-              cx={cx + (px - 50) * scale}
-              cy={cy + (py - 47) * scale}
-              r={num === 1 ? 7 * scale : 6 * scale}
-              fill={isHighlighted ? '#fbbf24' : isLeft ? 'rgba(167,139,250,0.5)' : 'rgba(255,255,255,0.12)'}
-              stroke={isHighlighted ? '#fbbf24' : isLeft ? '#a78bfa' : 'rgba(255,255,255,0.28)'}
-              strokeWidth={isHighlighted ? 2.5 : 1}
-            />
-            <text
-              x={cx + (px - 50) * scale}
-              y={cy + (py - 47) * scale + 1}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontSize={num === 1 ? 7 * scale : 6 * scale}
-              fontWeight="700"
-              fill={isHighlighted ? '#0d0d1a' : isLeft ? '#fff' : 'rgba(255,255,255,0.45)'}
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              {num}
-            </text>
+          <g key={pin}>
+            <circle className={`pin-deck-pin${isStanding ? ' is-standing' : ''}`} cx={x} cy={y} r="8" />
+            <text className={`pin-deck-number${isStanding ? ' is-standing' : ''}`} x={x} y={y + 2.4} textAnchor="middle">{pin}</text>
           </g>
         )
       })}
@@ -81,195 +59,162 @@ function PinDeckDiagram({ highlighted = [], size = 180 }: { highlighted?: string
   )
 }
 
-function LeaveBar({ pct, color = '#a78bfa' }: { pct: number; color?: string }) {
-  return (
-    <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 3, overflow: 'hidden', marginTop: 5 }}>
-      <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.35s' }} />
-    </div>
-  )
-}
-
 export default function PinLeaves() {
-  const { data, isLoading } = useQuery<PinLeaveData>({
+  const query = useQuery<PinLeaveData>({
     queryKey: ['pin-leaves'],
-    queryFn: () => fetch('/api/analytics/pin-leaves').then(r => r.json()),
+    queryFn: () => fetchJson<PinLeaveData>('/api/analytics/pin-leaves'),
   })
-
   const [selectedLeave, setSelectedLeave] = useState<string | null>(null)
 
-  useEffect(() => { document.title = 'Pin Leave Analysis 🎯' }, [])
-
-  const total = data?.totalFirstThrows ?? 0
-  const topLeave = data?.leaves[0]
+  const repeatedLeaves = useMemo(
+    () => query.data?.leaves.filter((leave) => leave.count >= 2) ?? [],
+    [query.data],
+  )
+  const practiceLeave = useMemo(() => {
+    return [...repeatedLeaves].sort((a, b) => {
+      const missedA = a.count - a.conversions
+      const missedB = b.count - b.conversions
+      return missedB - missedA || b.count - a.count || a.conversionRate - b.conversionRate
+    })[0] ?? null
+  }, [repeatedLeaves])
   const bestConversion = useMemo(() => {
-    if (!data?.leaves.length) return null
-    return [...data.leaves].filter(l => l.count >= 2).sort((a, b) => b.conversionRate - a.conversionRate)[0]
-  }, [data])
-  const worstConversion = useMemo(() => {
-    if (!data?.leaves.length) return null
-    return [...data.leaves].filter(l => l.count >= 2).sort((a, b) => a.conversionRate - b.conversionRate)[0]
-  }, [data])
+    return [...repeatedLeaves].sort((a, b) => b.conversionRate - a.conversionRate || b.count - a.count)[0] ?? null
+  }, [repeatedLeaves])
 
-  if (isLoading) {
+  if (query.isLoading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <span className="muted">Loading pin analysis…</span>
-      </div>
+      <InsightsWorkspace description="Find the leave that deserves your next practice block.">
+        <InsightState title="Mapping your pin leaves" status="loading">
+          Counting repeat leaves and checking how often each one was converted.
+        </InsightState>
+      </InsightsWorkspace>
     )
   }
 
+  if (query.isError) {
+    return (
+      <InsightsWorkspace description="Find the leave that deserves your next practice block.">
+        <InsightState
+          title="Pin practice could not load"
+          tone="error"
+          action={<button className="insights-button" type="button" onClick={() => void query.refetch()}>Try again</button>}
+        >
+          Check your connection, then retry. No frame data has been changed.
+        </InsightState>
+      </InsightsWorkspace>
+    )
+  }
+
+  const data = query.data
+  if (!data || data.totalFirstThrows === 0 || data.leaves.length === 0) {
+    return (
+      <InsightsWorkspace description="Find the leave that deserves your next practice block.">
+        <InsightState
+          title="Frame data unlocks pin practice"
+          action={<Link className="insights-button" to="/sessions/new">Start bowling</Link>}
+        >
+          Record first-ball leaves and spare attempts in a game. Repeat patterns and conversion opportunities will appear here.
+        </InsightState>
+      </InsightsWorkspace>
+    )
+  }
+
+  const topLeave = data.leaves[0]
+  const activeLeave = selectedLeave ?? practiceLeave?.pins ?? topLeave.pins
+  const practiceDetail = practiceLeave
+    ? `You have seen it ${practiceLeave.count} times and converted ${practiceLeave.conversions}, a ${practiceLeave.conversionRate}% rate. Select any leave below to map it on the deck.`
+    : `You need at least two attempts at a leave before BowlSense can rank it as a repeat practice opportunity.`
+
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Pin Leave Analysis</h1>
-          <p className="muted" style={{ margin: '4px 0 0' }}>
-            {total > 0
-              ? `Tracking ${total} first-throw pin leaves`
-              : 'No pin data yet — log games to see your patterns'}
-          </p>
-        </div>
-        <Link to="/stats" className="btn btn-ghost" style={{ flexShrink: 0 }}>← Back to Stats</Link>
+    <InsightsWorkspace description="Find the leave that deserves your next practice block.">
+      <LeadTakeaway detail={practiceDetail} label="Next practice block">
+        {practiceLeave ? `Set up the ${practiceLeave.pins} leave first.` : `Build a repeatable spare sample.`}
+      </LeadTakeaway>
+
+      <section className="insights-metrics" aria-label="Pin leave summary">
+        <InsightMetric label="Tracked first balls" value={data.totalFirstThrows} note="With frame detail" />
+        <InsightMetric label="Most common" value={topLeave.pins} note={`${topLeave.count} times · ${topLeave.pct}%`} />
+        <InsightMetric label="Best conversion" value={bestConversion ? `${bestConversion.conversionRate}%` : '—'} note={bestConversion?.pins ?? 'Need repeat attempts'} />
+        <InsightMetric label="Practice leave" value={practiceLeave?.pins ?? '—'} note={practiceLeave ? `${practiceLeave.conversionRate}% converted` : 'Need repeat attempts'} />
+      </section>
+
+      <div className="insights-pin-layout">
+        <section className="insights-panel insights-pin-deck">
+          <div className="insights-panel-header">
+            <div>
+              <h2>{activeLeave} leave</h2>
+              <p>Standing pins are shown in purple</p>
+            </div>
+          </div>
+          <PinDeck leave={activeLeave} />
+        </section>
+
+        <section className="insights-panel">
+          <div className="insights-panel-header">
+            <div>
+              <h2>Leave frequency</h2>
+              <p>Select a leave to map it on the deck</p>
+            </div>
+          </div>
+          <ol className="insights-leave-list">
+            {data.leaves.map((leave) => {
+              const isSelected = activeLeave === leave.pins
+              return (
+                <li key={leave.pins}>
+                  <button
+                    className="insights-leave-button"
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedLeave(leave.pins)}
+                  >
+                    <strong>{leave.pins}</strong>
+                    <span>
+                      {leave.count} time{leave.count === 1 ? '' : 's'} · {leave.pct}% of tracked throws
+                      <i className="insights-rate-track" aria-hidden="true"><i style={{ width: `${Math.min(100, leave.pct)}%` }} /></i>
+                    </span>
+                    <span>{leave.conversionRate}% converted</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        </section>
       </div>
 
-      {total === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <div style={{ fontSize: 52, marginBottom: 14 }}>🎳</div>
-          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 18 }}>No Pin Data Yet</div>
-          <div className="muted" style={{ marginBottom: 20, lineHeight: 1.6 }}>
-            Pin leaves are recorded automatically when you log games.<br />
-            Play a few sessions and check back here.
+      <div className="insights-grid">
+        <section className="insights-panel">
+          <div className="insights-panel-header">
+            <div><h2>Unseen leaves</h2><p>Pin combinations not yet present in your sample</p></div>
           </div>
-          <Link to="/sessions/new" className="btn btn-primary">Log a Game →</Link>
-        </div>
-      ) : (
-        <>
-          {/* Summary cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 10, marginBottom: 18 }}>
-            <div className="card" style={{ textAlign: 'center' }}>
-              <div className="muted" style={{ fontSize: 10, letterSpacing: 0.6, marginBottom: 4 }}>TRACKED THROWS</div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: '#a78bfa' }}>{total}</div>
+          {data.neverLeft.length > 0 ? (
+            <div className="insights-tags">
+              {data.neverLeft.map((pins) => <span className="insights-tag" key={pins}>{pins}</span>)}
             </div>
-            <div className="card" style={{ textAlign: 'center' }}>
-              <div className="muted" style={{ fontSize: 10, letterSpacing: 0.6, marginBottom: 4 }}>MOST LEFT</div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: '#fbbf24' }}>{topLeave?.pins ?? '—'}</div>
-              <div className="muted" style={{ fontSize: 10 }}>{topLeave?.count ?? 0}x · {topLeave?.pct ?? 0}%</div>
-            </div>
-            <div className="card" style={{ textAlign: 'center' }}>
-              <div className="muted" style={{ fontSize: 10, letterSpacing: 0.6, marginBottom: 4 }}>BEST CONVERSION</div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: '#34d399' }}>{bestConversion?.pins ?? '—'}</div>
-              <div className="muted" style={{ fontSize: 10 }}>{bestConversion?.conversionRate ?? 0}%</div>
-            </div>
-            <div className="card" style={{ textAlign: 'center' }}>
-              <div className="muted" style={{ fontSize: 10, letterSpacing: 0.6, marginBottom: 4 }}>NEEDS WORK</div>
-              <div style={{ fontSize: 30, fontWeight: 900, color: '#fc8181' }}>{worstConversion?.pins ?? '—'}</div>
-              <div className="muted" style={{ fontSize: 10 }}>{worstConversion?.conversionRate ?? 0}%</div>
-            </div>
+          ) : (
+            <p className="muted">No unseen-leave data is available for this sample.</p>
+          )}
+        </section>
+
+        <section className="insights-panel">
+          <div className="insights-panel-header">
+            <div><h2>Recent months</h2><p>How repeat leaves have shifted</p></div>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            {/* Pin deck */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontWeight: 700 }}>Pin Deck</div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
-                {selectedLeave
-                  ? <>Leave: <b style={{ color: '#fbbf24' }}>{selectedLeave}</b></>
-                  : 'Tap a row below to highlight'}
-              </div>
-              <PinDeckDiagram
-                highlighted={selectedLeave ? [selectedLeave] : data?.leaves.slice(0, 3).map(l => l.pins) ?? []}
-                size={200}
-              />
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Back row = 7-8-9-10</div>
-            </div>
-
-            {/* Never left */}
-            <div className="card">
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>🎯 Pins Never Left</div>
-              {data?.neverLeft.length ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {data.neverLeft.map(p => (
-                    <span key={p} style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.28)', borderRadius: 999, padding: '3px 10px', fontSize: 12, color: '#34d399' }}>
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="muted" style={{ fontSize: 13 }}>You've left just about everything!</div>
-              )}
-            </div>
-          </div>
-
-          {/* Monthly trend */}
-          {data?.byMonth.length ? (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>📅 Monthly Trend</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {data.byMonth.slice(0, 6).map(m => (
-                  <div key={m.month} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', minWidth: 56, fontFamily: 'monospace' }}>{m.month}</div>
-                    <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                      {m.leaves.map(l => (
-                        <span key={l.pins} style={{ background: 'rgba(167,139,250,0.18)', border: '1px solid rgba(167,139,250,0.28)', borderRadius: 999, padding: '2px 8px', fontSize: 11, color: '#c4b5fd' }}>
-                          {l.pins} <span style={{ opacity: 0.65 }}>×{l.count}</span>
-                        </span>
-                      ))}
-                    </div>
+          {data.byMonth.length > 0 ? (
+            <div className="insights-months">
+              {data.byMonth.slice().reverse().slice(0, 6).map((month) => (
+                <div className="insights-month" key={month.month}>
+                  <span>{month.month}</span>
+                  <div className="insights-tags">
+                    {month.leaves.map((leave) => <span className="insights-tag" key={leave.pins}>{leave.pins} ×{leave.count}</span>)}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ) : null}
-
-          {/* Leaves table */}
-          <div className="card">
-            <div style={{ fontWeight: 700, marginBottom: 14 }}>All Pin Leaves</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 460 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Pins Left', 'Count', '% of Throws', 'Conversions', 'Conv Rate'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.4 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.leaves.map(leave => {
-                    const isSelected = selectedLeave === leave.pins
-                    return (
-                      <tr
-                        key={leave.pins}
-                        onClick={() => setSelectedLeave(isSelected ? null : leave.pins)}
-                        style={{ cursor: 'pointer', background: isSelected ? 'rgba(251,191,36,0.07)' : undefined, transition: 'background 0.15s' }}
-                      >
-                        <td style={{ padding: '9px 10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <PinDeckDiagram highlighted={[leave.pins]} size={38} />
-                            <span style={{ fontWeight: 600, fontSize: 14, color: isSelected ? '#fbbf24' : 'var(--text)' }}>{leave.pins}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '9px 10px', color: 'var(--text)' }}>{leave.count}x</td>
-                        <td style={{ padding: '9px 10px', minWidth: 100 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 12, color: 'var(--muted)', minWidth: 32 }}>{leave.pct}%</span>
-                            <LeaveBar pct={leave.pct} />
-                          </div>
-                        </td>
-                        <td style={{ padding: '9px 10px', color: 'var(--text)' }}>{leave.conversions}</td>
-                        <td style={{ padding: '9px 10px' }}>
-                          <span style={{ fontSize: 12, color: leave.conversionRate >= 70 ? '#34d399' : leave.conversionRate >= 40 ? '#fbbf24' : '#fc8181' }}>
-                            {leave.conversionRate}%
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+          ) : (
+            <p className="muted">Monthly patterns appear after leaves are recorded across dated sessions.</p>
+          )}
+        </section>
+      </div>
+    </InsightsWorkspace>
   )
 }

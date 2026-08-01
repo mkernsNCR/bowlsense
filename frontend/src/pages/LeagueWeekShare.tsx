@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface WeekData {
   league: { id: number; name: string; location: string | null; season: string | null }
@@ -17,7 +17,7 @@ function scoreColor(score: number): { bg: string; text: string; label: string } 
   if (score >= 250) return { bg: '#a78bfa', text: '#ffffff', label: String(score) }
   if (score >= 200) return { bg: '#818cf8', text: '#ffffff', label: String(score) }
   if (score < 170) return { bg: '#fc8181', text: '#ffffff', label: String(score) }
-  return { bg: 'rgba(255,255,255,0.12)', text: '#ffffff', label: String(score) }
+  return { bg: '#ede9f7', text: 'var(--public-ink)', label: String(score) }
 }
 
 export default function LeagueWeekShare() {
@@ -36,7 +36,7 @@ export default function LeagueWeekShare() {
     },
   })
 
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink } = useCopyLink()
 
   const title = data ? `${data.league.name} — Week ${data.week.weekNumber} Recap 🎳` : 'League Week Recap 🎳'
   const subtitle = data ? [data.league.location, `Week ${data.week.weekNumber}`, data.week.date].filter(Boolean).join(' · ') : ''
@@ -57,14 +57,6 @@ export default function LeagueWeekShare() {
     return `https://twitter.com/intent/tweet?text=${text}&url=${url}`
   }, [data, shareText])
 
-  const copyLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch { /* ignore */ }
-  }
-
   const nativeShare = async () => {
     if (!data || !navigator.share) return
     try {
@@ -76,7 +68,7 @@ export default function LeagueWeekShare() {
 
   if (invalidIds) {
     return (
-      <PublicShell eyebrow="League recap" title="League or week not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="League recap" title="League or week not found"><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 
@@ -85,15 +77,15 @@ export default function LeagueWeekShare() {
       <div className="public-legacy-content" style={{ maxWidth: 960, margin: '0 auto' }}>
 
         {isLoading && (
-          <div style={{ textAlign: 'center', padding: 80, color: 'rgba(255,255,255,0.6)' }}>Loading recap...</div>
+          <div className="muted" style={{ textAlign: 'center', padding: 80 }}>Loading recap...</div>
         )}
 
         {isError && (
           <div style={{ textAlign: 'center', padding: 80 }}>
-            <div style={{ color: '#fc8181', marginBottom: 16 }}>Failed to load week data.</div>
-            <p style={{ color: 'rgba(255,255,255,0.6)' }}>This shared league week is unavailable right now.</p>
+            <div role="alert" style={{ color: 'var(--danger, #b42318)', marginBottom: 16 }}>Failed to load week data.</div>
+            <p className="muted">This shared league week is unavailable right now.</p>
             <Link to="/" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-block' }}>
-              BowlSense home
+              Browse leagues on BowlSense
             </Link>
           </div>
         )}
@@ -120,14 +112,14 @@ export default function LeagueWeekShare() {
                       background: bg, borderRadius: 12, padding: '12px 16px',
                       minWidth: 72, textAlign: 'center',
                     }}>
-                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 2 }}>G{i + 1}</div>
+                      <div style={{ fontSize: 12, color: 'var(--public-muted)', marginBottom: 2 }}>G{i + 1}</div>
                       <div style={{ fontSize: 22, fontWeight: 900, color: text, lineHeight: 1 }}>{label}</div>
                     </div>
                   )
                 })}
               </div>
             ) : (
-              <div style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 20 }}>No game scores available yet.</div>
+              <div className="muted" style={{ marginBottom: 20 }}>No game scores available yet.</div>
             )}
 
             {/* Share actions */}

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sheet } from '../../design'
 import './competition.css'
@@ -83,11 +83,14 @@ export function CompetitionArchiveSheet({
   id: string
   active: number
   onClose: () => void
-  mutation: { isPending: boolean; isError: boolean; mutate: (restore: boolean) => void }
+  mutation: { isPending: boolean; isError: boolean; mutate: (restore: boolean) => void; reset: () => void }
 }) {
   const restoring = active === 0
   const singular = area === 'leagues' ? 'league' : 'tournament'
   const preserved = area === 'leagues' ? 'weeks and games' : 'games and results'
+  const { reset } = mutation
+
+  useEffect(() => reset(), [reset])
 
   return (
     <CompetitionSheet

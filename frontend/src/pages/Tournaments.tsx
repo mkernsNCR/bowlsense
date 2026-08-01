@@ -103,11 +103,6 @@ export default function TournamentsPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  if (id) {
-    const isEdit = location.pathname.endsWith('/edit')
-    return <TournamentDetail id={id} isEditing={isEdit} onEdit={() => navigate(`/tournaments/${id}/edit`)} />
-  }
-
   if (location.pathname === '/tournaments/new') {
     return (
       <>
@@ -117,6 +112,11 @@ export default function TournamentsPage() {
         </CompetitionSheet>
       </>
     )
+  }
+
+  if (id) {
+    const isEdit = location.pathname.endsWith('/edit')
+    return <TournamentDetail id={id} isEditing={isEdit} onEdit={() => navigate(`/tournaments/${id}/edit`)} />
   }
 
   return <TournamentList />
@@ -528,6 +528,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                         balls={balls || []}
                         defaultBallId={g.ballId ? String(g.ballId) : undefined}
                         initialFrameData={g.frameData}
+                        initialSplits={g.splits ?? undefined}
                         shareContext={{ location: tournament.location, date: tournament.date }}
                         onSave={async (result) => {
                           await updateGame.mutateAsync({ gameId: g.id, data: { ...result, squad: g.squad } })

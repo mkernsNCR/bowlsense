@@ -39,6 +39,11 @@ test('league and tournament archive routes are reversible and validate ids', asy
     assert.equal((await fastify.inject({ method: 'POST', url: `/api/${resource}/999/archive` })).statusCode, 404)
     assert.equal((await fastify.inject({ method: 'POST', url: `/api/${resource}/invalid/archive` })).statusCode, 400)
     assert.equal((await fastify.inject({ method: 'DELETE', url: `/${resource}/invalid` })).statusCode, 400)
+
+    const deleted = await fastify.inject({ method: 'DELETE', url: `/api/${resource}/1` })
+    assert.equal(deleted.statusCode, 204)
+    const preserved = (await fastify.inject({ method: 'GET', url: `/api/${resource}?includeArchived=1` })).json()
+    assert.equal(preserved.find((row) => row.id === 1).active, 0)
   }
 })
 
@@ -68,7 +73,13 @@ test('backup restore and tournament CSV preserve active state and legacy default
   const csv = await fastify.inject({ method: 'GET', url: '/api/tournaments/export.csv' })
   assert.equal(csv.statusCode, 200)
   assert.match(csv.headers['content-type'], /text\/csv/)
-  assert.match(csv.body.split('\n')[0], /active/)
-  assert.match(csv.body, /Archived Tournament[\s\S]*,0,/)
-  assert.match(csv.body, /Legacy Tournament[\s\S]*,1,/)
+  const rows = csv.body.trim().split('\n').map((line) => line.split(',').map((value) => value.replace(/^"|"$/g, '').replace(/""/g, '"')))
+  const [header, ...dataRows] = rows
+  const nameColumn = header.indexOf('name')
+  const activeColumn = header.indexOf('active')
+  assert.notEqual(nameColumn, -1)
+  assert.notEqual(activeColumn, -1)
+  const activeByName = new Map(dataRows.map((row) => [row[nameColumn], row[activeColumn]]))
+  assert.equal(activeByName.get('Archived Tournament'), '0')
+  assert.equal(activeByName.get('Legacy Tournament'), '1')
 })

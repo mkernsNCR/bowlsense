@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 import { downloadTournamentStandingsCard } from '../utils/tournamentShare'
 
 interface StandingsEntry {
@@ -70,7 +70,7 @@ export default function TournamentStandingsShare() {
   const { id } = useParams()
   const tournamentId = Number(id)
   const invalid = Number.isNaN(tournamentId)
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: handleCopyLink } = useCopyLink()
   const [downloaded, setDownloaded] = useState(false)
 
   const { data: standings, isLoading: standingsLoading, isError: standingsError } = useQuery<StandingsResponse>({
@@ -118,14 +118,6 @@ export default function TournamentStandingsShare() {
 
   usePublicMetadata({ title, description: subtitle || 'Tournament standings', imageUrl: ogImageUrl })
 
-  const handleCopyLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch { /* ignore */ }
-  }
-
   const handleDownload = async () => {
     if (!tournament || invalid) return
     const filename = `bowlsense-standings-${tournament.name.replace(/\s+/g, '-').toLowerCase()}-${tournamentId}.png`
@@ -150,7 +142,7 @@ export default function TournamentStandingsShare() {
 
   if (invalid) {
     return (
-      <PublicShell eyebrow="Tournament standings" title="Tournament not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="Tournament standings" title="Tournament not found"><Link to="/">Browse tournaments on BowlSense</Link></PublicShell>
     )
   }
 

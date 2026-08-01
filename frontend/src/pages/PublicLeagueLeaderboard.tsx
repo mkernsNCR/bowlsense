@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface LeaderboardRecord {
   wins: number
@@ -41,7 +41,7 @@ interface LeagueMeta {
 
 export default function PublicLeagueLeaderboard() {
   const { id } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: shareCopy } = useCopyLink()
   const leagueId = Number(id)
   const invalidId = Number.isNaN(leagueId)
 
@@ -77,16 +77,6 @@ export default function PublicLeagueLeaderboard() {
 
   usePublicMetadata({ title, description, imageUrl: invalidId ? '' : ogImageUrl })
 
-  const shareCopy = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
-  }
-
   const tweetText = encodeURIComponent(
     `Check out the ${league?.name || 'league'} leaderboard! 🎳`
   )
@@ -95,7 +85,7 @@ export default function PublicLeagueLeaderboard() {
 
   if (invalidId) {
     return (
-      <PublicShell eyebrow="League leaderboard" title="League not found" detail="The league link looks invalid."><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="League leaderboard" title="League not found" detail="The league link looks invalid."><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  copySessionShareLink,
   downloadSessionCard,
   nativeShareSession,
 } from '../utils/sessionShare'
 import { Icon } from '../design'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface PublicSessionPayload {
   session: {
@@ -39,8 +39,8 @@ export default function SessionShare() {
   const [data, setData] = useState<PublicSessionPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState<'share' | 'download' | null>(null)
+  const { copied, copyLink } = useCopyLink()
 
   useEffect(() => {
     let mounted = true
@@ -87,13 +87,6 @@ export default function SessionShare() {
 
   usePublicMetadata({ title, description, imageUrl })
 
-  const copyLink = async () => {
-    if (!Number.isFinite(sessionId)) return
-    await copySessionShareLink(sessionId)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1200)
-  }
-
   const shareNative = async () => {
     if (!Number.isFinite(sessionId)) return
     setBusy('share')
@@ -120,7 +113,7 @@ export default function SessionShare() {
 
   if (notFound || !data) {
     return (
-      <PublicShell eyebrow="Session result" title="Session not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="Session result" title="Session not found"><Link to="/">Browse sessions on BowlSense</Link></PublicShell>
     )
   }
 

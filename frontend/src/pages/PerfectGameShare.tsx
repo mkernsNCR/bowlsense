@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import ShareCard from '../components/ShareCard'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 import { downloadGameImage, nativeShareGame, shareOnX } from '../utils/gameShare'
 
 interface PerfectGamePayload {
@@ -31,7 +31,7 @@ export default function PerfectGameShare() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: handleCopyLink } = useCopyLink()
   const [showShareCard, setShowShareCard] = useState(false)
   const [sharing, setSharing] = useState(false)
 
@@ -76,16 +76,6 @@ export default function PerfectGameShare() {
 
   usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
-  const handleCopyLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      setCopied(false)
-    }
-  }
-
   const handleNativeShare = async () => {
     if (!data || sharing) return
     setSharing(true)
@@ -107,7 +97,7 @@ export default function PerfectGameShare() {
 
   if (!Number.isFinite(gameId) || (loading === false && notFound)) {
     return (
-      <PublicShell eyebrow="Perfect game" title="Perfect game not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="Perfect game" title="Perfect game not found"><Link to="/">Browse games on BowlSense</Link></PublicShell>
     )
   }
 
@@ -118,10 +108,10 @@ export default function PerfectGameShare() {
   }
 
   if (loadError) {
-    return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><p role="alert">This shared result could not be loaded right now.</p><Link to="/">BowlSense home</Link></PublicShell>
+    return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><p role="alert">This shared result could not be loaded right now.</p><Link to="/">Browse games on BowlSense</Link></PublicShell>
   }
 
-  if (!data) return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><Link to="/">BowlSense home</Link></PublicShell>
+  if (!data) return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><Link to="/">Browse games on BowlSense</Link></PublicShell>
 
   return (
     <PublicShell eyebrow="Perfect game" title="Perfect 300" detail={`${data.session.location || 'Unknown Alley'} · ${data.session.date}`}>
@@ -257,7 +247,7 @@ export default function PerfectGameShare() {
       {/* Back link */}
       <div style={{ maxWidth: 860, margin: '28px auto 0', textAlign: 'center' }}>
         <Link to="/" style={{ color: 'rgba(167,139,250,0.8)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
-          BowlSense home
+          Browse games on BowlSense
         </Link>
       </div>
       </div>

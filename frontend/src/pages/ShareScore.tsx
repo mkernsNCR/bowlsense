@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Icon } from '../design'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface PublicGamePayload {
   game: {
@@ -31,8 +31,8 @@ export default function ShareScore() {
   const [data, setData] = useState<PublicGamePayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const { copied, copyLink } = useCopyLink()
 
   useEffect(() => {
     let mounted = true
@@ -75,16 +75,6 @@ export default function ShareScore() {
 
   usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
-  const copyLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
-    } catch {
-      setCopied(false)
-    }
-  }
-
   const shareOnX = () => {
     if (!data) return
     const text = `I just scored ${data.game.score} at ${data.session.location || 'the alley'}. #BowlSense`
@@ -122,7 +112,7 @@ export default function ShareScore() {
 
   if (notFound || !data) {
     return (
-      <PublicShell eyebrow="Game result" title="Game not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="Game result" title="Game not found"><Link to="/">Browse games on BowlSense</Link></PublicShell>
     )
   }
 
@@ -144,7 +134,7 @@ export default function ShareScore() {
           ...(data.game.ballName ? [{ label: 'Ball', value: data.game.ballName }] : []),
         ]}
       />
-      <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+      <div className="public-share-actions">
           <button
             type="button"
             onClick={shareOnX}
@@ -159,13 +149,6 @@ export default function ShareScore() {
             className="btn btn-ghost"
           >
             {downloading ? 'Saving…' : 'Download image'}
-          </button>
-          <button
-            type="button"
-            onClick={copyLink}
-            className="btn btn-ghost"
-          >
-            {copied ? 'Link copied' : 'Copy link'}
           </button>
       </div>
     </PublicShell>

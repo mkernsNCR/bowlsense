@@ -14,7 +14,7 @@ export function getGameOgImageUrl(gameId: number): string {
 }
 
 export async function copyGameShareLink(gameId: number): Promise<void> {
-  await navigator.clipboard.writeText(getGameShareUrl(gameId))
+  await copyText(getGameShareUrl(gameId))
 }
 
 async function fetchGameImageFile(gameId: number, filename: string): Promise<File> {
@@ -69,3 +69,4 @@ export async function nativeShareGame(opts: {
     return false
   }
 }
+import { copyText } from '../features/scoring/copyText'

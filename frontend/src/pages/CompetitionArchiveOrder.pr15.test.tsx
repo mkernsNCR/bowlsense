@@ -3,14 +3,22 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CompetitionArchiveSheet } from '../features/competition/CompetitionUI'
 import LeaguesPage from './Leagues'
 import TournamentsPage from './Tournaments'
 
-vi.mock('../components/BowlingScorer', () => ({ default: () => <div>Scorer</div> }))
+const scorerMock = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }))
+vi.mock('../components/BowlingScorer', () => ({
+  default: (props: Record<string, unknown>) => {
+    scorerMock.props = props
+    return <div>Scorer</div>
+  },
+}))
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  scorerMock.props = null
   window.history.replaceState({}, '', '/')
 })
 
@@ -33,6 +41,28 @@ function renderPage(path: string, kind: 'leagues' | 'tournaments') {
 }
 
 describe('PR 15 competition archive and ordering', () => {
+  it('opens the tournament create sheet before treating new as a tournament id', () => {
+    renderPage('/tournaments/new', 'tournaments')
+    expect(screen.getByRole('dialog', { name: 'New tournament' })).toBeTruthy()
+    expect(screen.queryByText('Scorer')).toBeNull()
+  })
+
+  it('clears a stale archive mutation error whenever the sheet opens', async () => {
+    const reset = vi.fn()
+    render(
+      <MemoryRouter>
+        <CompetitionArchiveSheet
+          area="leagues"
+          id="7"
+          active={1}
+          onClose={() => undefined}
+          mutation={{ isPending: false, isError: true, mutate: vi.fn(), reset }}
+        />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(reset).toHaveBeenCalledTimes(1))
+  })
+
   it('separates archived leagues while keeping their recovery links available', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse([
       { id: 1, name: 'Tuesday Classic', active: 1, gamesPerWeek: 3 },
@@ -130,5 +160,26 @@ describe('PR 15 competition archive and ordering', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/tournaments/9/unarchive', { method: 'POST' }))
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+  })
+
+  it('restores saved frame data and split count when editing a tournament game', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === '/api/balls') return Promise.resolve(jsonResponse([]))
+      return Promise.resolve(jsonResponse({
+        id: 4, name: 'Edit Open', location: null, date: '2026-01-01', endDate: null,
+        format: null, entryFee: null, prizeFund: null, placement: null, notes: null,
+        active: 1, games: [{ id: 41, tournamentId: 4, gameNumber: 1, score: 210, strikes: 6, spares: 4, splits: 2, ballId: null, squad: null, frameData: '{"frames":[]}' }],
+        stats: { totalGames: 1, series: 210, average: 210, high: 210, placement: null },
+      }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderPage('/tournaments/4', 'tournaments')
+    const editButtons = await screen.findAllByRole('button', { name: 'Edit' })
+    await user.click(editButtons.at(-1)!)
+
+    expect(scorerMock.props?.initialFrameData).toBe('{"frames":[]}')
+    expect(scorerMock.props?.initialSplits).toBe(2)
   })
 })

@@ -1,9 +1,8 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface LeagueStats {
   average: number
@@ -165,7 +164,7 @@ function WeeklyTrendChart({ data }: { data: { weekNumber: number; average: numbe
 export default function PublicLeague() {
   const { id } = useParams()
   const leagueId = parseInt(id || '')
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink } = useCopyLink()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const tabParam = searchParams.get('tab')
@@ -220,31 +219,15 @@ export default function PublicLeague() {
     imageUrl: Number.isNaN(leagueId) ? '' : `/api/leagues/${leagueId}/leaderboard/og-image`,
   })
 
-  const copyLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      window.prompt('Copy this link:', window.location.href)
-    }
-  }
-
   const shareStandings = async () => {
     const url = new URL(window.location.href)
     url.searchParams.set('tab', 'standings')
-    try {
-      await copyText(url.toString())
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      window.prompt('Copy this standings link:', url.toString())
-    }
+    await copyLink(url.toString())
   }
 
   if (isNaN(leagueId)) {
     return (
-      <PublicShell eyebrow="League result" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="League result" title="League not found"><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 
@@ -256,7 +239,7 @@ export default function PublicLeague() {
 
   if (!league) {
     return (
-      <PublicShell eyebrow="League result" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="League result" title="League not found"><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 

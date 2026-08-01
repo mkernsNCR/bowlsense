@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Icon } from '../design'
 import { PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface TournamentStanding {
   rank: number
@@ -59,7 +59,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export default function TournamentStandings() {
   const { id } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: shareCopy } = useCopyLink()
   const [downloading, setDownloading] = useState(false)
   const tournamentId = Number(id)
   const invalidId = Number.isNaN(tournamentId)
@@ -99,16 +99,6 @@ export default function TournamentStandings() {
 
   usePublicMetadata({ title, description, imageUrl: invalidId ? '' : ogImageUrl })
 
-  const shareCopy = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
-  }
-
   const handleDownloadPng = async () => {
     if (downloading || invalidId) return
     setDownloading(true)
@@ -139,7 +129,7 @@ export default function TournamentStandings() {
 
   if (invalidId) {
     return (
-      <PublicShell eyebrow="Tournament standings" title="Tournament not found" detail="The tournament link looks invalid."><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="Tournament standings" title="Tournament not found" detail="The tournament link looks invalid."><Link to="/">Browse tournaments on BowlSense</Link></PublicShell>
     )
   }
 

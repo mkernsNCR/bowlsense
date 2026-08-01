@@ -2536,7 +2536,6 @@ const deleteLeague = async (request: any, reply: any) => {
   return reply.status(204).send();
 };
 fastify.delete('/leagues/:id', deleteLeague);
-fastify.delete('/api/leagues/:id', deleteLeague);
 
 fastify.get('/leagues/:id/weeks', async (request) => {
   const { id } = request.params as any;
@@ -3405,7 +3404,6 @@ const deleteTournament = async (request: any, reply: any) => {
   return reply.status(204).send();
 };
 fastify.delete('/tournaments/:id', deleteTournament);
-fastify.delete('/api/tournaments/:id', deleteTournament);
 
 fastify.post('/tournaments/:id/games', async (request, reply) => {
   const { id } = request.params as any;

@@ -27,7 +27,7 @@ describe('requestJson', () => {
 
   it('preserves a caller-provided signal', async () => {
     const controller = new AbortController()
-    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve(new Response('{}', { status: 200 })))
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(new Response('{}', { status: 200 })))
     vi.stubGlobal('fetch', fetchMock)
 
     await requestJson('/api/data', { signal: controller.signal })

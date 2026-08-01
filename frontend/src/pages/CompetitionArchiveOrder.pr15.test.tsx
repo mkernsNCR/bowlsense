@@ -74,7 +74,7 @@ describe('PR 15 competition archive and ordering', () => {
     expect((await screen.findByRole('link', { name: /Tuesday Classic/ })).getAttribute('href')).toBe('/leagues/1')
     const archived = screen.getByRole('heading', { name: 'Archived leagues' }).closest('section')!
     expect(within(archived).getByRole('link', { name: /Retired Scratch/ }).getAttribute('href')).toBe('/leagues/2')
-    expect(fetch).toHaveBeenCalledWith('/api/leagues?includeArchived=1', undefined)
+    expect(fetch).toHaveBeenCalledWith('/api/leagues?includeArchived=1', expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
   it('orders upcoming tournaments nearest-first and separates past and archived events', async () => {
@@ -97,7 +97,7 @@ describe('PR 15 competition archive and ordering', () => {
     expect(past.getByText('Recent Past Open')).toBeTruthy()
     expect(past.getByText('Undated Open')).toBeTruthy()
     expect(within(screen.getByRole('heading', { name: 'Archived tournaments' }).closest('section')!).getByText('Archived Open')).toBeTruthy()
-    expect(fetch).toHaveBeenCalledWith('/api/tournaments?includeArchived=1', undefined)
+    expect(fetch).toHaveBeenCalledWith('/api/tournaments?includeArchived=1', expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
   it('renders a league-list error instead of an empty state for a failed response', async () => {

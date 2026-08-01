@@ -9,20 +9,6 @@ export const sessions = sqliteTable('sessions', {
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
-export const games = sqliteTable('games', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  sessionId: integer('session_id').notNull().references(() => sessions.id),
-  gameNumber: integer('game_number').notNull(),
-  score: integer('score'),
-  strikes: integer('strikes'),
-  spares: integer('spares'),
-  splits: integer('splits'),
-  ballId: integer('ball_id'),
-  frameData: text('frame_data'),
-  pinLeaves: text('pin_leaves'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-});
-
 export const balls = sqliteTable('balls', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
@@ -37,6 +23,20 @@ export const balls = sqliteTable('balls', {
   coverstockType: text('coverstock_type'),
   factoryFinish: text('factory_finish'),
   thumbnailImage: text('thumbnail_image'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const games = sqliteTable('games', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: integer('session_id').notNull().references(() => sessions.id),
+  gameNumber: integer('game_number').notNull(),
+  score: integer('score'),
+  strikes: integer('strikes'),
+  spares: integer('spares'),
+  splits: integer('splits'),
+  ballId: integer('ball_id').references(() => balls.id, { onDelete: 'set null' }),
+  frameData: text('frame_data'),
+  pinLeaves: text('pin_leaves'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
@@ -62,6 +62,7 @@ export const leagueWeeks = sqliteTable('league_weeks', {
   opponent: text('opponent'),
   gamesWon: integer('games_won').default(0),
   gamesLost: integer('games_lost').default(0),
+  gamesTied: integer('games_tied').default(0),
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 }, (table) => [uniqueIndex('league_weeks_league_number_unique').on(table.leagueId, table.weekNumber)]);
@@ -74,7 +75,7 @@ export const leagueGames = sqliteTable('league_games', {
   strikes: integer('strikes'),
   spares: integer('spares'),
   splits: integer('splits'),
-  ballId: integer('ball_id'),
+  ballId: integer('ball_id').references(() => balls.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 }, (table) => [uniqueIndex('league_games_week_number_unique').on(table.weekId, table.gameNumber)]);
 
@@ -101,7 +102,7 @@ export const tournamentGames = sqliteTable('tournament_games', {
   strikes: integer('strikes'),
   spares: integer('spares'),
   splits: integer('splits'),
-  ballId: integer('ball_id'),
+  ballId: integer('ball_id').references(() => balls.id, { onDelete: 'set null' }),
   squad: text('squad'),
   frameData: text('frame_data'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),

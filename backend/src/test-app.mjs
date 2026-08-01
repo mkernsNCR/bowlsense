@@ -58,7 +58,7 @@ export async function buildTestApp(t, { legacyCompetitions = false, legacyLeague
         (1, 1, 1, '2026-07-01'),
         (2, 1, 1, '2026-07-02');
       INSERT INTO league_games (id, week_id, game_number, score) VALUES
-        (1, 1, 1, 170),
+        (999, 1, 1, 170),
         (2, 2, 1, 180),
         (3, 1, 2, 190);
     `)

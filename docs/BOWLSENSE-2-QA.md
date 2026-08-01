@@ -16,7 +16,7 @@ In progress. The final browser matrix completed 106 route/viewport checks with n
 | Frontend lint | Pass | `npm run lint` |
 | Frontend regressions | Pass | `npm test`: 40 Node tests and 90 Vitest checks, including detailed physical-pin, rendered Today, public-layout, and service-worker cache-isolation scenarios |
 | Production build | Pass | `npm run build`; only Vite's non-blocking 500 kB chunk advisory remains |
-| Backend type-check and auth | Pass | `npx tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; 15 Node 20 tests verify trusted-proxy authorization, legacy schema convergence, retry idempotency, archives, restore, and public metadata. |
+| Backend type-check and auth | Pass | `npx tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; 19 backend tests run under CI's Node 24 and verify trusted-proxy authorization, legacy schema convergence, retry idempotency, archives, restore, and public metadata. |
 | Service-worker syntax and cache isolation | Pass | `node --check public/sw.js`; Node tests prove every public share route, including `/score/:id` and `/perfect-games/:id`, cannot replace the generic cached app shell while private navigations can refresh it. |
 | Patch integrity | Pass | `git diff --check` |
 | Backend runtime | Pass | `npm start` launches `tsx src/server.ts` on port 3003; `/health` returns `{ status: "ok", service: "bowlsense-api" }` |
@@ -57,7 +57,7 @@ The 320 CSS-pixel pass exercises the same narrow reflow pressure as a doubled te
 | --- | --- | --- |
 | Keyboard-only navigation | Pass | The More sheet starts on Leagues, advances through every link, wraps from Close back to Leagues, wraps backward with Shift+Tab, closes with Escape, and restores focus to More. |
 | Visible focus | Pass | Keyboard focus on the Tournaments link computes to a 3px solid violet outline. |
-| Logical headings and landmarks | Pass | 25 private/public routes each have exactly one `main` and one `h1`; nested page-level `main` elements were removed. |
+| Logical headings and landmarks | Pass | 26 private/public routes each have exactly one `main` and one `h1`; nested page-level `main` elements were removed. |
 | Accessible names | Pass | Semantic browser snapshots expose names for navigation, scoring pins, frame editing, sheets, share actions, forms, and CRUD actions. |
 | 44px targets | Pass | Computed target audit across the 106 checks found no failures. |
 | Light/dark contrast | Pass | Semantic token pairs meet normal-text contrast: light ink/canvas 16.05:1, secondary/surface 5.66:1, violet/canvas 5.15:1; dark ink/canvas 17.74:1, secondary/surface 7.41:1, violet/canvas 6.51:1, gold/canvas 10.69:1. |

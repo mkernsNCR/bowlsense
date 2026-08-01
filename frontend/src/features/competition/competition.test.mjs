@@ -48,9 +48,10 @@ test('major public result pages share one printable result composition', async (
 
 test('public profile identity and timestamp are supplied by the server', async () => {
   const server = await readFile(new URL('../../../../backend/src/server.ts', import.meta.url), 'utf8')
-  assert.match(server, /BOWLSENSE_PUBLIC_PROFILE_NAME/)
-  assert.match(server, /profileName(?:,|:)/)
-  assert.match(server, /generatedAt: new Date\(\)\.toISOString\(\)/)
+  const statsBuilder = server.match(/async function buildPublicStats\(\) \{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.match(statsBuilder, /const profileName = \(process\.env\.BOWLSENSE_PUBLIC_PROFILE_NAME \|\| ''\)\.trim\(\)\.slice\(0, 80\) \|\| null/)
+  assert.match(statsBuilder, /profileName,/)
+  assert.match(statsBuilder, /generatedAt: new Date\(\)\.toISOString\(\)/)
 })
 
 test('league score pills remain legible on the light public surface', async () => {

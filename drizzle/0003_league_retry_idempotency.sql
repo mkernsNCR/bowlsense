@@ -1,5 +1,8 @@
 -- Collapse legacy retry duplicates before enforcing the natural identities used
 -- by Log Week. The newest record wins, matching the latest retry payload.
+-- RELEASE GATE: before applying this destructive reconciliation, download an
+-- authenticated /api/export backup and review the duplicate preview queries in
+-- docs/DEPLOYMENT.md. Abort when the counts are not understood.
 DELETE FROM league_games
 WHERE week_id IN (
   SELECT older.id

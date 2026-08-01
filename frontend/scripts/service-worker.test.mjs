@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import vm from 'node:vm'
 
-async function loadServiceWorker(fetchImpl) {
+async function loadServiceWorker(fetchImpl, cacheMatch = async () => null) {
   const listeners = new Map()
   const cacheWrites = []
   const cache = {
@@ -20,7 +20,7 @@ async function loadServiceWorker(fetchImpl) {
     clearTimeout,
     caches: {
       open: async () => cache,
-      match: async () => null,
+      match: cacheMatch,
       keys: async () => [],
       delete: async () => true,
     },
@@ -56,6 +56,7 @@ test('public share navigations never replace the generic cached app shell', asyn
     assert.equal(vm.runInContext(`isPublicShareNavigation(${JSON.stringify(pathname)})`, context), true, pathname)
     const waits = []
     let responsePromise
+    assert.equal(listeners.has('fetch'), true)
     listeners.get('fetch')({
       request: { mode: 'navigate', url: `https://bowlsense.test${pathname}` },
       respondWith: (promise) => { responsePromise = promise },
@@ -72,6 +73,7 @@ test('private navigation refreshes the generic cached app shell', async () => {
   const { listeners, cacheWrites } = await loadServiceWorker(async () => new Response('<html>private shell</html>', { status: 200 }))
   const waits = []
   let responsePromise
+  assert.equal(listeners.has('fetch'), true)
   listeners.get('fetch')({
     request: { mode: 'navigate', url: 'https://bowlsense.test/settings' },
     respondWith: (promise) => { responsePromise = promise },
@@ -80,4 +82,22 @@ test('private navigation refreshes the generic cached app shell', async () => {
   assert.equal((await responsePromise).status, 200)
   await Promise.all(waits)
   assert.deepEqual(cacheWrites, ['/index.html'])
+})
+
+test('failed navigation serves the cached app shell', async () => {
+  const cached = new Response('<html>offline shell</html>', { status: 200 })
+  const { listeners } = await loadServiceWorker(
+    async () => { throw new Error('offline') },
+    async (key) => key === '/index.html' ? cached : null,
+  )
+  let responsePromise
+  assert.equal(listeners.has('fetch'), true)
+  listeners.get('fetch')({
+    request: { mode: 'navigate', url: 'https://bowlsense.test/settings' },
+    respondWith: (promise) => { responsePromise = promise },
+    waitUntil: () => {},
+  })
+  const response = await responsePromise
+  assert.equal(response, cached)
+  assert.match(await response.text(), /offline shell/)
 })

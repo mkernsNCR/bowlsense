@@ -118,7 +118,7 @@ legacyMigrationDatabase.exec(`
     (1, 1, 1, '2026-07-01'),
     (2, 1, 1, '2026-07-02');
   INSERT INTO league_games (id, week_id, game_number, score) VALUES
-    (1, 1, 1, 170),
+    (999, 1, 1, 170),
     (2, 2, 1, 180),
     (3, 1, 2, 190);
 `);
@@ -222,24 +222,60 @@ assert.equal(counts.arsenals, backup.arsenals.length);
 assert.equal(counts.arsenal_balls, backup.arsenalBalls.length);
 assert.equal(health.backupHealth.hasRecentBackup, false);
 
+response = await request('/api/backups');
+assert.equal(response.status, 200);
+assert.deepEqual(await response.json(), { backupBackend: 'sites-managed', backups: [], latestMtime: null, backupCount: 0, cloudRemote: null });
+response = await request('/api/backups', { method: 'POST' });
+assert.equal(response.status, 405);
+
+database.exec(`
+  INSERT INTO balls (id, name) VALUES (900, 'Disposable Ball');
+  INSERT INTO sessions (id, date) VALUES (900, '2026-08-01');
+  INSERT INTO games (session_id, game_number, ball_id) VALUES (900, 1, 900);
+  INSERT INTO leagues (id, name) VALUES (900, 'Disposable League');
+  INSERT INTO league_weeks (id, league_id, week_number, date) VALUES (900, 900, 1, '2026-08-01');
+  INSERT INTO league_games (week_id, game_number, ball_id) VALUES (900, 1, 900);
+  INSERT INTO tournaments (id, name) VALUES (900, 'Disposable Tournament');
+  INSERT INTO tournament_games (tournament_id, game_number, ball_id) VALUES (900, 1, 900);
+  INSERT INTO arsenals (id, name) VALUES (900, 'Disposable Bag');
+  INSERT INTO arsenal_balls (arsenal_id, ball_id) VALUES (900, 900);
+`);
+response = await request('/api/balls/900', { method: 'DELETE' });
+assert.equal(response.status, 204);
+assert.equal(database.prepare('SELECT ball_id FROM games WHERE session_id = 900').get().ball_id, null);
+assert.equal(database.prepare('SELECT ball_id FROM league_games WHERE week_id = 900').get().ball_id, null);
+assert.equal(database.prepare('SELECT ball_id FROM tournament_games WHERE tournament_id = 900').get().ball_id, null);
+assert.equal(database.prepare('SELECT COUNT(*) AS count FROM arsenal_balls WHERE ball_id = 900').get().count, 0);
+database.exec(`
+  DELETE FROM games WHERE session_id = 900;
+  DELETE FROM sessions WHERE id = 900;
+  DELETE FROM league_games WHERE week_id = 900;
+  DELETE FROM league_weeks WHERE id = 900;
+  DELETE FROM leagues WHERE id = 900;
+  DELETE FROM tournament_games WHERE tournament_id = 900;
+  DELETE FROM tournaments WHERE id = 900;
+  DELETE FROM arsenals WHERE id = 900;
+`);
+
 response = await request("/api/leagues/1/weeks", {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ weekNumber: 99, date: "2026-08-01", opponent: "First attempt" }),
+  body: JSON.stringify({ weekNumber: 99, date: "2026-08-01", opponent: "First attempt", gamesTied: 1 }),
 });
 assert.equal(response.status, 201);
 const firstRetryWeek = await response.json();
 response = await request("/api/leagues/1/weeks", {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ weekNumber: 99, date: "2026-08-01", opponent: "Retry payload" }),
+  body: JSON.stringify({ weekNumber: 99, date: "2026-08-01", opponent: "Retry payload", gamesTied: 2 }),
 });
 assert.equal(response.status, 201);
 const retriedWeek = await response.json();
 assert.equal(retriedWeek.id, firstRetryWeek.id);
-assert.deepEqual({ ...database.prepare("SELECT COUNT(*) AS count, MAX(opponent) AS opponent FROM league_weeks WHERE league_id = 1 AND week_number = 99").get() }, {
+assert.deepEqual({ ...database.prepare("SELECT COUNT(*) AS count, MAX(opponent) AS opponent, MAX(games_tied) AS games_tied FROM league_weeks WHERE league_id = 1 AND week_number = 99").get() }, {
   count: 1,
   opponent: "Retry payload",
+  games_tied: 2,
 });
 
 response = await request(`/api/leagues/weeks/${firstRetryWeek.id}/games`, {

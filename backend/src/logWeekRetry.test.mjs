@@ -26,19 +26,20 @@ test('log-week retries upsert one week and one game after ambiguous responses', 
   const firstWeek = await fastify.inject({
     method: 'POST',
     url: `/api/leagues/${leagueId}/weeks`,
-    payload: { weekNumber: 4, date: '2026-08-01', opponent: 'First attempt' },
+    payload: { weekNumber: 4, date: '2026-08-01', opponent: 'First attempt', gamesTied: 1 },
   })
   assert.equal(firstWeek.statusCode, 200, firstWeek.body)
   const retriedWeek = await fastify.inject({
     method: 'POST',
     url: `/api/leagues/${leagueId}/weeks`,
-    payload: { weekNumber: 4, date: '2026-08-01', opponent: 'Retry payload' },
+    payload: { weekNumber: 4, date: '2026-08-01', opponent: 'Retry payload', gamesTied: 2 },
   })
   assert.equal(retriedWeek.statusCode, 200, retriedWeek.body)
   assert.equal(retriedWeek.json().id, firstWeek.json().id)
-  assert.deepEqual(sqlite.prepare('SELECT COUNT(*) AS count, MAX(opponent) AS opponent FROM league_weeks WHERE league_id = ? AND week_number = ?').get(leagueId, 4), {
+  assert.deepEqual(sqlite.prepare('SELECT COUNT(*) AS count, MAX(opponent) AS opponent, MAX(games_tied) AS gamesTied FROM league_weeks WHERE league_id = ? AND week_number = ?').get(leagueId, 4), {
     count: 1,
     opponent: 'Retry payload',
+    gamesTied: 2,
   })
 
   const weekId = firstWeek.json().id

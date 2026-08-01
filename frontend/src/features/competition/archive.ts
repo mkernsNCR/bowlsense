@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 type CompetitionArea = 'leagues' | 'tournaments'
 
-async function competitionJson(input: RequestInfo | URL, init?: RequestInit) {
+async function competitionJson(input: RequestInfo | URL, init?: RequestInit): Promise<unknown> {
   const response = init === undefined ? await fetch(input) : await fetch(input, init)
   if (!response.ok) throw new Error(`Competition request failed (${response.status})`)
   return response.json()

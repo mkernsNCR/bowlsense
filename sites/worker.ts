@@ -1469,7 +1469,18 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = Number(ballMatch[1]);
     if (method === "GET") { const ball = camelize(await first(db, "SELECT * FROM balls WHERE id = ?", id)); return ball ? json(ball) : error("Ball not found", 404); }
     if (method === "PUT") return updateResponse(db, "balls", id, await body(request), "Ball");
-    if (method === "DELETE") { await run(db, "DELETE FROM balls WHERE id = ?", id); return new Response(null, { status: 204 }); }
+    if (method === "DELETE") {
+      const existing = await first(db, "SELECT id FROM balls WHERE id = ?", id);
+      if (!existing) return error("Ball not found", 404);
+      await db.batch([
+        db.prepare("UPDATE games SET ball_id = NULL WHERE ball_id = ?").bind(id),
+        db.prepare("UPDATE league_games SET ball_id = NULL WHERE ball_id = ?").bind(id),
+        db.prepare("UPDATE tournament_games SET ball_id = NULL WHERE ball_id = ?").bind(id),
+        db.prepare("DELETE FROM arsenal_balls WHERE ball_id = ?").bind(id),
+        db.prepare("DELETE FROM balls WHERE id = ?").bind(id),
+      ]);
+      return new Response(null, { status: 204 });
+    }
   }
   if (path === "/balls/search" && method === "GET") {
     const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
@@ -1636,8 +1647,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 
   if ((path === "/api/backup" || path === "/api/export") && method === "GET") return json(await exportData(db), 200, { "content-disposition": "attachment; filename=bowlsense-backup.json" });
   if ((path === "/api/restore" || path === "/api/import") && method === "POST") return json({ ok: true, imported: await restoreData(db, await limitedJsonBody(request)) });
-  if (path === "/api/backups" && method === "GET") return json({ backups: [], latestMtime: null, backupCount: 0, cloudRemote: "Sites managed database" });
-  if (path === "/api/backups" && method === "POST") return json({ ok: true, output: "Sites continuously manages the BowlSense database.", backups: [] });
+  if (path === "/api/backups" && method === "GET") return json({ backupBackend: "sites-managed", backups: [], latestMtime: null, backupCount: 0, cloudRemote: null });
+  if (path === "/api/backups" && method === "POST") return error("On-demand SQLite backups are unavailable on Sites. Use Export Backup instead.", 405);
   if (path === "/api/data-health" && method === "GET") return json(await dataHealth(db));
 
   if (path === "/api/import/csv" && method === "POST") {

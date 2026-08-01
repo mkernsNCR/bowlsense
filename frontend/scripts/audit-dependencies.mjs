@@ -11,6 +11,7 @@ export const ALLOWED_ADVISORY = Object.freeze({
   package: 'react-router',
   propagatedPackage: 'react-router-dom',
   severity: 'high',
+  range: '>=7.12.0 <8.3.0',
 })
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx'])
@@ -34,7 +35,8 @@ function isAllowedAdvisory(advisory) {
     advisory.url === ALLOWED_ADVISORY.url &&
     advisory.name === ALLOWED_ADVISORY.package &&
     advisory.dependency === ALLOWED_ADVISORY.package &&
-    advisory.severity === ALLOWED_ADVISORY.severity
+    advisory.severity === ALLOWED_ADVISORY.severity &&
+    advisory.range === ALLOWED_ADVISORY.range
   )
 }
 

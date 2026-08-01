@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS games (
   strikes INTEGER,
   spares INTEGER,
   splits INTEGER,
-  ball_id INTEGER,
+  ball_id INTEGER REFERENCES balls(id) ON DELETE SET NULL,
   frame_data TEXT,
   pin_leaves TEXT,
   created_at INTEGER
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS league_games (
   strikes INTEGER,
   spares INTEGER,
   splits INTEGER,
-  ball_id INTEGER,
+  ball_id INTEGER REFERENCES balls(id) ON DELETE SET NULL,
   frame_data TEXT,
   created_at INTEGER
 );
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS tournament_games (
   strikes INTEGER,
   spares INTEGER,
   splits INTEGER,
-  ball_id INTEGER,
+  ball_id INTEGER REFERENCES balls(id) ON DELETE SET NULL,
   squad TEXT,
   frame_data TEXT,
   created_at INTEGER

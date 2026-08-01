@@ -122,11 +122,15 @@ export function Sheet({
   const panelRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
   const closeDisabledRef = useRef(closeDisabled)
+  const dismissibleRef = useRef(dismissible)
+  const initialFocusRefRef = useRef(initialFocusRef)
 
   useEffect(() => {
     onCloseRef.current = onClose
     closeDisabledRef.current = closeDisabled
-  }, [closeDisabled, onClose])
+    dismissibleRef.current = dismissible
+    initialFocusRefRef.current = initialFocusRef
+  }, [closeDisabled, dismissible, initialFocusRef, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -138,14 +142,19 @@ export function Sheet({
 
     const focusFrame = requestAnimationFrame(() => {
       if (!isTopSheet(panel)) return
-      const requestedControl = initialFocusRef?.current
+      const requestedControl = initialFocusRefRef.current?.current
+      if (requestedControl && panel.contains(requestedControl)) {
+        requestedControl.focus()
+        return
+      }
+      if (!initialFocusRefRef.current && panel.contains(document.activeElement)) return
       const firstControl = panel.querySelector<HTMLElement>(focusableSelector)
-      ;(requestedControl && panel.contains(requestedControl) ? requestedControl : firstControl ?? panel).focus()
+      ;(firstControl ?? panel).focus()
     })
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isTopSheet(panel)) return
-      if (event.key === 'Escape' && dismissible && onCloseRef.current) {
+      if (event.key === 'Escape' && dismissibleRef.current && onCloseRef.current) {
         event.preventDefault()
         event.stopImmediatePropagation()
         if (!closeDisabledRef.current) onCloseRef.current()
@@ -174,7 +183,7 @@ export function Sheet({
       cancelAnimationFrame(focusFrame)
       unregisterSheet(panel)
     }
-  }, [dismissible, initialFocusRef, open])
+  }, [open])
 
   if (!open) return null
 

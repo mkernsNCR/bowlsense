@@ -512,6 +512,12 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                       <button className="btn btn-danger" onClick={() => { if (confirm('Delete this game?')) deleteGame.mutate(g.id) }}>Delete</button>
                     </div>
                   </div>
+                  {deleteGame.isError && deleteGame.variables === g.id && (
+                    <div role="alert" style={{ marginTop: 10, color: 'var(--danger)' }}>
+                      The game could not be deleted.{' '}
+                      <button className="btn btn-ghost" type="button" onClick={() => deleteGame.mutate(g.id)}>Try again</button>
+                    </div>
+                  )}
 
                   {rescoringGameId === g.id && (
                     <CompetitionSheet title={`Edit game ${g.gameNumber}`} closeTo={`/tournaments/${id}`} onClose={() => setRescoringGameId(null)}>

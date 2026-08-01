@@ -23,6 +23,7 @@ function acceptedReport() {
             dependency: 'react-router',
             url: ALLOWED_ADVISORY.url,
             severity: 'high',
+            range: ALLOWED_ADVISORY.range,
           },
         ],
       },
@@ -79,6 +80,18 @@ test('rejects a changed advisory on react-router', () => {
 test('rejects indirect findings beyond react-router propagation', () => {
   const report = acceptedReport()
   report.vulnerabilities['react-router-dom'].via.push('another-package')
+  assert.equal(evaluateAuditReport(report).ok, false)
+})
+
+test('rejects an unsupported npm audit report version', () => {
+  const report = acceptedReport()
+  report.auditReportVersion = 3
+  assert.equal(evaluateAuditReport(report).ok, false)
+})
+
+test('rejects vulnerability metadata totals that do not match the package map', () => {
+  const report = acceptedReport()
+  report.metadata.vulnerabilities.total = 3
   assert.equal(evaluateAuditReport(report).ok, false)
 })
 

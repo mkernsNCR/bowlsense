@@ -19,6 +19,7 @@ interface BackupFile {
 }
 
 interface BackupsResponse {
+  backupBackend: 'sqlite' | 'sites-managed'
   backups: BackupFile[]
   latestMtime: string | null
   backupCount: number
@@ -336,8 +337,8 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* ── DB Backup ─────────────────────────────── */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      {/* ── Native SQLite backup ───────────────────── */}
+      {backups?.backupBackend === 'sqlite' && <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
           <div style={{ fontWeight: 700 }}>Database backup</div>
           {backups?.latestMtime && (
@@ -436,7 +437,7 @@ export default function SettingsPage() {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       <div style={{ textAlign: 'center', paddingBottom: 8 }}>
         <Link className="public-link-target" to="/help" style={{ color: 'var(--muted)', textDecoration: 'none', fontSize: 14 }}>

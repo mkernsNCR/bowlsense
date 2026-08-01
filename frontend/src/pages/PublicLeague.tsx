@@ -266,7 +266,7 @@ export default function PublicLeague() {
         { label: 'High game', value: stats?.high ?? '—' },
       ]} />
 
-      <div className="public-tabs" style={{
+      <div className="public-tabs" role="tablist" aria-label="League result views" style={{
         display: 'inline-flex',
         background: '#111126',
         border: '1px solid rgba(255,255,255,0.12)',
@@ -279,7 +279,25 @@ export default function PublicLeague() {
           return (
             <button
               key={tab}
+              id={`league-${tab}-tab`}
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`league-${tab}-panel`}
+              tabIndex={selected ? 0 : -1}
               onClick={() => setTab(tab)}
+              onKeyDown={(event) => {
+                const tabs = ['overview', 'standings', 'leaderboard'] as const
+                const current = tabs.indexOf(tab)
+                const next = event.key === 'Home' ? 0
+                  : event.key === 'End' ? tabs.length - 1
+                    : event.key === 'ArrowRight' ? (current + 1) % tabs.length
+                      : event.key === 'ArrowLeft' ? (current - 1 + tabs.length) % tabs.length
+                        : -1
+                if (next < 0) return
+                event.preventDefault()
+                setTab(tabs[next])
+                document.getElementById(`league-${tabs[next]}-tab`)?.focus()
+              }}
               style={{
                 border: 'none',
                 borderRadius: 8,
@@ -298,7 +316,7 @@ export default function PublicLeague() {
       </div>
 
       {activeTab === 'overview' && (
-        <>
+        <div role="tabpanel" id="league-overview-panel" aria-labelledby="league-overview-tab">
           {/* Weekly trend */}
           {trendData.filter(d => d.average > 0).length >= 2 && (
             <div className="card" style={{ marginBottom: 20 }}>
@@ -398,11 +416,11 @@ export default function PublicLeague() {
               )
             })}
           </div>
-        </>
+        </div>
       )}
 
       {activeTab === 'standings' && (
-        <>
+        <div role="tabpanel" id="league-standings-panel" aria-labelledby="league-standings-tab">
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div>
@@ -470,11 +488,11 @@ export default function PublicLeague() {
               <div style={{ padding: 12, color: 'var(--muted)', fontSize: 13 }}>No standings data yet.</div>
             )}
           </div>
-        </>
+        </div>
       )}
 
       {activeTab === 'leaderboard' && leaderboard && (
-        <>
+        <div role="tabpanel" id="league-leaderboard-panel" aria-labelledby="league-leaderboard-tab">
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
               <div>
@@ -511,7 +529,7 @@ export default function PublicLeague() {
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
 
       </div>

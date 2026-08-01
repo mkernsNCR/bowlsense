@@ -21,7 +21,8 @@ const SHARE_OG_SVG_PATH = join(__dirname, 'assets', 'share-og.svg');
 // Deployment must finish the frontend build before starting (or restarting)
 // this process so the cached HTML and its asset hashes match the release.
 const CACHED_INDEX_HTML = existsSync(INDEX_PATH) ? readFileSync(INDEX_PATH, 'utf8') : null;
-const CACHED_SHARE_OG_SVG = readFileSync(SHARE_OG_SVG_PATH, 'utf8');
+const CACHED_SHARE_OG_SVG = existsSync(SHARE_OG_SVG_PATH) ? readFileSync(SHARE_OG_SVG_PATH, 'utf8') : null;
+const LEAGUE_RETRY_MIGRATION = readFileSync(resolve(__dirname, '..', '..', 'drizzle', '0003_league_retry_idempotency.sql'), 'utf8');
 
 const sqlite = new Database(process.env.BOWLSENSE_DB_PATH?.trim() || 'bowling.db');
 const db = drizzle(sqlite);
@@ -117,7 +118,6 @@ function relayInjectedResponse(reply: any, response: any) {
   if (response.headers['cache-control']) reply.header('Cache-Control', response.headers['cache-control']);
   if (response.headers['content-disposition']) reply.header('Content-Disposition', response.headers['content-disposition']);
   if (response.statusCode === 204) return reply.send();
-  if (contentType.includes('application/json')) return reply.send(response.json());
   return reply.send(response.rawPayload);
 }
 
@@ -439,11 +439,21 @@ fastify.put('/api/balls/:id', async (request) => {
   sqlite.prepare('UPDATE balls SET name=?, brand=?, color=?, notes=? WHERE id=?').run(name, brand, color, notes, parseInt(id));
   return sqlite.prepare('SELECT * FROM balls WHERE id=?').get(parseInt(id));
 });
-fastify.delete('/api/balls/:id', async (request, reply) => {
+const deleteBall = async (request: any, reply: any) => {
   const { id } = request.params as any;
-  await db.delete(balls).where(eq(balls.id, parseInt(id)));
+  const ballId = Number(id);
+  if (!Number.isInteger(ballId) || ballId < 1) return reply.status(400).send({ error: 'Invalid ball id' });
+  const remove = sqlite.transaction(() => {
+    sqlite.prepare('UPDATE games SET ball_id = NULL WHERE ball_id = ?').run(ballId);
+    sqlite.prepare('UPDATE league_games SET ball_id = NULL WHERE ball_id = ?').run(ballId);
+    sqlite.prepare('UPDATE tournament_games SET ball_id = NULL WHERE ball_id = ?').run(ballId);
+    sqlite.prepare('DELETE FROM arsenal_balls WHERE ball_id = ?').run(ballId);
+    return sqlite.prepare('DELETE FROM balls WHERE id = ?').run(ballId).changes;
+  });
+  if (remove() === 0) return reply.status(404).send({ error: 'Ball not found' });
   return reply.status(204).send();
-});
+};
+fastify.delete('/api/balls/:id', deleteBall);
 
 // GET /api/balls/image-proxy?path=/sites/default/files/... — proxies bowwwl.com ball
 // thumbnails back to the browser as same-origin so the frontend can fetch+blob them
@@ -742,51 +752,30 @@ const leagueWeekIndexes = sqlite.prepare('PRAGMA index_list(league_weeks)').all(
 const leagueGameIndexes = sqlite.prepare('PRAGMA index_list(league_games)').all() as any[];
 if (!leagueWeekIndexes.some((index) => index.name === 'league_weeks_league_number_unique')
   || !leagueGameIndexes.some((index) => index.name === 'league_games_week_number_unique')) {
-  sqlite.transaction(() => sqlite.exec(`
-    DELETE FROM league_games
-    WHERE week_id IN (
-      SELECT older.id FROM league_weeks older JOIN league_weeks newer
-        ON newer.league_id = older.league_id
-       AND newer.week_number = older.week_number
-       AND newer.id > older.id
-    )
-    AND EXISTS (
-      SELECT 1 FROM league_games kept_game
-      JOIN league_weeks kept_week ON kept_week.id = kept_game.week_id
-      JOIN league_weeks older_week ON older_week.id = league_games.week_id
-      WHERE kept_week.league_id = older_week.league_id
-        AND kept_week.week_number = older_week.week_number
-        AND kept_game.game_number = league_games.game_number
-        AND kept_week.id > older_week.id
-    );
-    UPDATE league_games SET week_id = (
-      SELECT MAX(canonical.id) FROM league_weeks canonical
-      JOIN league_weeks current ON current.id = league_games.week_id
-      WHERE canonical.league_id = current.league_id
-        AND canonical.week_number = current.week_number
-    )
-    WHERE week_id IN (
-      SELECT older.id FROM league_weeks older JOIN league_weeks newer
-        ON newer.league_id = older.league_id
-       AND newer.week_number = older.week_number
-       AND newer.id > older.id
-    );
-    DELETE FROM league_games
-    WHERE id NOT IN (SELECT MAX(id) FROM league_games GROUP BY week_id, game_number);
-    DELETE FROM league_weeks
-    WHERE id NOT IN (SELECT MAX(id) FROM league_weeks GROUP BY league_id, week_number);
-    CREATE UNIQUE INDEX IF NOT EXISTS league_weeks_league_number_unique
-      ON league_weeks(league_id, week_number);
-    CREATE UNIQUE INDEX IF NOT EXISTS league_games_week_number_unique
-      ON league_games(week_id, game_number);
-  `))();
+  sqlite.transaction(() => sqlite.exec(LEAGUE_RETRY_MIGRATION))();
 }
 
 // Routes
 
 // Create session
-const createSession = async (request: any) => {
-  const { date, location, lanes, notes } = request.body as any;
+const sessionFields = ['date', 'location', 'lanes', 'notes'] as const;
+function validateSessionBody(body: unknown, requireDate: boolean) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Session body must be an object' };
+  const input = body as Record<string, unknown>;
+  if (Object.keys(input).some((key) => !sessionFields.includes(key as any))) return { error: 'Session body contains an unknown field' };
+  if (!requireDate && Object.keys(input).length === 0) return { error: 'At least one session field is required' };
+  if (requireDate && (typeof input.date !== 'string' || !input.date.trim())) return { error: 'Date is required' };
+  if (Object.hasOwn(input, 'date') && (typeof input.date !== 'string' || !input.date.trim())) return { error: 'Date must be a non-empty string' };
+  for (const field of ['location', 'lanes', 'notes'] as const) {
+    if (Object.hasOwn(input, field) && input[field] !== null && typeof input[field] !== 'string') return { error: `${field} must be a string or null` };
+  }
+  return { value: input };
+}
+
+const createSession = async (request: any, reply: any) => {
+  const validation = validateSessionBody(request.body, true);
+  if (!validation.value) return reply.status(400).send({ error: validation.error });
+  const { date, location, lanes, notes } = validation.value as any;
   const result = await db.insert(sessions).values({ date, location, lanes, notes }).returning();
   return result[0];
 };
@@ -880,6 +869,7 @@ const getSession = async (request: any, reply: any) => {
     return reply.callNotFound();
   }
   const session = await db.select().from(sessions).where(eq(sessions.id, parseInt(id)));
+  if (!session[0]) return reply.status(404).send({ error: 'Session not found' });
   const sessionGames = await db.select().from(games).where(eq(games.sessionId, parseInt(id)));
   return { ...session[0], games: sessionGames };
 };
@@ -1139,6 +1129,7 @@ fastify.get('/api/sessions/:id/og-image', async (request, reply) => {
 
 // Static OG share image (PNG rendered from SVG)
 fastify.get('/sessions/share-og.png', async (_request, reply) => {
+  if (!CACHED_SHARE_OG_SVG) return reply.status(503).send({ error: 'Share image asset is unavailable' });
   const png = await sharp(Buffer.from(CACHED_SHARE_OG_SVG)).png().toBuffer();
 
   reply.header('Content-Type', 'image/png');
@@ -1149,7 +1140,16 @@ fastify.get('/sessions/share-og.png', async (_request, reply) => {
 // Edit session
 const updateSession = async (request: any, reply: any) => {
   const { id } = request.params as any;
-  const { date, location, lanes, notes } = request.body as any;
+  if (!/^\d+$/.test(String(id)) || Number(id) < 1) return reply.status(400).send({ error: 'Invalid session id' });
+  const validation = validateSessionBody(request.body, false);
+  if (!validation.value) return reply.status(400).send({ error: validation.error });
+  const existing = sqlite.prepare('SELECT * FROM sessions WHERE id=?').get(Number(id)) as any;
+  if (!existing) return reply.status(404).send({ error: 'Session not found' });
+  const input = validation.value;
+  const date = Object.hasOwn(input, 'date') ? input.date : existing.date;
+  const location = Object.hasOwn(input, 'location') ? input.location : existing.location;
+  const lanes = Object.hasOwn(input, 'lanes') ? input.lanes : existing.lanes;
+  const notes = Object.hasOwn(input, 'notes') ? input.notes : existing.notes;
   const result = sqlite.prepare(
     'UPDATE sessions SET date=?, location=?, lanes=?, notes=? WHERE id=?'
   ).run(date, location, lanes, notes, parseInt(id));
@@ -1162,8 +1162,12 @@ fastify.put('/api/sessions/:id', updateSession);
 // Delete session + games
 const deleteSession = async (request: any, reply: any) => {
   const { id } = request.params as any;
-  sqlite.prepare('DELETE FROM games WHERE session_id=?').run(parseInt(id));
-  sqlite.prepare('DELETE FROM sessions WHERE id=?').run(parseInt(id));
+  if (!/^\d+$/.test(String(id)) || Number(id) < 1) return reply.status(400).send({ error: 'Invalid session id' });
+  const remove = sqlite.transaction((sessionId: number) => {
+    sqlite.prepare('DELETE FROM games WHERE session_id=?').run(sessionId);
+    return sqlite.prepare('DELETE FROM sessions WHERE id=?').run(sessionId).changes;
+  });
+  if (remove(Number(id)) === 0) return reply.status(404).send({ error: 'Session not found' });
   return reply.status(204).send();
 };
 fastify.delete('/sessions/:id', deleteSession);
@@ -1297,11 +1301,7 @@ fastify.put('/balls/:id', async (request) => {
   return sqlite.prepare('SELECT * FROM balls WHERE id=?').get(parseInt(id));
 });
 
-fastify.delete('/balls/:id', async (request, reply) => {
-  const { id } = request.params as any;
-  await db.delete(balls).where(eq(balls.id, parseInt(id)));
-  return reply.status(204).send();
-});
+fastify.delete('/balls/:id', deleteBall);
 
 // Public game share payload (no auth)
 fastify.get('/games/:id/public', async (request, reply) => {
@@ -2640,6 +2640,7 @@ fastify.get('/leagues/:id/weeks', async (request) => {
     opponent: w.opponent,
     gamesWon: w.games_won,
     gamesLost: w.games_lost,
+    gamesTied: w.games_tied ?? 0,
     notes: w.notes,
     createdAt: w.created_at,
     games: (JSON.parse(w.gamesJson || '[]') as any[]).filter(Boolean),
@@ -2649,18 +2650,19 @@ fastify.get('/leagues/:id/weeks', async (request) => {
 fastify.post('/leagues/:id/weeks', async (request, reply) => {
   const { id } = request.params as any;
   const leagueId = parseInt(id);
-  const { weekNumber, date, opponent, gamesWon, gamesLost, notes } = request.body as any;
+  const { weekNumber, date, opponent, gamesWon, gamesLost, gamesTied, notes } = request.body as any;
 
   if (!date) return reply.status(400).send({ error: 'Date is required' });
 
   const row = sqlite.prepare(`
-    INSERT INTO league_weeks (league_id, week_number, date, opponent, games_won, games_lost, notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO league_weeks (league_id, week_number, date, opponent, games_won, games_lost, games_tied, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (league_id, week_number) DO UPDATE SET
       date = excluded.date,
       opponent = excluded.opponent,
       games_won = excluded.games_won,
       games_lost = excluded.games_lost,
+      games_tied = excluded.games_tied,
       notes = excluded.notes
     RETURNING *
   `).get(
@@ -2670,6 +2672,7 @@ fastify.post('/leagues/:id/weeks', async (request, reply) => {
     opponent || null,
     Number(gamesWon || 0),
     Number(gamesLost || 0),
+    Number(gamesTied || 0),
     notes || null,
     Date.now(),
   ) as any;
@@ -2681,6 +2684,7 @@ fastify.post('/leagues/:id/weeks', async (request, reply) => {
     opponent: row.opponent,
     gamesWon: row.games_won,
     gamesLost: row.games_lost,
+    gamesTied: row.games_tied ?? 0,
     notes: row.notes,
     createdAt: row.created_at,
   };
@@ -2700,6 +2704,7 @@ fastify.get('/leagues/weeks/:weekId', async (request, reply) => {
     opponent: week.opponent,
     gamesWon: week.games_won,
     gamesLost: week.games_lost,
+    gamesTied: week.games_tied ?? 0,
     notes: week.notes,
     createdAt: week.created_at,
     games: gamesRows.map((g) => ({
@@ -3974,7 +3979,7 @@ fastify.delete('/arsenals/balls/:entryId', async (request, reply) => {
 });
 
 // Backup
-fastify.get('/backup', async () => {
+fastify.get('/backup', async (_request, reply) => {
   const sessionsRows = sqlite.prepare('SELECT * FROM sessions ORDER BY id ASC').all();
   const gamesRows = sqlite.prepare('SELECT * FROM games ORDER BY id ASC').all();
   const ballsRows = sqlite.prepare('SELECT * FROM balls ORDER BY id ASC').all();
@@ -3985,6 +3990,7 @@ fastify.get('/backup', async () => {
   const tournamentGamesRows = sqlite.prepare('SELECT * FROM tournament_games ORDER BY id ASC').all();
   const arsenalsRows = sqlite.prepare('SELECT * FROM arsenals ORDER BY id ASC').all();
   const arsenalBallsRows = sqlite.prepare('SELECT * FROM arsenal_balls ORDER BY id ASC').all();
+  reply.header('Content-Disposition', 'attachment; filename="bowlsense-backup.json"');
   return {
     exportedAt: new Date().toISOString(),
     sessions: sessionsRows,
@@ -4602,6 +4608,7 @@ fastify.get('/games/perfect', async () => {
 fastify.get('/api/backups', async () => {
   const backups = listBackups();
   return {
+    backupBackend: 'sqlite',
     backups,
     latestMtime: backups[0]?.mtime || null,
     backupCount: backups.length,
@@ -4708,21 +4715,27 @@ fastify.post('/api/restore', async (request, reply) => {
   if (!existsSync(src)) return reply.status(404).send({ error: 'Backup not found' });
   const restore = sqlite.transaction(() => {
     const backupDb = new Database(src, { readonly: true });
-    // Copy all tables
-    const tables = [
-      'sessions', 'games', 'balls', 'leagues', 'league_weeks', 'league_games',
-      'tournaments', 'tournament_games', 'arsenals', 'arsenal_balls',
-    ];
-    for (const table of tables) {
-      sqlite.exec(`DELETE FROM ${table}`);
-      const rows = backupDb.prepare(`SELECT * FROM ${table}`).all();
-      if (rows.length > 0) {
-        const columns = Object.keys(rows[0]);
-        const insert = sqlite.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`);
-        for (const row of rows) insert.run(...Object.values(row));
+    try {
+      const deleteOrder = [
+        'arsenal_balls', 'tournament_games', 'league_games', 'games',
+        'arsenals', 'tournaments', 'league_weeks', 'leagues', 'sessions', 'balls',
+      ];
+      const insertOrder = [
+        'balls', 'sessions', 'games', 'leagues', 'league_weeks', 'league_games',
+        'tournaments', 'tournament_games', 'arsenals', 'arsenal_balls',
+      ];
+      for (const table of deleteOrder) sqlite.exec(`DELETE FROM ${table}`);
+      for (const table of insertOrder) {
+        const rows = backupDb.prepare(`SELECT * FROM ${table}`).all();
+        if (rows.length > 0) {
+          const columns = Object.keys(rows[0]);
+          const insert = sqlite.prepare(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`);
+          for (const row of rows) insert.run(...Object.values(row));
+        }
       }
+    } finally {
+      backupDb.close();
     }
-    backupDb.close();
   });
   try {
     restore();

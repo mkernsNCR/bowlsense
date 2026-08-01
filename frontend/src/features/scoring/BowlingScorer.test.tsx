@@ -76,11 +76,27 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.queryByRole('button', { name: 'Confirm retake' })).toBeNull()
   })
 
-  it('preserves the saved split count after editing a completed game', async () => {
+  it('recalculates the saved split count after editing a completed game', async () => {
     const onSave = vi.fn()
     const initialFrameData = JSON.stringify({
       pinSelections: Array.from({ length: 19 }, () => [] as number[]),
     })
+
+    renderScorer(initialFrameData, { onSave })
+    fireEvent.click(screen.getByRole('button', { name: 'Score details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit from frame 10' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit from here' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save game' }))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({ splits: 0 })
+  })
+
+  it('preserves split totals when legacy frame data has no physical pin selections', async () => {
+    const onSave = vi.fn()
+    const initialFrameData = JSON.stringify({ rolls: Array.from({ length: 20 }, () => 0) })
 
     renderScorer(initialFrameData, { onSave, initialSplits: 3 })
     fireEvent.click(screen.getByRole('button', { name: 'Score details' }))

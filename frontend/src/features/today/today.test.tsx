@@ -139,7 +139,7 @@ describe('Today behavior', () => {
     renderDashboard()
 
     const status = await screen.findByRole('status')
-    expect(status.textContent).toBe('Loading your latest bowling activity.')
+    await waitFor(() => expect(status.textContent).toBe('Loading your latest bowling activity.'))
   })
 
   it('locks created-session fields and prevents dismissal while saving', async () => {

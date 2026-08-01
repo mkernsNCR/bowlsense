@@ -116,6 +116,34 @@ describe('session detail review fixes', () => {
     expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toBe('')
     expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('deletes the selected game and refreshes the session', async () => {
+    let detailRequests = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path === '/api/balls') return Promise.resolve(jsonResponse([]))
+      if (path === '/api/games/1' && init?.method === 'DELETE') {
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      if (path === '/api/sessions/7') {
+        detailRequests += 1
+        return Promise.resolve(jsonResponse(detail))
+      }
+      return Promise.resolve(jsonResponse({}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    renderSessionDetail('/sessions/7')
+    await user.click(await screen.findByRole('button', { name: 'Actions for game 1' }))
+    await user.click(screen.getByRole('button', { name: 'Delete game' }))
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete game' })
+    await user.click(deleteButtons[deleteButtons.length - 1]!)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/games/1', { method: 'DELETE' }))
+    await waitFor(() => expect(detailRequests).toBeGreaterThan(1))
+    expect(screen.queryByRole('button', { name: 'Close game actions' })).toBeNull()
+  })
 })
 
 describe('session list review fixes', () => {
@@ -151,6 +179,19 @@ describe('session list review fixes', () => {
     expect(screen.queryByText('Highest scores')).toBeNull()
   })
 
+  it('announces singular and plural perfect-game counts correctly', async () => {
+    const sessions = [
+      { id: 1, date: '2026-07-20', location: 'One Perfect', lanes: '', notes: '', gameCount: 3, avgScore: 250, highScore: 300, perfectGames: 1 },
+      { id: 2, date: '2026-07-19', location: 'Two Perfect', lanes: '', notes: '', gameCount: 4, avgScore: 275, highScore: 300, perfectGames: 2 },
+    ]
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ sessions, total: 2, limit: 20, offset: 0 }))))
+
+    renderSessions()
+
+    expect(await screen.findByLabelText('1 perfect game')).toBeTruthy()
+    expect(screen.getByLabelText('2 perfect games')).toBeTruthy()
+  })
+
   it('returns to the preceding page after deleting the only trailing session', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
@@ -173,6 +214,8 @@ describe('session list review fixes', () => {
     const deleteButtons = screen.getAllByRole('button', { name: 'Delete session' })
     await user.click(deleteButtons[deleteButtons.length - 1]!)
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/sessions/3', { method: 'DELETE' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Close session actions' })).toBeNull())
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => (
       init?.method !== 'DELETE' && new URL(String(input), 'https://bowlsense.test').searchParams.get('page') === '2'
     ))).toBe(true))

@@ -4,20 +4,15 @@ import { Link } from 'react-router-dom'
 import QuickAddGame from '../components/QuickAddGame'
 import { fetchRecentSessions, type Session } from '../api/bowling'
 import { Icon } from '../design'
+import SavedGameConfirmation, { type SavedQuickGame } from '../features/scoring/SavedGameConfirmation'
 import { readableDate } from '../features/scoring/date'
 import '../features/scoring/scoring.css'
-
-interface SavedQuickGame {
-  id: number
-  startAnother: () => void
-}
 
 export default function QuickStart() {
   const [savedGame, setSavedGame] = useState<SavedQuickGame | null>(null)
   const sessionsQuery = useQuery<Session[]>({
-    queryKey: ['sessions', 'quick-start'],
-    queryFn: fetchRecentSessions,
-    select: (sessions) => sessions.slice(0, 5),
+    queryKey: ['sessions', 'quick-start', 5],
+    queryFn: () => fetchRecentSessions(5),
   })
 
   return (
@@ -35,25 +30,14 @@ export default function QuickStart() {
       </div>
 
       {savedGame && (
-        <div className="scoring-status" role="status">
-          <div className="scoring-save-check"><Icon name="check" size={34} /></div>
-          <h2>Game saved</h2>
-          <p className="scoring-subtitle">The score is ready in your session history.</p>
-          <div className="scoring-toolbar" style={{ justifyContent: 'center', marginTop: 20 }}>
-            <button
-              type="button"
-              className="scoring-button primary"
-              onClick={() => {
-                savedGame.startAnother()
-                setSavedGame(null)
-              }}
-            >
-              <Icon name="plus" /> Add another
-            </button>
-            <Link to={`/score/${savedGame.id}`} className="scoring-button secondary">Open score</Link>
-            <Link to="/sessions" className="scoring-button quiet">View sessions</Link>
-          </div>
-        </div>
+        <SavedGameConfirmation
+          game={savedGame}
+          headingLevel="h2"
+          onStartAnother={() => {
+            savedGame.startAnother()
+            setSavedGame(null)
+          }}
+        />
       )}
 
       <h2 className="scoring-section-title">Recent sessions</h2>

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
-import { fetchRecentSessions, type Session } from '../api/bowling'
+import { fetchBalls, fetchRecentSessions, type Ball, type Session } from '../api/bowling'
 import { Icon } from '../design'
 import { localDateValue } from '../features/scoring/date'
-import type { ScoringBall } from '../features/scoring/types'
 import '../features/scoring/scoring.css'
 
 interface QuickAddGameProps {
@@ -23,6 +22,7 @@ const SAVE_COMPLETION_DELAY_MS = SAVE_CONFIRMATION_ANIMATION_MS + SAVE_COMPLETIO
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const queryClient = useQueryClient()
   const { settings } = useSettings()
+  const detailsId = useId()
   const [showScorer, setShowScorer] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [sessionId, setSessionId] = useState<number | null>(null)
@@ -38,16 +38,12 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
 
   const sessionsQuery = useQuery<Session[]>({
     queryKey: ['sessions', 'recent'],
-    queryFn: fetchRecentSessions,
+    queryFn: () => fetchRecentSessions(),
   })
 
-  const ballsQuery = useQuery<ScoringBall[]>({
+  const ballsQuery = useQuery<Ball[]>({
     queryKey: ['balls'],
-    queryFn: async () => {
-      const response = await fetch('/api/balls')
-      if (!response.ok) throw new Error('Balls could not be loaded.')
-      return response.json() as Promise<ScoringBall[]>
-    },
+    queryFn: fetchBalls,
   })
 
   const createSession = useMutation({
@@ -85,7 +81,7 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
     }
 
     const createdGame = await createGame.mutateAsync({ sessionId: activeSessionId, ...game })
-    await Promise.all([
+    void Promise.all([
       queryClient.invalidateQueries({ queryKey: ['sessions'] }),
       queryClient.invalidateQueries({ queryKey: ['stats'] }),
       queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
@@ -136,13 +132,13 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
       {sessionId !== null && <p className="scoring-subtitle">Additional games stay in this created session.</p>}
 
       <div className="scoring-disclosure">
-        <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
+        <button type="button" className="scoring-button quiet" aria-expanded={showDetails} aria-controls={detailsId} onClick={() => setShowDetails((visible) => !visible)}>
           {showDetails ? 'Hide details' : 'Add details'} <Icon name="chevron-right" size={16} />
         </button>
       </div>
 
       {showDetails && (
-        <section className="scoring-group">
+        <section id={detailsId} className="scoring-group">
           <div className="scoring-field">
             <label htmlFor="quick-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
             <input id="quick-lanes" type="text" disabled={sessionId !== null} value={lanes} onChange={(event) => setLanes(event.target.value)} placeholder="5–6" />

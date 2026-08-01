@@ -42,12 +42,16 @@ WHERE week_id IN (
 
 DELETE FROM league_games
 WHERE id NOT IN (
-  SELECT MAX(id) FROM league_games GROUP BY week_id, game_number
+  SELECT MAX(id)
+  FROM league_games
+  GROUP BY week_id, game_number
 );
 
 DELETE FROM league_weeks
 WHERE id NOT IN (
-  SELECT MAX(id) FROM league_weeks GROUP BY league_id, week_number
+  SELECT MAX(id)
+  FROM league_weeks
+  GROUP BY league_id, week_number
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS league_weeks_league_number_unique

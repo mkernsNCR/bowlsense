@@ -171,11 +171,12 @@ export default function PublicLeague() {
   const tabParam = searchParams.get('tab')
   const activeTab = tabParam === 'standings' || tabParam === 'leaderboard' ? tabParam : 'overview'
 
-  const { data: league, isLoading: leagueLoading, isError: leagueError, refetch: refetchLeague } = useQuery<League>({
+  const { data: league, isLoading: leagueLoading, isError: leagueError, refetch: refetchLeague } = useQuery<League | null>({
     queryKey: ['public-league', leagueId],
     queryFn: async () => {
       const response = await fetch(`/api/leagues/${leagueId}/share`)
-      if (!response.ok) throw new Error('League not found')
+      if (response.status === 404) return null
+      if (!response.ok) throw new Error('League unavailable')
       const payload = await response.json() as ShareLeaguePayload
       return {
         ...payload.league,
@@ -201,7 +202,7 @@ export default function PublicLeague() {
     enabled: !isNaN(leagueId),
   })
 
-  const { data: standings, isError: standingsError, refetch: refetchStandings } = useQuery<LeagueStandings>({
+  const { data: standings, isLoading: standingsLoading, isError: standingsError, refetch: refetchStandings } = useQuery<LeagueStandings>({
     queryKey: ['public-league-standings', leagueId],
     queryFn: () => requestJson(`/api/leagues/${leagueId}/standings`),
     enabled: !isNaN(leagueId),
@@ -268,7 +269,7 @@ export default function PublicLeague() {
     <PublicShell eyebrow="League result" title={league.name} detail={publicDetail || 'Shared result'} action={<button className="btn btn-primary" onClick={copyLink}>{copied ? 'Link copied' : 'Share league'}</button>}>
       <div className="public-legacy-content">
       <PublicResult score={stats?.average ?? '—'} label="League average" accessibleLabel={`League average ${stats?.average ?? 'not available'}`} facts={[
-        { label: 'Record', value: `${stats?.gamesWon ?? 0}W – ${stats?.gamesLost ?? 0}L` },
+        { label: 'Record', value: stats ? `${stats.gamesWon}W – ${stats.gamesLost}L` : '—' },
         { label: 'Weeks', value: stats?.totalWeeks ?? sortedWeeks.length },
         { label: 'High game', value: stats?.high ?? '—' },
       ]} />
@@ -429,7 +430,9 @@ export default function PublicLeague() {
 
       {activeTab === 'standings' && (
         <div role="tabpanel" id="league-standings-panel" aria-labelledby="league-standings-tab">
+          {standingsLoading && <div className="card" role="status">Loading league standings...</div>}
           {standingsError && <div className="card" role="alert"><p>League standings could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStandings()}>Try again</button></div>}
+          {!standingsLoading && !standingsError && <>
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <div>
@@ -497,6 +500,7 @@ export default function PublicLeague() {
               <div style={{ padding: 12, color: 'var(--muted)', fontSize: 13 }}>No standings data yet.</div>
             )}
           </div>
+          </>}
         </div>
       )}
 

@@ -276,7 +276,7 @@ describe('Today behavior', () => {
     await screen.findByText('Game logged')
     expect(JSON.parse(String(savedGames[0]?.pinLeaves))).toHaveLength(20)
 
-    await user.click(screen.getByRole('button', { name: 'Log another game' }))
+    await user.click(await screen.findByRole('button', { name: 'Log another game' }))
     expect(screen.queryByText('Game logged')).toBeNull()
     expect(screen.getByRole('button', { name: 'Record 0' })).toBeTruthy()
   })

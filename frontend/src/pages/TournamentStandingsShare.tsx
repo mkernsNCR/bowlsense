@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { useCopyLink } from '../features/competition/useCopyLink'
 import { downloadTournamentStandingsCard } from '../utils/tournamentShare'
 
 interface StandingsEntry {
@@ -43,25 +46,6 @@ interface TournamentPayload {
   stats: TournamentStats
 }
 
-function StatCard({ label, value, gold }: { label: string; value: string; gold?: boolean }) {
-  return (
-    <div style={{
-      background: '#121228',
-      borderRadius: 16,
-      padding: '14px 16px',
-      border: '1px solid rgba(167,139,250,0.2)',
-    }}>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
-      <div style={{
-        fontSize: 28,
-        fontWeight: 800,
-        color: gold ? '#fbbf24' : '#a78bfa',
-        lineHeight: 1.1,
-      }}>{value}</div>
-    </div>
-  )
-}
-
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span style={{ fontSize: 20 }}>🥇</span>
   if (rank === 2) return <span style={{ fontSize: 20 }}>🥈</span>
@@ -86,7 +70,7 @@ export default function TournamentStandingsShare() {
   const { id } = useParams()
   const tournamentId = Number(id)
   const invalid = Number.isNaN(tournamentId)
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: handleCopyLink } = useCopyLink()
   const [downloaded, setDownloaded] = useState(false)
 
   const { data: standings, isLoading: standingsLoading, isError: standingsError } = useQuery<StandingsResponse>({
@@ -103,7 +87,7 @@ export default function TournamentStandingsShare() {
     queryKey: ['tournament', tournamentId],
     enabled: !invalid,
     queryFn: async () => {
-      const res = await fetch(`/api/tournaments/${tournamentId}`)
+      const res = await fetch(`/api/tournaments/${tournamentId}/share`)
       if (!res.ok) throw new Error('Failed to load')
       return res.json()
     },
@@ -117,7 +101,7 @@ export default function TournamentStandingsShare() {
       tournament?.location,
       tournament?.format,
       tournament?.date
-        ? new Date(tournament.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        ? new Date(tournament.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
         : null,
     ].filter(Boolean)
     return parts.join(' · ')
@@ -130,43 +114,9 @@ export default function TournamentStandingsShare() {
 
   const title = useMemo(() => {
     return tournament?.name ? `${tournament.name} Standings 🎯` : 'Tournament Standings 🎯'
-  }, [tournament?.name])
+  }, [tournament])
 
-  useEffect(() => {
-    if (!tournament) return
-    document.title = title
-
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) {
-        el = document.createElement('meta')
-        el.setAttribute(attr, property)
-        document.head.appendChild(el)
-      }
-      el.setAttribute('content', content)
-    }
-
-    setMeta('og:title', title)
-    setMeta('og:description', subtitle || 'Tournament standings')
-    if (ogImageUrl) {
-      setMeta('og:image', ogImageUrl)
-      setMeta('og:image:width', '1200')
-      setMeta('og:image:height', '630')
-    }
-    setMeta('og:type', 'website')
-    setMeta('twitter:card', 'summary_large_image')
-    setMeta('twitter:title', title)
-    setMeta('twitter:description', subtitle || 'Tournament standings')
-    if (ogImageUrl) setMeta('twitter:image', ogImageUrl)
-  }, [title, subtitle, ogImageUrl, tournament])
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch { /* ignore */ }
-  }
+  usePublicMetadata({ title, description: subtitle || 'Tournament standings', imageUrl: ogImageUrl })
 
   const handleDownload = async () => {
     if (!tournament || invalid) return
@@ -185,57 +135,26 @@ export default function TournamentStandingsShare() {
 
   // Aggregate totals from standings data
   const totalGames = standings?.standings?.reduce((sum, s) => sum + s.games, 0) ?? 0
-  const totalPins = standings?.standings?.reduce((sum, s) => sum + s.total, 0) ?? 0
-  const overallAvg = totalGames > 0 ? Math.round(totalPins / totalGames) : 0
+  const overallAvg = totalGames > 0
+    ? Math.round((standings?.standings?.reduce((sum, s) => sum + s.total, 0) ?? 0) / totalGames)
+    : 0
   const highGame = standings?.standings?.reduce((max, s) => Math.max(max, s.highGame), 0) ?? 0
 
   if (invalid) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui', padding: 24 }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center', background: '#121228', borderRadius: 16, padding: 32 }}>
-          <h2 style={{ marginBottom: 8 }}>Tournament not found</h2>
-          <Link to="/tournaments" style={{ color: '#a78bfa' }}>← Back to Tournaments</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Tournament standings" title="Tournament not found"><Link to="/">Browse tournaments on BowlSense</Link></PublicShell>
     )
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#0d0d1a',
-      color: '#fff',
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-      paddingBottom: 48,
-    }}>
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+    <PublicShell eyebrow="Tournament standings" title={tournament?.name || 'Tournament'} detail={subtitle || 'Shared result'}>
+      <div className="public-legacy-content" style={{ maxWidth: 960, margin: '0 auto' }}>
 
-        {/* Hero */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{
-            display: 'inline-flex',
-            padding: '5px 14px',
-            borderRadius: 999,
-            background: 'linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.3))',
-            color: '#c4b5fd',
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            marginBottom: 14,
-            border: '1px solid rgba(167,139,250,0.4)',
-          }}>
-            🎯 Tournament Standings
-          </div>
-          <h1 style={{
-            margin: '0 0 8px',
-            fontSize: 'clamp(1.8rem, 5vw, 2.8rem)',
-            fontWeight: 900,
-            lineHeight: 1.1,
-          }}>
-            {tournament?.name || 'Tournament Standings'}
-          </h1>
-          {subtitle && <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15 }}>{subtitle}</div>}
-        </div>
+        {standings && <PublicResult score={stats?.placement ? `#${stats.placement}` : overallAvg || '—'} label={stats?.placement ? 'Final placement' : 'Tournament average'} accessibleLabel={stats?.placement ? `Final placement ${stats.placement}` : `Tournament average ${overallAvg || 'not available'}`} facts={[
+          { label: 'Average', value: stats?.average || overallAvg || '—' },
+          { label: 'Games', value: stats?.totalGames || totalGames },
+          { label: 'High game', value: stats?.high || highGame || '—' },
+        ]} />}
 
         {/* Share buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -253,22 +172,13 @@ export default function TournamentStandingsShare() {
               transition: 'background 0.2s',
             }}
           >
-            {copied ? '✅ Copied!' : '📤 Copy Link'}
+            {copied ? 'Link copied' : 'Copy link'}
           </button>
           <a
             href={twitterUrl}
             target="_blank"
             rel="noopener noreferrer"
-            style={{
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 12,
-              padding: '10px 20px',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: 14,
-              textDecoration: 'none',
-            }}
+            className="btn btn-ghost"
           >
             𝕏 Share on X
           </a>
@@ -286,7 +196,7 @@ export default function TournamentStandingsShare() {
               transition: 'background 0.2s',
             }}
           >
-            {downloaded ? '✅ Downloaded!' : '💾 Download Card'}
+            {downloaded ? 'Downloaded' : 'Download card'}
           </button>
         </div>
 
@@ -314,36 +224,8 @@ export default function TournamentStandingsShare() {
         {standingsLoading && <div style={{ color: 'rgba(255,255,255,0.6)', padding: 20 }}>Loading...</div>}
         {standingsError && <div style={{ color: '#fc8181', padding: 20 }}>Could not load standings.</div>}
 
-        {standings && tournamentData && (
+        {standings && (
           <>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: 12,
-              marginBottom: 24,
-            }}>
-              <StatCard label="Total Games" value={String(totalGames)} />
-              <StatCard label="Total Pins" value={String(totalPins)} />
-              <StatCard label="Avg Score" value={String(overallAvg)} />
-              <StatCard
-                label="High Game"
-                value={highGame ? String(highGame) : '—'}
-                gold={highGame > 0}
-              />
-              {stats?.placement != null && (
-                <StatCard
-                  label="Placement"
-                  value={
-                    stats.placement === 1 ? '🥇 1st'
-                    : stats.placement === 2 ? '🥈 2nd'
-                    : stats.placement === 3 ? '🥉 3rd'
-                    : `#${stats.placement}`
-                  }
-                  gold={stats.placement <= 3}
-                />
-              )}
-            </div>
-
             {/* Standings table */}
             <div style={{
               background: '#121228',
@@ -430,7 +312,7 @@ export default function TournamentStandingsShare() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ fontWeight: 800, fontSize: 18, color: '#a78bfa' }}>{entry.total}</div>
-                          <div style={{ fontSize: 11, color: entry.highGame === 300 ? '#fbbf24' : 'rgba(255,255,255,0.5)' }}>
+                          <div style={{ fontSize: 12, color: entry.highGame === 300 ? '#fbbf24' : 'rgba(255,255,255,0.5)' }}>
                             high {entry.highGame || '—'}
                           </div>
                         </div>
@@ -443,26 +325,6 @@ export default function TournamentStandingsShare() {
           </>
         )}
 
-        {/* Footer */}
-        <div style={{
-          marginTop: 28,
-          paddingTop: 20,
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 10,
-          color: 'rgba(255,255,255,0.5)',
-          fontSize: 13,
-        }}>
-          <span>Tracked with BowlSense 🧠</span>
-          <Link
-            to={`/tournaments/${tournamentId}`}
-            style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}
-          >
-            ← View Tournament
-          </Link>
-        </div>
       </div>
 
       <style>{`
@@ -472,6 +334,6 @@ export default function TournamentStandingsShare() {
           .tss-mobile { display: block; }
         }
       `}</style>
-    </div>
+    </PublicShell>
   )
 }

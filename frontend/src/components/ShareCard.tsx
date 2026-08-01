@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Sheet } from '../design'
+import { parseFrameMarks } from '../features/scoring/frameMarks'
 
 interface ShareCardProps {
   game: {
@@ -16,38 +18,6 @@ interface ShareCardProps {
   }
   ballName?: string
   onClose: () => void
-}
-
-function parseFrames(frameData?: string | null): string[] {
-  if (!frameData) return []
-  try {
-    const parsed = JSON.parse(frameData)
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    const mark = (v: number | null | undefined) => {
-      if (v == null) return ''
-      if (v === 10) return 'X'
-      if (v === 0) return '-'
-      return String(v)
-    }
-
-    return frames.map((f: any, idx: number) => {
-      const b1 = f?.ball1
-      const b2 = f?.ball2
-      const b3 = f?.ball3
-      if (idx < 9) {
-        if (b1 === 10) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return b1 + b2 === 10 ? `${mark(b1)}/` : `${mark(b1)}${mark(b2)}`
-      }
-      const first = mark(b1)
-      const second = b2 != null ? (b1 !== 10 && b1 + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${first}${second}${third}`
-    })
-  } catch {
-    return []
-  }
 }
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -68,7 +38,7 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
 export default function ShareCard({ game, session, ballName, onClose }: ShareCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [sharing, setSharing] = useState(false)
-  const marks = useMemo(() => parseFrames(game.frameData), [game.frameData])
+  const marks = useMemo(() => parseFrameMarks(game.frameData), [game.frameData])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -91,7 +61,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
 
     ctx.fillStyle = 'rgba(255,255,255,0.65)'
     ctx.font = '500 14px sans-serif'
-    ctx.fillText('🎳 BowlSense', 24, 34)
+    ctx.fillText('BowlSense', 24, 34)
 
     const isPerfect = game.score === 300
     const isElite = game.score >= 280
@@ -108,7 +78,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
       ctx.font = '700 18px sans-serif'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText('🏆 PERFECT GAME', bx + bw / 2, by + bh / 2 + 1)
+      ctx.fillText('PERFECT GAME', bx + bw / 2, by + bh / 2 + 1)
       ctx.textAlign = 'left'
       ctx.textBaseline = 'alphabetic'
     }
@@ -173,7 +143,7 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
       ctx.textAlign = 'right'
       ctx.fillStyle = 'rgba(255,255,255,0.9)'
       ctx.font = '600 16px sans-serif'
-      ctx.fillText(`🎳 ${ballName}`, w - 24, 416)
+      ctx.fillText(ballName, w - 24, 416)
     }
   }, [game.score, marks, session.date, session.lanes, session.location, ballName])
 
@@ -224,45 +194,40 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.8)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        flexDirection: 'column',
-        gap: 12,
-        padding: 16,
-      }}
-      onClick={onClose}
+    <Sheet
+      open
+      onClose={onClose}
+      title={`Share game ${game.score}`}
+      description="Save or share this score card image."
+      closeLabel="Close score card"
+      className="share-card-sheet"
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <canvas
           ref={canvasRef}
           width={800}
           height={460}
-          style={{ width: 400, height: 230, borderRadius: 14, display: 'block', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
+          role="img"
+          aria-label={`Score card for game ${game.gameNumber}: ${game.score} at ${session.location || 'Unknown Alley'}. ${session.date}${session.lanes ? `, lanes ${session.lanes}` : ''}.${ballName ? ` Ball: ${ballName}.` : ''} Frames: ${marks.filter(Boolean).join(', ') || 'not available'}.`}
+          style={{ width: 'min(400px, calc(100vw - 32px))', height: 'auto', maxWidth: '100%', borderRadius: 14, display: 'block', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
         />
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button className="btn btn-primary" style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10 }} onClick={saveImage}>
-            💾 Save Image
+          <button className="btn btn-primary" style={{ minHeight: 44, padding: '6px 12px', borderRadius: 10 }} onClick={saveImage}>
+            Save image
           </button>
 
           {canShare && (
-            <button className="btn btn-ghost" style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10 }} onClick={shareImage}>
-              📤 Share
+            <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 12px', borderRadius: 10 }} onClick={shareImage}>
+              Share
             </button>
           )}
 
-          <button className="btn btn-ghost" style={{ minHeight: 34, padding: '6px 12px', borderRadius: 10 }} onClick={onClose}>
-            ✕ Close
+          <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 12px', borderRadius: 10 }} onClick={onClose}>
+            Close
           </button>
         </div>
       </div>
-    </div>
+    </Sheet>
   )
 }

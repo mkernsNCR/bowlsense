@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface LeaderboardRecord {
   wins: number
@@ -36,25 +39,9 @@ interface LeagueMeta {
   }
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        background: '#121228',
-        borderRadius: 16,
-        padding: '14px 16px',
-        border: '1px solid rgba(167,139,250,0.2)',
-      }}
-    >
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: '#a78bfa', lineHeight: 1.1 }}>{value}</div>
-    </div>
-  )
-}
-
 export default function PublicLeagueLeaderboard() {
   const { id } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: shareCopy } = useCopyLink()
   const leagueId = Number(id)
   const invalidId = Number.isNaN(leagueId)
 
@@ -72,9 +59,10 @@ export default function PublicLeagueLeaderboard() {
     queryKey: ['public-league-meta', leagueId],
     enabled: !invalidId,
     queryFn: async () => {
-      const res = await fetch(`/api/leagues/${leagueId}`)
+      const res = await fetch(`/api/leagues/${leagueId}/share`)
       if (!res.ok) throw new Error('Failed to load league')
-      return res.json()
+      const payload = await res.json() as { league: LeagueMeta; stats: { average: number } }
+      return { ...payload.league, stats: { average: payload.stats.average } }
     },
   })
 
@@ -87,29 +75,7 @@ export default function PublicLeagueLeaderboard() {
   const description = subtitle
   const ogImageUrl = `/api/leagues/${leagueId}/leaderboard/og-image`
 
-  useEffect(() => {
-    document.title = title
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, property); document.head.appendChild(el) }
-      el.content = content
-    }
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    setMeta('og:image', ogImageUrl)
-    setMeta('og:type', 'website')
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, ogImageUrl])
-
-  const shareCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
-  }
+  usePublicMetadata({ title, description, imageUrl: invalidId ? '' : ogImageUrl })
 
   const tweetText = encodeURIComponent(
     `Check out the ${league?.name || 'league'} leaderboard! 🎳`
@@ -119,19 +85,13 @@ export default function PublicLeagueLeaderboard() {
 
   if (invalidId) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: 24 }}>
-        <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: '#121228' }}>
-          <h2 style={{ marginBottom: 8 }}>League not found</h2>
-          <p className="muted">The league link looks invalid.</p>
-          <Link to="/leagues" className="btn btn-ghost">← Back to My Leagues</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="League leaderboard" title="League not found" detail="The league link looks invalid."><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: '24px 16px 40px' }}>
-      <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+    <PublicShell eyebrow="League leaderboard" title={league?.name || 'League leaderboard'} detail={subtitle} action={<button onClick={shareCopy} className="btn btn-primary">{copied ? 'Link copied' : 'Share'}</button>}>
+      <div className="public-legacy-content" style={{ maxWidth: 1040, margin: '0 auto' }}>
         <style>{`
           .pllb-mobile-cards {
             display: none;
@@ -148,49 +108,18 @@ export default function PublicLeagueLeaderboard() {
             }
           }
         `}</style>
-        <div style={{ display: 'inline-flex', padding: '6px 12px', borderRadius: 999, background: 'rgba(167,139,250,0.18)', color: '#c4b5fd', fontWeight: 700, fontSize: 12, letterSpacing: 0.5, marginBottom: 14 }}>
-          🏆 PUBLIC LEAGUE LEADERBOARD
-        </div>
+        <div className="public-share-actions"><a href={twitterIntent} target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Share on X</a></div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900 }}>
-              {league?.name || 'League Leaderboard'}
-            </h1>
-            <div style={{ color: 'rgba(255,255,255,0.75)', marginTop: 8 }}>{subtitle}</div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <button
-              onClick={shareCopy}
-              className="btn btn-primary"
-              style={{ background: '#a78bfa', borderColor: '#a78bfa', color: '#140f2b' }}
-            >
-              {copied ? '✅ Copied!' : '📤 Share'}
-            </button>
-            <a
-              href={twitterIntent}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none' }}
-            >
-              Share on X
-            </a>
-          </div>
-        </div>
-
-        {isLoading && <div className="card" style={{ background: '#121228' }}>Loading leaderboard...</div>}
+        {isLoading && <div className="card" style={{ background: '#121228', color: '#fff' }}>Loading leaderboard...</div>}
         {isError && <div className="card" style={{ background: '#121228', color: '#fc8181' }}>Could not load leaderboard right now.</div>}
 
         {!isLoading && !isError && data && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-              <StatCard label="Your Average" value={league?.stats?.average != null ? String(league.stats.average) : '—'} />
-              <StatCard label="W — L — T" value={`${data.record?.wins ?? 0} — ${data.record?.losses ?? 0} — ${data.record?.ties ?? 0}`} />
-              <StatCard label="Weeks Played" value={String(data.totalWeeks ?? 0)} />
-              <StatCard label="League Avg" value={data.leagueAverage != null ? String(data.leagueAverage) : '—'} />
-            </div>
+            <PublicResult score={league?.stats?.average ?? '—'} label="Bowler average" accessibleLabel={`Bowler average ${league?.stats?.average ?? 'not available'}`} facts={[
+              { label: 'Record', value: `${data.record?.wins ?? 0}W – ${data.record?.losses ?? 0}L – ${data.record?.ties ?? 0}T` },
+              { label: 'Weeks', value: data.totalWeeks ?? 0 },
+              { label: 'League average', value: data.leagueAverage ?? '—' },
+            ]} />
 
             <div style={{ background: '#121228', borderRadius: 16, border: '1px solid rgba(167,139,250,0.2)', overflow: 'hidden' }}>
               {!data.rankedOpponents?.length ? (
@@ -258,11 +187,7 @@ export default function PublicLeagueLeaderboard() {
           </>
         )}
 
-        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'rgba(255,255,255,0.65)' }}>
-          <div>Tracked with BowlSense</div>
-          <Link to="/leagues" style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>← Back to My Leagues</Link>
-        </div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

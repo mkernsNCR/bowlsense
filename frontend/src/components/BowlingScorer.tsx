@@ -12,6 +12,7 @@ import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
 import { requiresDiscardConfirmation } from '../features/scoring/interaction'
 import { countSplits } from '../features/scoring/splits'
 import type { ScoringBall } from '../features/scoring/types'
+import ShareCard from './ShareCard'
 import '../features/scoring/scoring.css'
 
 export interface SavedBowlingGame {
@@ -32,6 +33,11 @@ interface BowlingScorerProps {
   initialFrameData?: string | null
   initialSplits?: number
   saving?: boolean
+  shareContext?: {
+    location?: string | null
+    date?: string | null
+    lanes?: string | null
+  }
   onSave: (game: SavedBowlingGame) => void | Promise<void>
   onCancel: () => void
 }
@@ -42,6 +48,13 @@ const pinRows = [
   [2, 3],
   [1],
 ]
+
+const perfectPinDeck = [
+  [50, 70],
+  [42, 54], [58, 54],
+  [34, 38], [50, 38], [66, 38],
+  [26, 22], [42, 22], [58, 22], [74, 22],
+] as const
 
 function activeFrameLabel(state: GameState) {
   if (state.isComplete) return 'Complete'
@@ -78,12 +91,14 @@ interface CompletionSheetBodyProps {
   canRestore: boolean
   confirmRetake: boolean
   perfectGameElements?: ReactNode
+  shareButtonText?: string
   saveButtonText: string
   retakeHint: string
   onDone: () => void
   onRestore: () => void
   onUndo: () => void
   onRetake: () => void
+  onShare?: () => void
   onSave: () => void | Promise<void>
 }
 
@@ -93,12 +108,14 @@ function CompletionSheetBody({
   canRestore,
   confirmRetake,
   perfectGameElements,
+  shareButtonText,
   saveButtonText,
   retakeHint,
   onDone,
   onRestore,
   onUndo,
   onRetake,
+  onShare,
   onSave,
 }: CompletionSheetBodyProps) {
   if (saveStatus === 'saved') {
@@ -117,6 +134,11 @@ function CompletionSheetBody({
       {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
       {canRestore && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={onRestore}>Restore original game</button>}
       <div className="scoring-sheet-actions">
+        {onShare && (
+          <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={onShare}>
+            <Icon name="share" size={18} /> {shareButtonText ?? 'Share score card'}
+          </button>
+        )}
         <button type="button" className="scoring-button secondary" disabled={isSaving} onClick={onUndo}>
           <Icon name="undo" size={18} /> Undo last roll
         </button>
@@ -139,6 +161,7 @@ export default function BowlingScorer({
   initialFrameData,
   initialSplits,
   saving = false,
+  shareContext,
   onSave,
   onCancel,
 }: BowlingScorerProps) {
@@ -156,6 +179,7 @@ export default function BowlingScorer({
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [confirmRetake, setConfirmRetake] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [showShareCard, setShowShareCard] = useState(false)
   const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(initialFrameData))
   const isSaving = saving || saveStatus === 'saving'
 
@@ -499,19 +523,46 @@ export default function BowlingScorer({
             confirmRetake={confirmRetake}
             perfectGameElements={(
               <>
+                <div className="perfect-lane-spotlight" aria-hidden="true">
+                  {perfectPinDeck.map(([left, top], index) => (
+                    <span key={index} style={{ left: `${left}%`, top: `${top}%` }} />
+                  ))}
+                </div>
                 <p className="scoring-eyebrow">Twelve strikes</p>
                 <div className="perfect-lane-score" aria-label="Perfect score 300">300</div>
               </>
             )}
+            shareButtonText="Share 300"
             saveButtonText="Save 300"
             retakeHint="Retaking clears the perfect game. Tap “Confirm retake” to continue."
             onDone={onCancel}
             onRestore={restoreBeforeEdit}
             onUndo={handleUndo}
             onRetake={handleRetake}
+            onShare={() => setShowShareCard(true)}
             onSave={handleSave}
           />
         </Sheet>
+      )}
+
+      {showShareCard && state.isComplete && state.totalScore === 300 && (
+        <ShareCard
+          game={{
+            gameNumber,
+            score: state.totalScore,
+            strikes,
+            spares,
+            splits,
+            frameData,
+          }}
+          session={{
+            location: shareContext?.location?.trim() || 'Unknown Alley',
+            date: shareContext?.date || '',
+            lanes: shareContext?.lanes || undefined,
+          }}
+          ballName={selectedBall?.name}
+          onClose={() => setShowShareCard(false)}
+        />
       )}
     </div>
   )

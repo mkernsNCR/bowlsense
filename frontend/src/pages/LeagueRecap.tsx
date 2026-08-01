@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface RecapLeague { id: number; name: string; location: string | null; season: string | null }
 interface RecapWeek { weekNumber: number; date: string; opponent: string; won: number; lost: number; tied: number }
@@ -26,22 +27,45 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
+function recapNarrative(data: RecapData): string {
+  if (data.stats.totalGames === 0) return ''
+  const plural = (count: number, singular: string, pluralForm = `${singular}s`) => `${count} ${count === 1 ? singular : pluralForm}`
+  const opponent = data.week.opponent ? ` against ${data.week.opponent}` : ''
+  const record = data.week.tied > 0
+    ? `${plural(data.week.won, 'win')}, ${plural(data.week.lost, 'loss', 'losses')}, and ${plural(data.week.tied, 'tie')}`
+    : `${plural(data.week.won, 'win')} and ${plural(data.week.lost, 'loss', 'losses')}`
+  const highNote = data.stats.highGame === 300 ? ' A perfect game capped the set.' : ` The high game was ${data.stats.highGame}.`
+  return `Week ${data.week.weekNumber}${opponent} finished with ${record}. The set averaged ${data.stats.average} across ${plural(data.stats.totalGames, 'game')}.${highNote}`
+}
+
 export default function LeagueRecap() {
   const { id } = useParams()
   const leagueId = Number(id)
   const invalidId = Number.isNaN(leagueId)
 
-  const [data, setData] = useState<RecapData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [request, setRequest] = useState<{ leagueId: number; data: RecapData | null; loading: boolean; error: string | null }>(() => ({
+    leagueId,
+    data: null,
+    loading: !invalidId,
+    error: null,
+  }))
+  const currentRequest = request.leagueId === leagueId
+    ? request
+    : { leagueId, data: null, loading: !invalidId, error: null }
+  const { data, loading, error } = currentRequest
+  const { copied, copyLink } = useCopyLink()
   const [downloading, setDownloading] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
 
   const downloadPng = async () => {
     if (!data) return
     setDownloading(true)
+    setDownloaded(false)
+    setDownloadError(false)
     try {
       const res = await fetch(`/api/leagues/${leagueId}/recap/og-image`)
+      if (!res.ok) throw new Error('Download failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -51,19 +75,23 @@ export default function LeagueRecap() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch { /* ignore */ }
-    setTimeout(() => setDownloading(false), 1200)
+      setDownloaded(true)
+      setTimeout(() => setDownloaded(false), 1800)
+    } catch {
+      setDownloadError(true)
+      setTimeout(() => setDownloadError(false), 1800)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   useEffect(() => {
     if (invalidId) return
     let cancelled = false
-    setLoading(true)
-    setError(null)
     fetch(`/api/leagues/${leagueId}/recap`)
       .then(r => { if (!r.ok) throw new Error('Recap not found'); return r.json() })
-      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+      .then(d => { if (!cancelled) setRequest({ leagueId, data: d, loading: false, error: null }) })
+      .catch(e => { if (!cancelled) setRequest({ leagueId, data: null, loading: false, error: e.message }) })
     return () => { cancelled = true }
   }, [leagueId, invalidId])
 
@@ -82,18 +110,12 @@ export default function LeagueRecap() {
     return `https://twitter.com/intent/tweet?text=${text}&url=${url}`
   }, [data, shareText])
 
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
-  }
-
   if (invalidId) {
     return (
       <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', display: 'grid', placeItems: 'center', padding: 24 }}>
         <div style={{ textAlign: 'center' }}>
           <h2>League not found</h2>
-          <Link to="/leagues" className="btn btn-ghost" style={{ marginTop: 16 }}>← Back to Leagues</Link>
+          <Link to="/leagues" className="btn btn-ghost" style={{ marginTop: 16 }}>Back to leagues</Link>
         </div>
       </div>
     )
@@ -103,7 +125,7 @@ export default function LeagueRecap() {
     <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '24px 16px 60px' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <Link to="/leagues" style={{ color: '#a78bfa', textDecoration: 'none', fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
-          ← Back to Leagues
+          Back to leagues
         </Link>
 
         {loading && (
@@ -126,7 +148,6 @@ export default function LeagueRecap() {
           <>
             {/* OG image preview */}
             <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 24, boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={ogImageUrl} alt="League recap card" style={{ width: '100%', display: 'block' }} />
             </div>
 
@@ -141,6 +162,9 @@ export default function LeagueRecap() {
               <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16 }}>
                 Week {data.week.weekNumber} · {data.week.date} · vs {data.week.opponent}
               </div>
+              {data.stats.totalGames > 0 && <p style={{ maxWidth: 680, margin: '16px 0 0', color: 'rgba(255,255,255,.84)', fontSize: 18, lineHeight: 1.6 }}>
+                {recapNarrative(data)}
+              </p>}
             </div>
 
             {/* Game scores */}
@@ -184,24 +208,27 @@ export default function LeagueRecap() {
               </a>
               <button
                 onClick={copyLink}
+                aria-live="polite"
                 className="btn btn-ghost"
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
               >
-                {copied ? '✅ Copied!' : '📋 Copy Link'}
+                {copied ? 'Link copied' : 'Copy link'}
               </button>
               <button
                 onClick={downloadPng}
+                aria-live="polite"
                 className="btn btn-ghost"
-                style={{ borderColor: 'rgba(167,139,250,0.5)', color: downloading ? '#34d399' : '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
+                disabled={downloading}
+                style={{ borderColor: 'rgba(167,139,250,0.5)', color: downloaded ? '#34d399' : downloadError ? '#fc8181' : '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
               >
-                {downloading ? '✅ Downloaded!' : '📥 Download PNG'}
+                {downloading ? 'Preparing…' : downloaded ? 'Downloaded' : downloadError ? 'Download failed' : 'Download image'}
               </button>
               <Link
                 to={`/leagues/${leagueId}/recap/share`}
                 className="btn btn-ghost"
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                🔗 Share Page
+                Share page
               </Link>
             </div>
 

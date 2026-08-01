@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import { Icon } from '../design'
+import { PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface TournamentStanding {
   rank: number
@@ -47,15 +51,15 @@ function StatCard({ label, value }: { label: string; value: string }) {
         border: '1px solid rgba(167,139,250,0.2)',
       }}
     >
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: '#a78bfa', lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#a78bfa', lineHeight: 1.1 }}>{value}</div>
     </div>
   )
 }
 
 export default function TournamentStandings() {
   const { id } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: shareCopy } = useCopyLink()
   const [downloading, setDownloading] = useState(false)
   const tournamentId = Number(id)
   const invalidId = Number.isNaN(tournamentId)
@@ -74,50 +78,26 @@ export default function TournamentStandings() {
     queryKey: ['tournament', tournamentId],
     enabled: !invalidId,
     queryFn: async () => {
-      const res = await fetch(`/api/tournaments/${tournamentId}`)
+      const res = await fetch(`/api/tournaments/${tournamentId}/share`)
       if (!res.ok) throw new Error('Failed to load tournament')
       return res.json()
     },
   })
 
-  const subtitle = useMemo(() => {
-    const parts = [
-      tournament?.tournament?.location,
-      tournament?.tournament?.format,
-      tournament?.tournament?.date
-        ? new Date(tournament.tournament.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : null,
-    ].filter(Boolean)
-    return parts.join(' · ')
-  }, [tournament?.tournament?.location, tournament?.tournament?.format, tournament?.tournament?.date])
+  const tournamentMeta = tournament?.tournament
+  const subtitle = [
+    tournamentMeta?.location,
+    tournamentMeta?.format,
+    tournamentMeta?.date
+      ? new Date(tournamentMeta.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      : null,
+  ].filter(Boolean).join(' · ')
 
-  const title = tournament?.tournament?.name ? `${tournament.tournament.name} Standings 🎯` : 'Tournament Standings 🎯'
+  const title = tournament?.tournament?.name ? `${tournament.tournament.name} standings` : 'Tournament standings'
   const description = subtitle || 'Tournament standings'
   const ogImageUrl = `/api/tournaments/${tournamentId}/standings/og-image`
 
-  useEffect(() => {
-    document.title = title
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, property); document.head.appendChild(el) }
-      el.content = content
-    }
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    setMeta('og:image', ogImageUrl)
-    setMeta('og:type', 'website')
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, ogImageUrl])
-
-  const shareCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
-  }
+  usePublicMetadata({ title, description, imageUrl: invalidId ? '' : ogImageUrl })
 
   const handleDownloadPng = async () => {
     if (downloading || invalidId) return
@@ -149,19 +129,18 @@ export default function TournamentStandings() {
 
   if (invalidId) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: 24 }}>
-        <div className="card" style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center', background: '#121228' }}>
-          <h2 style={{ marginBottom: 8 }}>Tournament not found</h2>
-          <p className="muted">The tournament link looks invalid.</p>
-          <Link to="/tournaments" className="btn btn-ghost">← Back to Tournaments</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Tournament standings" title="Tournament not found" detail="The tournament link looks invalid."><Link to="/">Browse tournaments on BowlSense</Link></PublicShell>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: '#fff', fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif', padding: '24px 16px 40px' }}>
-      <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+    <PublicShell
+      eyebrow="Tournament standings"
+      title={tournament?.tournament?.name || 'Tournament standings'}
+      detail={subtitle}
+      action={<button onClick={shareCopy} className="btn btn-primary"><Icon className="competition-action-icon" name="share" /> {copied ? 'Link copied' : 'Share standings'}</button>}
+    >
+      <div className="public-legacy-content">
         <style>{`
           .ts-mobile-cards {
             display: none;
@@ -179,32 +158,13 @@ export default function TournamentStandings() {
           }
         `}</style>
 
-        <div style={{ display: 'inline-flex', padding: '6px 12px', borderRadius: 999, background: 'rgba(167,139,250,0.18)', color: '#c4b5fd', fontWeight: 700, fontSize: 12, letterSpacing: 0.5, marginBottom: 14 }}>
-          🏆 TOURNAMENT STANDINGS
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900 }}>
-              {tournament?.tournament?.name || 'Tournament Standings'}
-            </h1>
-            <div style={{ color: 'rgba(255,255,255,0.75)', marginTop: 8 }}>{subtitle}</div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <button
-              onClick={shareCopy}
-              className="btn btn-primary"
-              style={{ background: '#a78bfa', borderColor: '#a78bfa', color: '#140f2b' }}
-            >
-              {copied ? '✅ Copied!' : '📤 Share'}
-            </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
             <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the ${tournament?.tournament?.name || 'tournament'} standings! 🎯`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the ${tournament?.tournament?.name || 'tournament'} standings.`)}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none' }}
+              style={{ textDecoration: 'none' }}
             >
               Share on X
             </a>
@@ -212,14 +172,13 @@ export default function TournamentStandings() {
               onClick={handleDownloadPng}
               disabled={downloading}
               className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none', minHeight: 40 }}
+              style={{ minHeight: 44 }}
             >
-              {downloading ? '⏳ Saving...' : '⬇️ Download PNG'}
+              {downloading ? 'Saving…' : 'Download image'}
             </button>
-          </div>
         </div>
 
-        {isLoading && <div className="card" style={{ background: '#121228' }}>Loading standings...</div>}
+        {isLoading && <div className="card" style={{ background: '#121228', color: '#fff' }}>Loading standings...</div>}
         {isError && <div className="card" style={{ background: '#121228', color: '#fc8181' }}>Could not load standings right now.</div>}
 
         {!isLoading && !isError && data && (
@@ -233,9 +192,9 @@ export default function TournamentStandings() {
                 <StatCard
                   label="Placement"
                   value={
-                    tournament.stats.placement === 1 ? '🥇 1st'
-                    : tournament.stats.placement === 2 ? '🥈 2nd'
-                    : tournament.stats.placement === 3 ? '🥉 3rd'
+                    tournament.stats.placement === 1 ? '1st'
+                    : tournament.stats.placement === 2 ? '2nd'
+                    : tournament.stats.placement === 3 ? '3rd'
                     : `#${tournament.stats.placement}`
                   }
                 />
@@ -245,7 +204,7 @@ export default function TournamentStandings() {
             <div style={{ background: '#121228', borderRadius: 16, border: '1px solid rgba(167,139,250,0.2)', overflow: 'hidden' }}>
               {!data.standings?.length ? (
                 <div style={{ padding: 28, textAlign: 'center', color: 'rgba(255,255,255,0.8)' }}>
-                  No games logged yet — check back after your next tournament! 🎯
+                  No games logged yet. Add a game after your next tournament.
                 </div>
               ) : (
                 <>
@@ -254,7 +213,7 @@ export default function TournamentStandings() {
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                           {['Rank', 'Ball / Name', 'Games', 'Total Pins', 'Average', 'High Game'].map((h) => (
-                            <th key={h} style={{ textAlign: 'left', padding: '12px 14px', fontSize: 12, letterSpacing: 0.4, color: 'rgba(255,255,255,0.72)' }}>{h}</th>
+                            <th key={h} style={{ textAlign: 'left', padding: '12px 14px', fontSize: '0.75rem', letterSpacing: '0.025rem', color: 'rgba(255,255,255,0.72)' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -291,9 +250,9 @@ export default function TournamentStandings() {
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                             <div style={{ fontWeight: 800, color: s.rank === 1 ? '#fbbf24' : '#fff' }}>#{s.rank} {s.ballName}</div>
-                            <div style={{ fontSize: 20, fontWeight: 900, color: '#a78bfa' }}>{s.average}</div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#a78bfa' }}>{s.average}</div>
                           </div>
-                          <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.78)' }}>
+                          <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, fontSize: '0.75rem', color: 'rgba(255,255,255,0.78)' }}>
                             <div>Games: <b>{s.games}</b></div>
                             <div>Pins: <b>{s.total}</b></div>
                             <div>High: <b style={{ color: s.highGame === 300 ? '#fbbf24' : '#fff' }}>{s.highGame}</b></div>
@@ -307,15 +266,7 @@ export default function TournamentStandings() {
             </div>
           </>
         )}
-
-        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: 'rgba(255,255,255,0.65)', fontSize: 13 }}>
-          <div>Tracked with BowlSense 🧠</div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <a href={`/tournaments/${tournamentId}/standings/share`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>📤 Share Standings</a>
-            <Link to={`/tournaments/${tournamentId}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: 700 }}>← View Tournament</Link>
-          </div>
-        </div>
       </div>
-    </div>
+    </PublicShell>
   )
 }

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ShareCard from '../components/ShareCard'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { useCopyLink } from '../features/competition/useCopyLink'
 import { downloadGameImage, nativeShareGame, shareOnX } from '../utils/gameShare'
 
 interface PerfectGamePayload {
@@ -27,7 +30,8 @@ export default function PerfectGameShare() {
   const [data, setData] = useState<PerfectGamePayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [loadError, setLoadError] = useState(false)
+  const { copied, copyLink: handleCopyLink } = useCopyLink()
   const [showShareCard, setShowShareCard] = useState(false)
   const [sharing, setSharing] = useState(false)
 
@@ -36,16 +40,18 @@ export default function PerfectGameShare() {
     const run = async () => {
       setLoading(true)
       setNotFound(false)
+      setLoadError(false)
       try {
         const res = await fetch(`/api/games/perfect/${gameId}`)
         if (!res.ok) {
           if (res.status === 404 && mounted) setNotFound(true)
+          else if (mounted) setLoadError(true)
           return
         }
         const json = await res.json()
         if (mounted) setData(json)
       } catch {
-        if (mounted) setNotFound(true)
+        if (mounted) setLoadError(true)
       } finally {
         if (mounted) setLoading(false)
       }
@@ -68,32 +74,7 @@ export default function PerfectGameShare() {
     return `${data.session.location || 'Unknown Alley'} · ${data.session.date || ''}`
   }, [data])
 
-  useEffect(() => {
-    document.title = title
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) {
-        el = document.createElement('meta')
-        el.setAttribute(attr, property)
-        document.head.appendChild(el)
-      }
-      el.setAttribute('content', content)
-    }
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    if (ogImageUrl) {
-      setMeta('og:image', ogImageUrl)
-      setMeta('og:image:width', '1200')
-      setMeta('og:image:height', '630')
-    }
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, ogImageUrl])
-
-  const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1400)
-  }
+  usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
   const handleNativeShare = async () => {
     if (!data || sharing) return
@@ -116,58 +97,30 @@ export default function PerfectGameShare() {
 
   if (!Number.isFinite(gameId) || (loading === false && notFound)) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 64, marginBottom: 14 }}>🎳</div>
-          <h1 style={{ marginBottom: 10 }}>Perfect game not found</h1>
-          <Link to="/perfect-games" className="btn btn-primary">View 300 Club</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Perfect game" title="Perfect game not found"><Link to="/">Browse games on BowlSense</Link></PublicShell>
     )
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', display: 'grid', placeItems: 'center' }}>
-        <div className="muted">Loading your perfect game...</div>
-      </div>
+      <PublicShell eyebrow="Perfect game" title="Loading shared result"><div className="muted">Loading your perfect game...</div></PublicShell>
     )
   }
 
-  if (!data) return null
+  if (loadError) {
+    return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><p role="alert">This shared result could not be loaded right now.</p><Link to="/">Browse games on BowlSense</Link></PublicShell>
+  }
+
+  if (!data) return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><Link to="/">Browse games on BowlSense</Link></PublicShell>
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0d0d1a', color: 'white', padding: '32px 16px 48px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Hero */}
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{
-          display: 'inline-block',
-          background: 'rgba(251,191,36,0.15)',
-          border: '1px solid rgba(251,191,36,0.4)',
-          color: '#fbbf24',
-          borderRadius: 999,
-          fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: '0.1em',
-          padding: '4px 14px',
-          marginBottom: 12,
-        }}>
-          🏆 PERFECT GAME
-        </div>
-        <h1 style={{
-          margin: '0 0 8px',
-          fontSize: 'clamp(2.5rem, 10vw, 5rem)',
-          fontWeight: 900,
-          lineHeight: 1,
-          color: '#fbbf24',
-          textShadow: '0 0 40px rgba(251,191,36,0.35)',
-        }}>
-          {data.game.score}
-        </h1>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16 }}>
-          {data.session.location || 'Unknown Alley'} · {data.session.date}
-        </div>
-      </div>
+    <PublicShell eyebrow="Perfect game" title="Perfect 300" detail={`${data.session.location || 'Unknown Alley'} · ${data.session.date}`}>
+      <div className="public-legacy-content">
+      <PublicResult score={data.game.score} label="Final score" accessibleLabel={`Perfect game score ${data.game.score}`} facts={[
+        { label: 'Strikes', value: data.game.strikes },
+        { label: 'Spares', value: data.game.spares },
+        { label: 'Ball', value: data.game.ballName || 'Not recorded' },
+      ]} />
 
       {/* OG share card image */}
       <div style={{ maxWidth: 860, margin: '0 auto 24px', borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
@@ -183,7 +136,7 @@ export default function PerfectGameShare() {
       </div>
 
       {/* Action buttons */}
-      <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      <div className="perfect-game-actions" style={{ maxWidth: 860, margin: '0 auto' }}>
         <button
           type="button"
           className="btn"
@@ -218,7 +171,7 @@ export default function PerfectGameShare() {
             cursor: 'pointer',
           }}
         >
-          ⬇️ Download PNG
+          Download image
         </button>
         <button
           type="button"
@@ -237,7 +190,7 @@ export default function PerfectGameShare() {
             cursor: 'pointer',
           }}
         >
-          📤 Share
+          Share
         </button>
         <button
           type="button"
@@ -255,7 +208,7 @@ export default function PerfectGameShare() {
             cursor: 'pointer',
           }}
         >
-          {copied ? '✅ Copied!' : '🔗 Copy Link'}
+          {copied ? 'Link copied' : 'Copy link'}
         </button>
       </div>
 
@@ -315,10 +268,11 @@ export default function PerfectGameShare() {
 
       {/* Back link */}
       <div style={{ maxWidth: 860, margin: '28px auto 0', textAlign: 'center' }}>
-        <Link to="/perfect-games" style={{ color: 'rgba(167,139,250,0.8)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
-          ← View all 300s in BowlSense
+        <Link to="/" style={{ color: 'rgba(167,139,250,0.8)', textDecoration: 'none', fontSize: 14, fontWeight: 600 }}>
+          Browse games on BowlSense
         </Link>
       </div>
-    </div>
+      </div>
+    </PublicShell>
   )
 }

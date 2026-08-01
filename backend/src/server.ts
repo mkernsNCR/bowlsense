@@ -11,10 +11,10 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { sessions, games, balls } from './schema.js';
 
-const sqlite = new Database('bowling.db');
+const sqlite = new Database(process.env.BOWLSENSE_DB_PATH?.trim() || 'bowling.db');
 const db = drizzle(sqlite);
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ logger: process.env.BOWLSENSE_TEST_MODE !== '1' });
 
 // Register multipart for file uploads (CSV import)
 await fastify.register(FastifyMultipart, {
@@ -27,7 +27,11 @@ await fastify.register(FastifyMultipart, {
 fastify.get('/api/stats', async (request) => {
   const allGames = await db.select().from(games);
   const totalGames = allGames.length;
-  if (totalGames === 0) return { average: 0, strikeRate: 0, spareRate: 0, totalGames: 0 };
+  const publicIdentity = {
+    profileName: process.env.BOWLSENSE_PUBLIC_PROFILE_NAME?.trim() || null,
+    generatedAt: new Date().toISOString(),
+  };
+  if (totalGames === 0) return { average: 0, strikeRate: 0, spareRate: 0, totalGames: 0, ...publicIdentity };
   const totalScore = allGames.reduce((sum, g) => sum + (g.score || 0), 0);
   const totalStrikes = allGames.reduce((sum, g) => sum + (g.strikes || 0), 0);
   const totalSpares = allGames.reduce((sum, g) => sum + (g.spares || 0), 0);
@@ -39,6 +43,7 @@ fastify.get('/api/stats', async (request) => {
     totalScore,
     totalStrikes,
     totalSpares,
+    ...publicIdentity,
   };
 });
 
@@ -442,6 +447,7 @@ sqlite.exec(`
     prize_fund REAL,
     placement INTEGER,
     notes TEXT,
+    active INTEGER DEFAULT 1,
     created_at INTEGER
   );
   CREATE TABLE IF NOT EXISTS tournament_games (
@@ -517,6 +523,17 @@ const arsenalBallColumns = sqlite.prepare('PRAGMA table_info(arsenal_balls)').al
 const arsenalBallColNames = arsenalBallColumns.map((c: any) => c.name);
 if (!arsenalBallColNames.includes('slot_order')) {
   sqlite.exec('ALTER TABLE arsenal_balls ADD COLUMN slot_order INTEGER DEFAULT 0');
+}
+
+// Archive-state migrations preserve existing competitions while making them
+// recoverable from the UI instead of requiring destructive deletes.
+const leagueColumnNames = (sqlite.prepare('PRAGMA table_info(leagues)').all() as any[]).map((column) => column.name);
+if (!leagueColumnNames.includes('active')) {
+  sqlite.exec('ALTER TABLE leagues ADD COLUMN active INTEGER DEFAULT 1');
+}
+const tournamentColumnNames = (sqlite.prepare('PRAGMA table_info(tournaments)').all() as any[]).map((column) => column.name);
+if (!tournamentColumnNames.includes('active')) {
+  sqlite.exec('ALTER TABLE tournaments ADD COLUMN active INTEGER DEFAULT 1');
 }
 
 // Migration safety checks for leagues feature
@@ -1354,6 +1371,49 @@ fastify.delete('/games/:id', async (request, reply) => {
 });
 
 // Leagues CRUD and related routes
+const wantsArchived = (query: any) => query?.includeArchived === '1' || query?.includeArchived === 'true';
+
+const leagueListStatement = sqlite.prepare(`
+  SELECT l.*,
+         COUNT(DISTINCT lw.id) as weekCount,
+         COALESCE(SUM(lw.games_won), 0) as gamesWon,
+         COALESCE(SUM(lw.games_lost), 0) as gamesLost
+  FROM leagues l
+  LEFT JOIN league_weeks lw ON lw.league_id = l.id
+  GROUP BY l.id
+  ORDER BY l.created_at DESC, l.id DESC
+`);
+const activeLeagueListStatement = sqlite.prepare(`
+  SELECT l.*,
+         COUNT(DISTINCT lw.id) as weekCount,
+         COALESCE(SUM(lw.games_won), 0) as gamesWon,
+         COALESCE(SUM(lw.games_lost), 0) as gamesLost
+  FROM leagues l
+  LEFT JOIN league_weeks lw ON lw.league_id = l.id
+  WHERE COALESCE(l.active, 1) = 1
+  GROUP BY l.id
+  ORDER BY l.created_at DESC, l.id DESC
+`);
+const selectLeagueRows = (includeArchived: boolean) =>
+  (includeArchived ? leagueListStatement : activeLeagueListStatement).all() as any[];
+
+const serializeLeagueRow = (league: any) => ({
+  id: league.id,
+  name: league.name,
+  location: league.location,
+  season: league.season,
+  dayOfWeek: league.day_of_week,
+  gamesPerWeek: league.games_per_week,
+  startDate: league.start_date,
+  endDate: league.end_date,
+  notes: league.notes,
+  active: league.active,
+  createdAt: league.created_at,
+  weekCount: Number(league.weekCount || 0),
+  gamesWon: Number(league.gamesWon || 0),
+  gamesLost: Number(league.gamesLost || 0),
+});
+
 fastify.get('/leagues', async (request, reply) => {
   // Serve the SPA when the request looks like a browser navigation
   const accept = String((request.headers as any)?.accept || '');
@@ -1361,66 +1421,12 @@ fastify.get('/leagues', async (request, reply) => {
     return reply.callNotFound();
   }
 
-  const leaguesRows = sqlite.prepare(`
-    SELECT l.*,
-           COUNT(DISTINCT lw.id) as weekCount,
-           COALESCE(SUM(lw.games_won), 0) as gamesWon,
-           COALESCE(SUM(lw.games_lost), 0) as gamesLost
-    FROM leagues l
-    LEFT JOIN league_weeks lw ON lw.league_id = l.id
-    WHERE l.active = 1
-    GROUP BY l.id
-    ORDER BY l.created_at DESC, l.id DESC
-  `).all() as any[];
-
-  return leaguesRows.map((l) => ({
-    id: l.id,
-    name: l.name,
-    location: l.location,
-    season: l.season,
-    dayOfWeek: l.day_of_week,
-    gamesPerWeek: l.games_per_week,
-    startDate: l.start_date,
-    endDate: l.end_date,
-    notes: l.notes,
-    active: l.active,
-    createdAt: l.created_at,
-    weekCount: Number(l.weekCount || 0),
-    gamesWon: Number(l.gamesWon || 0),
-    gamesLost: Number(l.gamesLost || 0),
-  }));
+  return selectLeagueRows(wantsArchived(request.query)).map(serializeLeagueRow);
 });
 
 // Alias: GET /api/leagues — mirrors /leagues for SPA clients
-fastify.get('/api/leagues', async () => {
-  const leaguesRows = sqlite.prepare(`
-    SELECT l.*,
-           COUNT(DISTINCT lw.id) as weekCount,
-           COALESCE(SUM(lw.games_won), 0) as gamesWon,
-           COALESCE(SUM(lw.games_lost), 0) as gamesLost
-    FROM leagues l
-    LEFT JOIN league_weeks lw ON lw.league_id = l.id
-    WHERE l.active = 1
-    GROUP BY l.id
-    ORDER BY l.created_at DESC, l.id DESC
-  `).all() as any[];
-
-  return leaguesRows.map((l) => ({
-    id: l.id,
-    name: l.name,
-    location: l.location,
-    season: l.season,
-    dayOfWeek: l.day_of_week,
-    gamesPerWeek: l.games_per_week,
-    startDate: l.start_date,
-    endDate: l.end_date,
-    notes: l.notes,
-    active: l.active,
-    createdAt: l.created_at,
-    weekCount: Number(l.weekCount || 0),
-    gamesWon: Number(l.gamesWon || 0),
-    gamesLost: Number(l.gamesLost || 0),
-  }));
+fastify.get('/api/leagues', async (request) => {
+  return selectLeagueRows(wantsArchived(request.query)).map(serializeLeagueRow);
 });
 
 fastify.post('/api/leagues', async (request, reply) => {
@@ -1714,6 +1720,7 @@ fastify.get('/leagues/:id/standings', async (request, reply) => {
 });
 
 fastify.get('/leagues/:id/leaderboard', async (request, reply) => {
+  if (String(request.headers.accept || '').includes('text/html')) return reply.callNotFound();
   const { id } = request.params as any;
   const leagueId = parseInt(id);
 
@@ -2423,21 +2430,29 @@ fastify.put('/leagues/:id', async (request, reply) => {
   };
 });
 
-fastify.delete('/leagues/:id', async (request, reply) => {
+const setLeagueArchived = async (request: any, reply: any, active: 0 | 1) => {
+  const leagueId = Number(request.params?.id);
+  if (!Number.isInteger(leagueId) || leagueId < 1) return reply.status(400).send({ error: 'Invalid league id' });
+  const result = sqlite.prepare('UPDATE leagues SET active = ? WHERE id = ?').run(active, leagueId);
+  if (result.changes === 0) return reply.status(404).send({ error: 'League not found' });
+  return { id: leagueId, active };
+};
+
+fastify.post('/leagues/:id/archive', (request, reply) => setLeagueArchived(request, reply, 0));
+fastify.post('/api/leagues/:id/archive', (request, reply) => setLeagueArchived(request, reply, 0));
+fastify.post('/leagues/:id/unarchive', (request, reply) => setLeagueArchived(request, reply, 1));
+fastify.post('/api/leagues/:id/unarchive', (request, reply) => setLeagueArchived(request, reply, 1));
+
+const deleteLeague = async (request: any, reply: any) => {
   const { id } = request.params as any;
-  const leagueId = parseInt(id);
-
-  const tx = sqlite.transaction(() => {
-    const weekIds = sqlite.prepare('SELECT id FROM league_weeks WHERE league_id = ?').all(leagueId) as any[];
-    const deleteGames = sqlite.prepare('DELETE FROM league_games WHERE week_id = ?');
-    for (const w of weekIds) deleteGames.run(w.id);
-    sqlite.prepare('DELETE FROM league_weeks WHERE league_id = ?').run(leagueId);
-    sqlite.prepare('DELETE FROM leagues WHERE id = ?').run(leagueId);
-  });
-
-  tx();
+  const leagueId = Number(id);
+  if (!Number.isInteger(leagueId) || leagueId < 1) return reply.status(400).send({ error: 'Invalid league id' });
+  const result = sqlite.prepare('UPDATE leagues SET active = 0 WHERE id = ?').run(leagueId);
+  if (result.changes === 0) return reply.status(404).send({ error: 'League not found' });
   return reply.status(204).send();
-});
+};
+fastify.delete('/leagues/:id', deleteLeague);
+fastify.delete('/api/leagues/:id', deleteLeague);
 
 fastify.get('/leagues/:id/weeks', async (request) => {
   const { id } = request.params as any;
@@ -2616,6 +2631,48 @@ fastify.delete('/leagues/games/:gameId', async (request, reply) => {
 });
 
 // Tournaments
+const tournamentListStatement = sqlite.prepare(`
+  SELECT t.*,
+         COUNT(tg.id) as total_games,
+         COALESCE(SUM(tg.score), 0) as series,
+         COALESCE(MAX(tg.score), 0) as high_game
+  FROM tournaments t
+  LEFT JOIN tournament_games tg ON tg.tournament_id = t.id
+  GROUP BY t.id
+  ORDER BY t.date DESC, t.created_at DESC, t.id DESC
+`);
+const activeTournamentListStatement = sqlite.prepare(`
+  SELECT t.*,
+         COUNT(tg.id) as total_games,
+         COALESCE(SUM(tg.score), 0) as series,
+         COALESCE(MAX(tg.score), 0) as high_game
+  FROM tournaments t
+  LEFT JOIN tournament_games tg ON tg.tournament_id = t.id
+  WHERE COALESCE(t.active, 1) = 1
+  GROUP BY t.id
+  ORDER BY t.date DESC, t.created_at DESC, t.id DESC
+`);
+const selectTournamentRows = (includeArchived: boolean) =>
+  (includeArchived ? tournamentListStatement : activeTournamentListStatement).all() as any[];
+
+const serializeTournamentRow = (tournament: any) => ({
+  id: tournament.id,
+  name: tournament.name,
+  location: tournament.location,
+  date: tournament.date,
+  endDate: tournament.end_date,
+  format: tournament.format,
+  entryFee: tournament.entry_fee,
+  prizeFund: tournament.prize_fund,
+  placement: tournament.placement,
+  notes: tournament.notes,
+  active: tournament.active,
+  createdAt: tournament.created_at,
+  totalGames: Number(tournament.total_games || 0),
+  series: Number(tournament.series || 0),
+  high: Number(tournament.high_game || 0),
+});
+
 fastify.get('/tournaments', async (request, reply) => {
   // Serve the SPA when the request looks like a browser navigation
   const accept = String((request.headers as any)?.accept || '');
@@ -2623,64 +2680,12 @@ fastify.get('/tournaments', async (request, reply) => {
     return reply.callNotFound();
   }
 
-  const rows = sqlite.prepare(`
-    SELECT t.*,
-           COUNT(tg.id) as total_games,
-           COALESCE(SUM(tg.score), 0) as series,
-           COALESCE(MAX(tg.score), 0) as high_game
-    FROM tournaments t
-    LEFT JOIN tournament_games tg ON tg.tournament_id = t.id
-    GROUP BY t.id
-    ORDER BY t.date DESC, t.created_at DESC, t.id DESC
-  `).all() as any[];
-
-  return rows.map((t) => ({
-    id: t.id,
-    name: t.name,
-    location: t.location,
-    date: t.date,
-    endDate: t.end_date,
-    format: t.format,
-    entryFee: t.entry_fee,
-    prizeFund: t.prize_fund,
-    placement: t.placement,
-    notes: t.notes,
-    createdAt: t.created_at,
-    totalGames: Number(t.total_games || 0),
-    series: Number(t.series || 0),
-    high: Number(t.high_game || 0),
-  }));
+  return selectTournamentRows(wantsArchived(request.query)).map(serializeTournamentRow);
 });
 
 // Alias /api/tournaments for SPA clients
-fastify.get('/api/tournaments', async () => {
-  const rows = sqlite.prepare(`
-    SELECT t.*,
-           COUNT(tg.id) as total_games,
-           COALESCE(SUM(tg.score), 0) as series,
-           COALESCE(MAX(tg.score), 0) as high_game
-    FROM tournaments t
-    LEFT JOIN tournament_games tg ON tg.tournament_id = t.id
-    GROUP BY t.id
-    ORDER BY t.date DESC, t.created_at DESC, t.id DESC
-  `).all() as any[];
-
-  return rows.map((t) => ({
-    id: t.id,
-    name: t.name,
-    location: t.location,
-    date: t.date,
-    endDate: t.end_date,
-    format: t.format,
-    entryFee: t.entry_fee,
-    prizeFund: t.prize_fund,
-    placement: t.placement,
-    notes: t.notes,
-    createdAt: t.created_at,
-    totalGames: Number(t.total_games || 0),
-    series: Number(t.series || 0),
-    high: Number(t.high_game || 0),
-  }));
+fastify.get('/api/tournaments', async (request) => {
+  return selectTournamentRows(wantsArchived(request.query)).map(serializeTournamentRow);
 });
 
 fastify.post('/tournaments', async (request, reply) => {
@@ -2716,6 +2721,7 @@ fastify.post('/tournaments', async (request, reply) => {
     prizeFund: row.prize_fund,
     placement: row.placement,
     notes: row.notes,
+    active: row.active,
     createdAt: row.created_at,
   };
 });
@@ -2771,6 +2777,7 @@ fastify.get('/tournaments/:id', async (request, reply) => {
     prizeFund: tournament.prize_fund,
     placement: tournament.placement,
     notes: tournament.notes,
+    active: tournament.active,
     createdAt: tournament.created_at,
     games: gamesRows.map((g) => ({
       id: g.id,
@@ -2791,6 +2798,7 @@ fastify.get('/tournaments/:id', async (request, reply) => {
 
 // GET /tournaments/:id/share — share-safe tournament summary with all games and stats
 fastify.get('/tournaments/:id/share', async (request, reply) => {
+  if (String(request.headers.accept || '').includes('text/html')) return reply.callNotFound();
   const { id } = request.params as any;
   const tournamentId = parseInt(id, 10);
 
@@ -2825,7 +2833,7 @@ fastify.get('/tournaments/:id/share', async (request, reply) => {
       entryFee: tournament.entry_fee,
       prizeFund: tournament.prize_fund,
       placement: tournament.placement,
-      notes: tournament.notes,
+      notes: null,
     },
     stats: {
       totalGames: scores.length,
@@ -3201,6 +3209,7 @@ function buildTournamentStandingsOgSvg(opts: {
 }
 
 fastify.get('/tournaments/:id/standings', async (request, reply) => {
+  if (String(request.headers.accept || '').includes('text/html')) return reply.callNotFound();
   const { id } = request.params as any;
   const tournamentId = parseInt(id, 10);
 
@@ -3292,22 +3301,34 @@ fastify.put('/tournaments/:id', async (request, reply) => {
     prizeFund: row.prize_fund,
     placement: row.placement,
     notes: row.notes,
+    active: row.active,
     createdAt: row.created_at,
   };
 });
 
-fastify.delete('/tournaments/:id', async (request, reply) => {
+const setTournamentArchived = async (request: any, reply: any, active: 0 | 1) => {
+  const tournamentId = Number(request.params?.id);
+  if (!Number.isInteger(tournamentId) || tournamentId < 1) return reply.status(400).send({ error: 'Invalid tournament id' });
+  const result = sqlite.prepare('UPDATE tournaments SET active = ? WHERE id = ?').run(active, tournamentId);
+  if (result.changes === 0) return reply.status(404).send({ error: 'Tournament not found' });
+  return { id: tournamentId, active };
+};
+
+fastify.post('/tournaments/:id/archive', (request, reply) => setTournamentArchived(request, reply, 0));
+fastify.post('/api/tournaments/:id/archive', (request, reply) => setTournamentArchived(request, reply, 0));
+fastify.post('/tournaments/:id/unarchive', (request, reply) => setTournamentArchived(request, reply, 1));
+fastify.post('/api/tournaments/:id/unarchive', (request, reply) => setTournamentArchived(request, reply, 1));
+
+const deleteTournament = async (request: any, reply: any) => {
   const { id } = request.params as any;
-  const tournamentId = parseInt(id);
-
-  const tx = sqlite.transaction(() => {
-    sqlite.prepare('DELETE FROM tournament_games WHERE tournament_id = ?').run(tournamentId);
-    sqlite.prepare('DELETE FROM tournaments WHERE id = ?').run(tournamentId);
-  });
-
-  tx();
+  const tournamentId = Number(id);
+  if (!Number.isInteger(tournamentId) || tournamentId < 1) return reply.status(400).send({ error: 'Invalid tournament id' });
+  const result = sqlite.prepare('UPDATE tournaments SET active = 0 WHERE id = ?').run(tournamentId);
+  if (result.changes === 0) return reply.status(404).send({ error: 'Tournament not found' });
   return reply.status(204).send();
-});
+};
+fastify.delete('/tournaments/:id', deleteTournament);
+fastify.delete('/api/tournaments/:id', deleteTournament);
 
 fastify.post('/tournaments/:id/games', async (request, reply) => {
   const { id } = request.params as any;
@@ -3826,7 +3847,7 @@ fastify.post('/restore', async (request, reply) => {
     const insertLeague = sqlite.prepare(
       'INSERT INTO leagues (id, name, location, season, day_of_week, games_per_week, start_date, end_date, notes, active, created_at) VALUES (@id, @name, @location, @season, @day_of_week, @games_per_week, @start_date, @end_date, @notes, @active, @created_at)'
     );
-    for (const l of leaguesData || []) insertLeague.run(l);
+    for (const l of leaguesData || []) insertLeague.run({ ...l, active: l?.active === 0 ? 0 : 1 });
 
     const insertLeagueWeek = sqlite.prepare(
       'INSERT INTO league_weeks (id, league_id, week_number, date, opponent, games_won, games_lost, games_tied, notes, created_at) VALUES (@id, @league_id, @week_number, @date, @opponent, @games_won, @games_lost, @games_tied, @notes, @created_at)'
@@ -3839,9 +3860,9 @@ fastify.post('/restore', async (request, reply) => {
     for (const lg of leagueGamesData || []) insertLeagueGame.run({ ...lg, frame_data: lg?.frame_data ?? null });
 
     const insertTournament = sqlite.prepare(
-      'INSERT INTO tournaments (id, name, location, date, end_date, format, entry_fee, prize_fund, placement, notes, created_at) VALUES (@id, @name, @location, @date, @end_date, @format, @entry_fee, @prize_fund, @placement, @notes, @created_at)'
+      'INSERT INTO tournaments (id, name, location, date, end_date, format, entry_fee, prize_fund, placement, notes, active, created_at) VALUES (@id, @name, @location, @date, @end_date, @format, @entry_fee, @prize_fund, @placement, @notes, @active, @created_at)'
     );
-    for (const t of tournamentsData || []) insertTournament.run(t);
+    for (const t of tournamentsData || []) insertTournament.run({ ...t, active: t?.active === 0 ? 0 : 1 });
 
     const insertTournamentGame = sqlite.prepare(
       'INSERT INTO tournament_games (id, tournament_id, game_number, score, strikes, spares, splits, ball_id, squad, frame_data, created_at) VALUES (@id, @tournament_id, @game_number, @score, @strikes, @spares, @splits, @ball_id, @squad, @frame_data, @created_at)'
@@ -4278,19 +4299,19 @@ fastify.get('/api/balls/export.csv', async (_request, reply) => {
 fastify.get('/api/tournaments/export.csv', async (_request, reply) => {
   const rows = sqlite.prepare(`
     SELECT t.id, t.name, t.date, t.end_date, t.location, t.format, t.entry_fee, t.prize_fund,
-           t.placement, t.notes, t.created_at,
+           t.placement, t.notes, t.active, t.created_at,
            (SELECT COUNT(*) FROM tournament_games tg WHERE tg.tournament_id = t.id) as game_count
     FROM tournaments t
     ORDER BY t.date DESC, t.id DESC
   `).all() as any[];
 
   const header = ['id', 'name', 'date', 'end_date', 'location', 'format', 'entry_fee', 'prize_fund',
-    'placement', 'notes', 'game_count', 'created_at'];
+    'placement', 'notes', 'active', 'game_count', 'created_at'];
   const lines: string[] = [csvRow(header)];
   for (const r of rows) {
     lines.push(csvRow([
       r.id, r.name, r.date, r.end_date, r.location, r.format, r.entry_fee, r.prize_fund,
-      r.placement, r.notes, r.game_count, r.created_at,
+      r.placement, r.notes, r.active, r.game_count, r.created_at,
     ]));
   }
   const csv = lines.join('\n') + '\n';
@@ -5022,6 +5043,7 @@ fastify.delete('/api/leagues/games/:gameId', async (request, reply) => {
 
 // GET /leagues/:id/share — share-safe league summary with all weeks and stats
 fastify.get('/leagues/:id/share', async (request, reply) => {
+  if (String(request.headers.accept || '').includes('text/html')) return reply.callNotFound();
   const { id } = request.params as any;
   const leagueId = parseInt(id);
 
@@ -5232,8 +5254,227 @@ fastify.get('/api/leagues/:id/share/og-image', async (request, reply) => {
   })
 })
 
+interface PublicPageMetadata {
+  title: string
+  description: string
+  imageUrl?: string
+  pageUrl: string
+}
+
+const MANAGED_PUBLIC_META = new Set([
+  'og:title',
+  'og:description',
+  'og:type',
+  'og:url',
+  'og:image',
+  'og:image:width',
+  'og:image:height',
+  'twitter:card',
+  'twitter:title',
+  'twitter:description',
+  'twitter:image',
+])
+
+// Safe only for HTML text nodes and double-quoted attribute values. Do not use
+// for unquoted attributes, URL attributes, or inline script/style contexts.
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function requestOrigin(_request: any) {
+  const configured = process.env.BOWLSENSE_PUBLIC_ORIGIN?.trim()
+  if (configured) {
+    try {
+      const url = new URL(configured)
+      if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin
+    } catch {
+      // Fall through to the safe local default.
+    }
+  }
+  return 'http://localhost:3003'
+}
+
+function absolutePublicUrl(origin: string, pathname: string) {
+  return new URL(pathname, `${origin}/`).href
+}
+
+function publicPageUrl(origin: string, requestUrl: string) {
+  try {
+    return new URL(requestUrl, `${origin}/`).href
+  } catch {
+    return `${origin}/`
+  }
+}
+
+function compactDescription(parts: Array<string | number | null | undefined>) {
+  return parts.filter((part) => part !== null && part !== undefined && String(part).trim() !== '').join(' · ')
+}
+
+export function injectPublicMetadataHtml(html: string, metadata: PublicPageMetadata) {
+  const withoutTitle = html.replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, '')
+  const withoutManagedMeta = withoutTitle.replace(/<meta\b[^>]*>/gi, (tag) => {
+    const match = tag.match(/\b(?:property|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i)
+    const key = (match?.[1] || match?.[2] || match?.[3] || '').toLowerCase()
+    return MANAGED_PUBLIC_META.has(key) ? '' : tag
+  })
+  const imageTags = metadata.imageUrl
+    ? `
+    <meta property="og:image" content="${escapeHtml(metadata.imageUrl)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:image" content="${escapeHtml(metadata.imageUrl)}" />`
+    : ''
+  const tags = `
+    <title>${escapeHtml(metadata.title)}</title>
+    <meta property="og:title" content="${escapeHtml(metadata.title)}" />
+    <meta property="og:description" content="${escapeHtml(metadata.description)}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${escapeHtml(metadata.pageUrl)}" />${imageTags}
+    <meta name="twitter:card" content="${metadata.imageUrl ? 'summary_large_image' : 'summary'}" />
+    <meta name="twitter:title" content="${escapeHtml(metadata.title)}" />
+    <meta name="twitter:description" content="${escapeHtml(metadata.description)}" />
+  `
+  return /<\/head>/i.test(withoutManagedMeta)
+    ? withoutManagedMeta.replace(/<\/head>/i, `${tags}</head>`)
+    : `${withoutManagedMeta}${tags}`
+}
+
+let publicProfileStatsCache: { expiresAt: number; value: { totalGames: number; average: number } } | null = null
+
+function publicProfileStats() {
+  const now = Date.now()
+  if (publicProfileStatsCache && publicProfileStatsCache.expiresAt > now) return publicProfileStatsCache.value
+  const row = sqlite.prepare('SELECT COUNT(*) AS totalGames, COALESCE(ROUND(AVG(score)), 0) AS average FROM games').get() as any
+  const value = { totalGames: Number(row?.totalGames || 0), average: Number(row?.average || 0) }
+  publicProfileStatsCache = { expiresAt: now + 5_000, value }
+  return value
+}
+
+function resolvePublicPageMetadata(pathname: string, requestUrl: string, origin: string): PublicPageMetadata | null {
+  const pageUrl = publicPageUrl(origin, requestUrl)
+  const metadata = (title: string, description: string, imagePath?: string): PublicPageMetadata => ({
+    title,
+    description,
+    imageUrl: imagePath ? absolutePublicUrl(origin, imagePath) : undefined,
+    pageUrl,
+  })
+
+  if (pathname === '/bowl') {
+    const stats = publicProfileStats()
+    const profileName = process.env.BOWLSENSE_PUBLIC_PROFILE_NAME?.trim() || ''
+    const title = profileName ? `${profileName}'s BowlSense` : 'BowlSense profile'
+    const imagePath = profileName ? `/api/profile/og-image?name=${encodeURIComponent(profileName)}` : '/api/profile/og-image'
+    return metadata(title, `${stats.totalGames} games · ${stats.average} average`, imagePath)
+  }
+
+  let match = pathname.match(/^\/score\/(\d+)$/)
+  if (match) {
+    const gameId = Number(match[1])
+    const row = sqlite.prepare(`
+      SELECT g.score, s.location, s.date
+      FROM games g JOIN sessions s ON s.id = g.session_id
+      WHERE g.id = ?
+    `).get(gameId) as any
+    if (!row) return metadata('BowlSense score unavailable', 'This shared game could not be found.')
+    return metadata(`${Number(row.score || 0)} — BowlSense score`, compactDescription([row.location || 'Unknown Alley', row.date]), `/api/games/${gameId}/og-image`)
+  }
+
+  match = pathname.match(/^\/sessions\/(\d+)\/share$/)
+  if (match) {
+    const sessionId = Number(match[1])
+    const payload = getPublicSessionPayload(sessionId)
+    if (!payload) return metadata('BowlSense session unavailable', 'This shared session could not be found.')
+    return metadata(
+      `${payload.summary.series} series — BowlSense`,
+      compactDescription([`${payload.summary.totalGames} games`, `Avg ${payload.summary.average}`, `High ${payload.summary.highGame}`]),
+      `/api/sessions/${sessionId}/og-image`,
+    )
+  }
+
+  match = pathname.match(/^\/perfect-games\/(\d+)$/)
+  if (match) {
+    const gameId = Number(match[1])
+    const row = sqlite.prepare(`
+      SELECT g.score, s.location, s.date
+      FROM games g JOIN sessions s ON s.id = g.session_id
+      WHERE g.id = ? AND g.score = 300
+    `).get(gameId) as any
+    if (!row) return metadata('Perfect game unavailable — BowlSense', 'This shared perfect game could not be found.')
+    return metadata('Perfect 300 — BowlSense', compactDescription([row.location || 'Unknown Alley', row.date]), `/api/games/${gameId}/og-image`)
+  }
+
+  match = pathname.match(/^\/leagues\/(\d+)\/(public|leaderboard|share)$/)
+  if (match) {
+    const leagueId = Number(match[1])
+    const surface = match[2]
+    const league = sqlite.prepare('SELECT name, location, season, day_of_week FROM leagues WHERE id = ?').get(leagueId) as any
+    const fallbackTitle = surface === 'leaderboard' ? 'League leaderboard unavailable — BowlSense' : 'League unavailable — BowlSense'
+    if (!league) return metadata(fallbackTitle, 'This shared league could not be found.')
+    const title = surface === 'leaderboard' ? `${league.name} leaderboard — BowlSense` : `${league.name} — BowlSense`
+    const imagePath = surface === 'share' ? `/api/leagues/${leagueId}/share/og-image` : `/api/leagues/${leagueId}/leaderboard/og-image`
+    return metadata(title, compactDescription([league.location, league.season, league.day_of_week]) || 'Shared league results', imagePath)
+  }
+
+  match = pathname.match(/^\/leagues\/(\d+)\/recap\/share$/)
+  if (match) {
+    const leagueId = Number(match[1])
+    const row = sqlite.prepare(`
+      SELECT l.name, l.location, lw.week_number, lw.date, lw.opponent
+      FROM leagues l LEFT JOIN league_weeks lw ON lw.league_id = l.id
+      WHERE l.id = ?
+      ORDER BY lw.week_number DESC LIMIT 1
+    `).get(leagueId) as any
+    if (!row) return metadata('League recap unavailable — BowlSense', 'This shared league recap could not be found.')
+    return metadata(
+      row.week_number == null ? `${row.name} recap — BowlSense` : `${row.name} Week ${row.week_number} recap — BowlSense`,
+      compactDescription([row.location, row.date, row.opponent ? `vs ${row.opponent}` : null]) || 'Shared league recap',
+      `/api/leagues/${leagueId}/recap/og-image`,
+    )
+  }
+
+  match = pathname.match(/^\/leagues\/(\d+)\/week\/(\d+)\/share$/)
+  if (match) {
+    const leagueId = Number(match[1])
+    const weekId = Number(match[2])
+    const row = sqlite.prepare(`
+      SELECT l.name, l.location, lw.week_number, lw.date, lw.opponent
+      FROM leagues l JOIN league_weeks lw ON lw.league_id = l.id
+      WHERE l.id = ? AND lw.id = ?
+    `).get(leagueId, weekId) as any
+    if (!row) return metadata('League week unavailable — BowlSense', 'This shared league week could not be found.')
+    return metadata(
+      `${row.name} Week ${row.week_number} recap — BowlSense`,
+      compactDescription([row.location, row.date, row.opponent ? `vs ${row.opponent}` : null]),
+      `/api/leagues/${leagueId}/weeks/${weekId}/og-image`,
+    )
+  }
+
+  match = pathname.match(/^\/tournaments\/(\d+)\/(share|standings(?:\/share)?)$/)
+  if (match) {
+    const tournamentId = Number(match[1])
+    const surface = match[2]
+    const tournament = sqlite.prepare('SELECT name, location, date, format FROM tournaments WHERE id = ?').get(tournamentId) as any
+    const isStandings = surface.startsWith('standings')
+    if (!tournament) return metadata(`Tournament ${isStandings ? 'standings ' : ''}unavailable — BowlSense`, 'This shared tournament could not be found.')
+    const title = isStandings ? `${tournament.name} standings — BowlSense` : `${tournament.name} — BowlSense`
+    const imagePath = isStandings ? `/api/tournaments/${tournamentId}/standings/og-image` : `/api/tournaments/${tournamentId}/og-image`
+    return metadata(title, compactDescription([tournament.location, tournament.format, tournament.date]) || 'Shared tournament results', imagePath)
+  }
+
+  return null
+}
+
 // ── Serve frontend build (SPA — all from one origin for OG images) ──
-const FRONTEND_DIST = join(__dirname, '..', '..', 'frontend', 'dist');
+const FRONTEND_DIST = process.env.BOWLSENSE_FRONTEND_DIST?.trim() || join(__dirname, '..', '..', 'frontend', 'dist');
+const INDEX_PATH = join(FRONTEND_DIST, 'index.html');
+// Deployment must finish the frontend build before starting (or restarting)
+// this process so the cached HTML and its asset hashes match the release.
+const CACHED_INDEX_HTML = existsSync(INDEX_PATH) ? readFileSync(INDEX_PATH, 'utf8') : null;
 if (existsSync(FRONTEND_DIST)) {
   // Serve the SPA from the frontend build.
   // @fastify/static with prefix: '/' serves exact files, and when no file
@@ -5259,9 +5500,10 @@ fastify.setNotFoundHandler((request, reply) => {
     }
   }
   // Serve the SPA for all other routes (including /sessions/new and /tournaments)
-  const indexPath = join(FRONTEND_DIST, 'index.html');
-  if (existsSync(indexPath)) {
-    return reply.type('text/html').send(readFileSync(indexPath));
+  if (CACHED_INDEX_HTML) {
+    const origin = requestOrigin(request);
+    const metadata = resolvePublicPageMetadata(url, request.url, origin);
+    return reply.type('text/html').send(metadata ? injectPublicMetadataHtml(CACHED_INDEX_HTML, metadata) : CACHED_INDEX_HTML);
   }
   return reply.status(404).send('Frontend not built');
 });
@@ -5278,7 +5520,11 @@ fastify.get('/backup-log', async () => {
   }
 });
 
-fastify.listen({ port: 3003, host: '0.0.0.0' }, (err) => {
-  if (err) throw err;
-  console.log('BowlSense API running on http://localhost:3003');
-});
+export { fastify, sqlite };
+
+if (process.env.BOWLSENSE_DISABLE_LISTEN !== '1') {
+  fastify.listen({ port: 3003, host: '0.0.0.0' }, (err) => {
+    if (err) throw err;
+    console.log('BowlSense API running on http://localhost:3003');
+  });
+}

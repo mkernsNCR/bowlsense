@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  copySessionShareLink,
   downloadSessionCard,
   nativeShareSession,
 } from '../utils/sessionShare'
+import { Icon } from '../design'
+import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
+import { usePublicMetadata } from '../features/competition/publicMetadata'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface PublicSessionPayload {
   session: {
@@ -37,8 +40,8 @@ export default function SessionShare() {
   const [data, setData] = useState<PublicSessionPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState<'share' | 'download' | null>(null)
+  const { copied, copyLink } = useCopyLink()
 
   useEffect(() => {
     let mounted = true
@@ -83,33 +86,7 @@ export default function SessionShare() {
 
   const imageUrl = useMemo(() => (Number.isFinite(sessionId) ? `/api/sessions/${sessionId}/og-image` : ''), [sessionId])
 
-  useEffect(() => {
-    document.title = title
-
-    const setMeta = (property: string, content: string, attr: 'property' | 'name' = 'property') => {
-      let el = document.querySelector(`meta[${attr}="${property}"]`) as HTMLMetaElement | null
-      if (!el) {
-        el = document.createElement('meta')
-        el.setAttribute(attr, property)
-        document.head.appendChild(el)
-      }
-      el.setAttribute('content', content)
-    }
-
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    if (imageUrl) setMeta('og:image', imageUrl)
-    setMeta('og:image:width', '1200')
-    setMeta('og:image:height', '630')
-    setMeta('twitter:card', 'summary_large_image')
-  }, [title, description, imageUrl])
-
-  const copyLink = async () => {
-    if (!Number.isFinite(sessionId)) return
-    await copySessionShareLink(sessionId)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1200)
-  }
+  usePublicMetadata({ title, description, imageUrl })
 
   const shareNative = async () => {
     if (!Number.isFinite(sessionId)) return
@@ -132,42 +109,38 @@ export default function SessionShare() {
   }
 
   if (loading) {
-    return <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center' }} className="muted">Loading share card...</div>
+    return <PublicShell eyebrow="Session result" title="Loading shared session"><div className="muted">Loading share card…</div></PublicShell>
   }
 
   if (notFound || !data) {
     return (
-      <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24 }}>
-        <div>
-          <h1 style={{ marginBottom: 8 }}>Session not found</h1>
-          <Link to="/sessions" className="btn btn-primary">Back to Sessions</Link>
-        </div>
-      </div>
+      <PublicShell eyebrow="Session result" title="Session not found"><Link to="/">Browse sessions on BowlSense</Link></PublicShell>
     )
   }
 
   return (
-    <div style={{ maxWidth: 920, margin: '0 auto', paddingBottom: 64 }}>
-      <h1 style={{ marginBottom: 6, fontSize: 'clamp(1.5rem, 5vw, 2.2rem)' }}>🎳 Session Share</h1>
-      <div className="muted" style={{ marginBottom: 14 }}>{description}</div>
-
-      <div className="card" style={{ padding: 10, marginBottom: 12 }}>
-        <img src={imageUrl} alt="Session share card" style={{ width: '100%', borderRadius: 12, display: 'block' }} />
+    <PublicShell
+      eyebrow="Session result"
+      title={`${data.summary.series} series`}
+      detail={[data.session.location, data.session.date, data.session.lanes ? `Lanes ${data.session.lanes}` : null].filter(Boolean).join(' · ')}
+      action={<button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}><Icon className="competition-action-icon" name="share" /> {busy === 'share' ? 'Sharing…' : 'Share result'}</button>}
+    >
+      <PublicResult
+        score={data.summary.series}
+        label={`${data.summary.totalGames}-game series`}
+        accessibleLabel={`Series total ${data.summary.series}`}
+        facts={[
+          { label: 'Average', value: data.summary.average },
+          { label: 'High game', value: data.summary.highGame },
+          { label: 'Perfect games', value: data.summary.perfectGames },
+          { label: 'Game scores', value: data.games.map((game) => game.score).join(' · ') },
+        ]}
+      />
+      <div className="public-share-actions">
+        <button className="btn btn-ghost" onClick={copyLink}>{copied ? 'Link copied' : 'Copy link'}</button>
+        <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading…' : 'Download image'}</button>
+        <a className="btn btn-ghost" href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Open score card</a>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, marginBottom: 12 }}>
-        <button className="btn btn-primary" onClick={shareNative} disabled={busy !== null}>{busy === 'share' ? 'Sharing...' : '📤 Share'}</button>
-        <button className="btn btn-ghost" onClick={copyLink}>{copied ? '✅ Copied' : '🔗 Copy Link'}</button>
-        <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading...' : '⬇️ Download PNG'}</button>
-        <a className="btn btn-ghost" href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>🖼️ Open Card</a>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>Games</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.totalGames}</div></div>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>Series</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.series}</div></div>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>Average</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.average}</div></div>
-        <div className="card" style={{ textAlign: 'center', padding: 10 }}><div className="muted" style={{ fontSize: 11 }}>High</div><div style={{ fontWeight: 800, fontSize: 24 }}>{data.summary.highGame}</div></div>
-      </div>
-    </div>
+    </PublicShell>
   )
 }

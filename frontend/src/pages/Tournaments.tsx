@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from '../components/BowlingScorer'
+import { Icon } from '../design'
+import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { competitionJson, useCompetitionArchive } from '../features/competition/archive'
+import { formatFrameMarks } from '../features/scoring/frameMarks'
 import {
   copyTournamentShareLink,
   downloadTournamentCard,
@@ -33,13 +37,14 @@ interface Tournament {
   id: number
   name: string
   location: string | null
-  date: string
+  date: string | null
   endDate: string | null
   format: string | null
   entryFee: number | null
   prizeFund: number | null
   placement: number | null
   notes: string | null
+  active: number
   createdAt?: number
   totalGames?: number
   series?: number
@@ -71,31 +76,6 @@ interface TournamentBracket {
   standings: TournamentBracketStanding[]
 }
 
-function frameMarks(frameData?: string | null): string | null {
-  if (!frameData) return null
-  try {
-    const parsed = JSON.parse(frameData) as any
-    const frames = Array.isArray(parsed?.frames) ? parsed.frames : []
-    return frames.map((f: any, idx: number) => {
-      const b1 = f?.ball1, b2 = f?.ball2, b3 = f?.ball3
-      const strike = b1 === 10
-      const spare = !strike && b1 != null && b2 != null && b1 + b2 === 10
-      const mark = (v: number | null | undefined) => v == null ? '' : v === 10 ? 'X' : v === 0 ? '-' : String(v)
-      if (idx < 9) {
-        if (strike) return 'X'
-        if (b1 == null) return ''
-        if (b2 == null) return mark(b1)
-        return `${mark(b1)}${spare ? '/' : mark(b2)}`
-      }
-      const second = b2 != null ? (b1 !== 10 && b1! + b2 === 10 ? '/' : mark(b2)) : ''
-      const third = b3 != null ? (b1 === 10 && b2 != null && b2 < 10 && b2 + b3 === 10 ? '/' : mark(b3)) : ''
-      return `${mark(b1)}${second}${third}`
-    }).filter(Boolean).join(' ')
-  } catch {
-    return null
-  }
-}
-
 const emptyForm = {
   name: '',
   location: '',
@@ -111,59 +91,97 @@ const emptyForm = {
 export default function TournamentsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  if (id) {
-    const isEdit = window.location.pathname.endsWith('/edit')
-    return <TournamentDetail id={id} isEditing={isEdit} onEdit={() => navigate(`/tournaments/${id}/edit`)} />
+  if (location.pathname === '/tournaments/new') {
+    return (
+      <>
+        <CompetitionHeader area="tournaments" title="Tournaments" detail="Events, squads, series, and finish." />
+        <CompetitionSheet title="New tournament" closeTo="/tournaments">
+          <TournamentForm title="New Tournament" submitText="Create tournament" onSubmitDone={(newId) => navigate(`/tournaments/${newId}`)} />
+        </CompetitionSheet>
+      </>
+    )
   }
 
-  if (window.location.pathname === '/tournaments/new') {
-    return <TournamentForm title="New Tournament" submitText="Create Tournament" onSubmitDone={(newId) => navigate(`/tournaments/${newId}`)} />
+  if (id) {
+    const isEdit = location.pathname.endsWith('/edit')
+    return <TournamentDetail id={id} isEditing={isEdit} onEdit={() => navigate(`/tournaments/${id}/edit`)} />
   }
 
   return <TournamentList />
 }
 
 function TournamentList() {
-  const { data: tournaments, isLoading } = useQuery<Tournament[]>({
+  const { data: tournaments, isLoading, isError } = useQuery<Tournament[]>({
     queryKey: ['tournaments'],
-    queryFn: () => fetch('/api/tournaments').then((r) => r.json()),
+    queryFn: () => competitionJson<Tournament[]>('/api/tournaments?includeArchived=1'),
   })
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const activeTournaments = tournaments?.filter((tournament) => tournament.active !== 0) || []
+  const byDate = (value: string | null | undefined) => value || ''
+  const upcomingTournaments = activeTournaments
+    .filter((tournament) => byDate(tournament.endDate || tournament.date) >= today)
+    .sort((a, b) => byDate(a.date).localeCompare(byDate(b.date)) || a.name.localeCompare(b.name))
+  const pastTournaments = activeTournaments
+    .filter((tournament) => byDate(tournament.endDate || tournament.date) < today)
+    .sort((a, b) => byDate(b.date).localeCompare(byDate(a.date)) || a.name.localeCompare(b.name))
+  const archivedTournaments = (tournaments?.filter((tournament) => tournament.active === 0) || [])
+    .sort((a, b) => byDate(b.date).localeCompare(byDate(a.date)) || a.name.localeCompare(b.name))
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 10, flexWrap: 'wrap' }}>
-        <h1>Tournaments</h1>
-        <Link to="/tournaments/new" className="btn btn-primary">+ New Tournament</Link>
-      </div>
+      <CompetitionHeader
+        area="tournaments"
+        title="Tournaments"
+        detail="Events, squads, series, and finish."
+        action={<Link to="/tournaments/new" className="btn btn-primary"><Icon className="competition-action-icon" name="plus" /> New tournament</Link>}
+      />
 
       {isLoading && <div className="muted">Loading tournaments...</div>}
+      {isError && <div role="alert">Could not load tournaments right now.</div>}
 
-      {!isLoading && !tournaments?.length && (
+      {!isLoading && !isError && !activeTournaments.length && (
         <div className="card" style={{ textAlign: 'center' }}>
-          <div className="muted">No tournaments yet.</div>
-          <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create your first tournament →</Link>
+          <div className="muted">No active tournaments.</div>
+          <Link to="/tournaments/new" style={{ color: 'var(--accent)' }}>Create a tournament</Link>
         </div>
       )}
 
+      <TournamentListSection id="upcoming-tournaments" title="Upcoming tournaments" tournaments={upcomingTournaments} />
+      <TournamentListSection id="past-tournaments" title="Past tournaments" tournaments={pastTournaments} />
+      <TournamentListSection id="archived-tournaments" title="Archived tournaments" tournaments={archivedTournaments} archived />
+    </div>
+  )
+}
+
+function TournamentListSection({ id, title, tournaments, archived = false }: { id: string; title: string; tournaments: Tournament[]; archived?: boolean }) {
+  if (!tournaments.length) return null
+  return (
+    <section aria-labelledby={id} style={{ marginTop: 24 }}>
+      <h2 id={id} style={{ fontSize: 16, marginBottom: 10 }}>{title}</h2>
+      {archived && <p className="muted" style={{ fontSize: 13 }}>Results are preserved. Open a tournament to restore it.</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {tournaments?.map((t) => (
-          <Link key={t.id} to={`/tournaments/${t.id}`} className="card card-accent-top" style={{ textDecoration: 'none', color: 'inherit' }}>
+        {tournaments.map((tournament) => (
+          <Link key={tournament.id} to={`/tournaments/${tournament.id}`} className="card card-accent-top" style={{ textDecoration: 'none', color: 'inherit', opacity: archived ? 0.78 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 750, fontSize: 18 }}>{t.name}</div>
-                <div className="muted" style={{ fontSize: 13 }}>{[t.date, t.location, t.format].filter(Boolean).join(' · ')}</div>
+                <div style={{ fontWeight: 750, fontSize: 18 }}>{tournament.name}</div>
+                <div className="muted" style={{ fontSize: 13 }}>{[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ')}</div>
               </div>
-              <div style={{ fontSize: 20 }}>{placementBadge(t.placement)}</div>
+              <div style={{ fontSize: archived ? 13 : 20, color: archived ? 'var(--accent)' : undefined }}>
+                {archived ? 'Archived' : placementBadge(tournament.placement)}
+              </div>
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <MiniPill label="Games" value={t.totalGames ?? 0} />
-              <MiniPill label="Series" value={t.series ?? 0} />
+              <MiniPill label="Games" value={tournament.totalGames ?? 0} />
+              <MiniPill label="Series" value={tournament.series ?? 0} />
             </div>
           </Link>
         ))}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -198,22 +216,20 @@ function TournamentForm({ title, submitText, initial, tournamentId, onSubmitDone
 
   return (
     <div>
-      <h1 style={{ marginBottom: 14 }}>{title}</h1>
       <div className="card" style={{ display: 'grid', gap: 10 }}>
-        <input placeholder="Tournament Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        <input placeholder="Location" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
-        <label className="muted" style={{ fontSize: 12 }}>Date *</label>
-        <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-        <label className="muted" style={{ fontSize: 12 }}>End Date (optional)</label>
-        <input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
-        <input placeholder="Format (Singles, Doubles, Team...)" value={form.format} onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))} />
-        <input type="number" step="0.01" placeholder="Entry Fee ($)" value={form.entryFee} onChange={(e) => setForm((f) => ({ ...f, entryFee: e.target.value }))} />
-        <input type="number" step="0.01" placeholder="Prize Fund ($)" value={form.prizeFund} onChange={(e) => setForm((f) => ({ ...f, prizeFund: e.target.value }))} />
-        <input type="number" min={1} placeholder="Placement" value={form.placement} onChange={(e) => setForm((f) => ({ ...f, placement: e.target.value }))} />
-        <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+        <span className="sr-only">{title}</span>
+        <label>Tournament name<input autoFocus required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></label>
+        <label>Location<input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} /></label>
+        <label>Date<input required type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} /></label>
+        <label>End date <span className="muted">optional</span><input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} /></label>
+        <label>Format<input placeholder="Singles, doubles, team…" value={form.format} onChange={(e) => setForm((f) => ({ ...f, format: e.target.value }))} /></label>
+        <label>Entry fee<input type="number" step="0.01" inputMode="decimal" value={form.entryFee} onChange={(e) => setForm((f) => ({ ...f, entryFee: e.target.value }))} /></label>
+        <label>Prize fund<input type="number" step="0.01" inputMode="decimal" value={form.prizeFund} onChange={(e) => setForm((f) => ({ ...f, prizeFund: e.target.value }))} /></label>
+        <label>Placement<input type="number" min={1} inputMode="numeric" value={form.placement} onChange={(e) => setForm((f) => ({ ...f, placement: e.target.value }))} /></label>
+        <label>Notes<textarea placeholder="Optional, private to your account" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></label>
 
         <button className="btn btn-primary" disabled={mutation.isPending || !form.name.trim() || !form.date} onClick={() => mutation.mutate()}>
-          {mutation.isPending ? 'Saving...' : submitText}
+          {mutation.isPending ? 'Saving…' : submitText}
         </button>
       </div>
     </div>
@@ -233,6 +249,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   })
 
   const [rescoringGameId, setRescoringGameId] = useState<number | null>(null)
+  const [archiveSheetOpen, setArchiveSheetOpen] = useState(false)
 
   const updateGame = useMutation({
     mutationFn: ({ gameId, data }: { gameId: number; data: object }) =>
@@ -243,13 +260,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
     },
   })
 
-  const deleteTournament = useMutation({
-    mutationFn: () => fetch(`/api/tournaments/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tournaments'] })
-      navigate('/tournaments')
-    },
-  })
+  const setArchiveState = useCompetitionArchive({ area: 'tournaments', id, onSuccess: () => setArchiveSheetOpen(false) })
 
   const addGame = useMutation({
     mutationFn: (payload: object) => fetch(`/api/tournaments/${id}/games`, {
@@ -288,23 +299,28 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
 
   if (isEditing) {
     return (
-      <TournamentForm
-        title="Edit Tournament"
-        submitText="Save Changes"
-        tournamentId={id}
-        initial={{
-          name: tournament.name || '',
-          location: tournament.location || '',
-          date: tournament.date || '',
-          endDate: tournament.endDate || '',
-          format: tournament.format || '',
-          entryFee: tournament.entryFee?.toString() || '',
-          prizeFund: tournament.prizeFund?.toString() || '',
-          placement: tournament.placement?.toString() || '',
-          notes: tournament.notes || '',
-        }}
-        onSubmitDone={(savedId) => navigate(`/tournaments/${savedId}`)}
-      />
+      <>
+        <CompetitionHeader area="tournaments" title={tournament.name} detail={[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ')} />
+        <CompetitionSheet title="Edit tournament" closeTo={`/tournaments/${id}`}>
+          <TournamentForm
+            title="Edit Tournament"
+            submitText="Save changes"
+            tournamentId={id}
+            initial={{
+              name: tournament.name || '',
+              location: tournament.location || '',
+              date: tournament.date || '',
+              endDate: tournament.endDate || '',
+              format: tournament.format || '',
+              entryFee: tournament.entryFee?.toString() || '',
+              prizeFund: tournament.prizeFund?.toString() || '',
+              placement: tournament.placement?.toString() || '',
+              notes: tournament.notes || '',
+            }}
+            onSubmitDone={(savedId) => navigate(`/tournaments/${savedId}`)}
+          />
+        </CompetitionSheet>
+      </>
     )
   }
 
@@ -348,21 +364,30 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'start', marginBottom: 14 }}>
-        <div>
-          <h1 style={{ marginBottom: 4 }}>{tournament.name}</h1>
-          <div className="muted" style={{ fontSize: 13 }}>{[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ')}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative' }}>
+      <CompetitionHeader
+        area="tournaments"
+        title={tournament.name}
+        detail={[tournament.date, tournament.location, tournament.format].filter(Boolean).join(' · ') || 'Tournament competition'}
+        action={tournament.active === 0
+          ? <button className="btn btn-primary" onClick={() => setArchiveSheetOpen(true)}>Restore tournament</button>
+          : <button className="btn btn-primary" onClick={() => setShowScorer(true)}><Icon className="competition-action-icon" name="plus" /> Add game</button>}
+      />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', marginBottom: 14 }}>
           <button
             className="btn btn-primary"
             onClick={() => setShareMenuOpen((v) => !v)}
-            style={{ minHeight: 36, padding: '6px 14px', fontWeight: 700 }}
+            aria-expanded={shareMenuOpen}
+            aria-haspopup="true"
+            style={{ minHeight: 44, padding: '6px 14px', fontWeight: 700 }}
           >
-            {copiedLink ? '✅ Copied!' : sharing ? '⏳ Sharing...' : '📤 Share'}
+            <Icon className="competition-action-icon" name="share" /> {copiedLink ? 'Copied' : sharing ? 'Sharing…' : 'Share'}
           </button>
           {shareMenuOpen && (
             <div
+              aria-label="Tournament sharing options"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setShareMenuOpen(false)
+              }}
               style={{
                 position: 'absolute',
                 right: 0,
@@ -383,36 +408,47 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleShare}
               >
-                📤 Share Card
+                Share card
               </button>
               <button
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleCopyLink}
               >
-                🔗 Copy Link
+                Copy link
               </button>
               <button
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13, marginBottom: 2 }}
                 onClick={handleDownloadCard}
               >
-                💾 Download Image
+                Download image
               </button>
               <button
                 className="btn"
                 style={{ width: '100%', justifyContent: 'flex-start', background: 'none', borderRadius: 8, fontSize: 13 }}
                 onClick={handleXShare}
               >
-                𝕏 Share on X
+                Share on X
               </button>
             </div>
           )}
           <a href={`/tournaments/${id}/standings`} className="btn btn-ghost" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Standings</a>
-          <button className="btn btn-ghost" onClick={onEdit}>Edit</button>
-          <button className="btn btn-danger" onClick={() => { if (confirm('Delete this tournament and all games?')) deleteTournament.mutate() }}>Delete</button>
-        </div>
+          <button className="btn btn-ghost" onClick={onEdit}><Icon className="competition-action-icon" name="edit" /> Edit</button>
+          {tournament.active !== 0 && (
+            <button className="btn btn-ghost" onClick={() => setArchiveSheetOpen(true)}>Archive tournament</button>
+          )}
       </div>
+
+      {archiveSheetOpen && (
+        <CompetitionArchiveSheet
+          area="tournaments"
+          id={id}
+          active={tournament.active}
+          onClose={() => setArchiveSheetOpen(false)}
+          mutation={setArchiveState}
+        />
+      )}
 
       <div style={{ width: '100%', overflowX: 'auto', marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 10, paddingBottom: 2 }}>
@@ -444,7 +480,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
           <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
             {(tournament.games || []).map((g) => {
               const ballName = balls?.find((b) => b.id === g.ballId)?.name
-              const marks = frameMarks(g.frameData)
+              const marks = formatFrameMarks(g.frameData)
               return (
                 <div key={g.id} className="card" style={{ padding: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -465,11 +501,15 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                   </div>
 
                   {rescoringGameId === g.id && (
-                    <div style={{ marginTop: 10, marginLeft: -12, marginRight: -12 }}>
+                    <CompetitionSheet title={`Edit game ${g.gameNumber}`} closeTo={`/tournaments/${id}`} onClose={() => setRescoringGameId(null)}>
+                    <div>
                       <BowlingScorer
                         gameNumber={g.gameNumber}
                         balls={balls || []}
                         defaultBallId={g.ballId ? String(g.ballId) : undefined}
+                        initialFrameData={g.frameData}
+                        initialSplits={g.splits ?? undefined}
+                        shareContext={{ location: tournament.location, date: tournament.date }}
                         onSave={(result) => {
                           updateGame.mutate({ gameId: g.id, data: { ...result, squad: g.squad } })
                           setRescoringGameId(null)
@@ -477,18 +517,20 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                         onCancel={() => setRescoringGameId(null)}
                       />
                     </div>
+                    </CompetitionSheet>
                   )}
                 </div>
               )
             })}
           </div>
 
-          {!showScorer ? (
+          {tournament.active !== 0 && (!showScorer ? (
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => setShowScorer(true)}>
-              🎳 Bowl a Game
+              Bowl a game
             </button>
           ) : (
-            <div style={{ marginTop: 10 }}>
+            <CompetitionSheet title={`Add game ${nextGameNumber}`} closeTo={`/tournaments/${id}`} onClose={() => setShowScorer(false)}>
+            <div>
               <div style={{ padding: '0 4px 8px', display: 'grid', gap: 8 }}>
                 <div className="muted" style={{ fontSize: 12 }}>Game {nextGameNumber}</div>
                 <input
@@ -501,6 +543,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 gameNumber={nextGameNumber}
                 balls={balls || []}
                 defaultBallId={undefined}
+                shareContext={{ location: tournament.location, date: tournament.date }}
                 onSave={(game) => addGame.mutate({ ...game, squad }, {
                   onSuccess: () => {
                     setSquad('')
@@ -510,7 +553,8 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 onCancel={() => setShowScorer(false)}
               />
             </div>
-          )}
+            </CompetitionSheet>
+          ))}
         </>
       )}
 

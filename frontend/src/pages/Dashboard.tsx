@@ -154,7 +154,7 @@ export default function Dashboard() {
   })
   const sessionsQuery = useQuery<Session[]>({
     queryKey: ['sessions', 'recent'],
-    queryFn: fetchRecentSessions,
+    queryFn: () => fetchRecentSessions(),
   })
   const recentGamesQuery = useQuery<Game[]>({
     queryKey: ['games-recent'],

@@ -24,7 +24,7 @@ export function toFrameRibbonFrames(
       rolls,
       score: frame.cumulative,
       state,
-      ariaLabel: `Frame ${index + 1}, ${state}, ${rollDescription}${scoreDescription}`,
+      label: `Frame ${index + 1}, ${state}, ${rollDescription}${scoreDescription}`,
     }
   })
 }

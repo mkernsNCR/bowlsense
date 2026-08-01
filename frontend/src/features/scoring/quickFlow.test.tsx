@@ -36,7 +36,6 @@ vi.mock('../../components/BowlingScorer', () => ({
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-  vi.useRealTimers()
   vi.unstubAllGlobals()
   localStorage.clear()
 })
@@ -109,11 +108,10 @@ describe('quick scoring flows', () => {
     expect(screen.getByText('Test scorer game 2')).toBeTruthy()
   })
 
-  it('cancels the delayed completion callback when quick scoring unmounts', async () => {
-    vi.useFakeTimers()
+  it('reports completion without scheduling a second save confirmation', async () => {
     stubQuickFlowFetch()
     const onDone = vi.fn()
-    const { view } = renderWithClient(<QuickAddGame onDone={onDone} />)
+    renderWithClient(<QuickAddGame onDone={onDone} />)
     const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
 
     fireEvent.click(screen.getByRole('button', { name: 'Start bowling' }))
@@ -121,11 +119,9 @@ describe('quick scoring flows', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save test game' }))
       for (let turn = 0; turn < 10; turn += 1) await Promise.resolve()
     })
-    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), expect.any(Number))
-    view.unmount()
 
-    await vi.runAllTimersAsync()
-    expect(onDone).not.toHaveBeenCalled()
+    expect(onDone).toHaveBeenCalledOnce()
+    expect(setTimeoutSpy.mock.calls.some(([, delay]) => typeof delay === 'number' && delay > 0)).toBe(false)
   })
 
   it('shows one parent confirmation and clears it when scoring restarts', async () => {

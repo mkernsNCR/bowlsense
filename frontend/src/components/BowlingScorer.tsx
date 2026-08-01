@@ -10,6 +10,7 @@ import {
 import { FrameRibbon, Icon, Sheet } from '../design'
 import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
 import { requiresDiscardConfirmation } from '../features/scoring/interaction'
+import { countSplits } from '../features/scoring/splits'
 import type { ScoringBall } from '../features/scoring/types'
 import '../features/scoring/scoring.css'
 
@@ -54,6 +55,19 @@ function completeRackActionLabel(state: GameState) {
   if (state.currentBall === 1) return frame?.isStrike ? 'Strike' : 'Spare'
   if (frame?.isStrike && frame.ball2 != null && frame.ball2 < 10) return 'Clear rack'
   return 'Strike'
+}
+
+function hasSavedPinSelections(frameData?: string | null) {
+  if (!frameData) return true
+  try {
+    const parsed: unknown = JSON.parse(frameData)
+    const selections = parsed && typeof parsed === 'object'
+      ? (parsed as { pinSelections?: unknown }).pinSelections
+      : undefined
+    return Array.isArray(selections) && selections.length > 0
+  } catch {
+    return false
+  }
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -139,6 +153,7 @@ export default function BowlingScorer({
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [confirmRetake, setConfirmRetake] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(initialFrameData))
   const isSaving = saving || saveStatus === 'saving'
 
   useEffect(() => {
@@ -161,7 +176,8 @@ export default function BowlingScorer({
     [state.frames],
   )
   const spares = useMemo(() => state.frames.filter((frame) => frame.isSpare).length, [state.frames])
-  const splits = initialSplits ?? 0
+  const derivedSplits = useMemo(() => countSplits(state.pinSelections), [state.pinSelections])
+  const splits = canDeriveSplits ? derivedSplits : (initialSplits ?? 0)
   const frameData = JSON.stringify({
     rolls: state.rolls,
     frames: state.frames,
@@ -259,6 +275,7 @@ export default function BowlingScorer({
     setSelectedKnocked([])
     setEditSnapshot(null)
     setEditingFromFrame(null)
+    setCanDeriveSplits(true)
     setConfirmRetake(false)
     setSaveStatus('idle')
   }

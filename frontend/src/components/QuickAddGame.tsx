@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
@@ -15,10 +15,6 @@ interface CreatedRecord {
   id: number
 }
 
-const SAVE_CONFIRMATION_ANIMATION_MS = 440
-const SAVE_COMPLETION_BUFFER_MS = 80
-const SAVE_COMPLETION_DELAY_MS = SAVE_CONFIRMATION_ANIMATION_MS + SAVE_COMPLETION_BUFFER_MS
-
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const queryClient = useQueryClient()
   const { settings } = useSettings()
@@ -30,11 +26,6 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const [location, setLocation] = useState(settings.homeLanes || 'Home Lanes')
   const [lanes, setLanes] = useState('')
   const [gameNumber, setGameNumber] = useState(1)
-  const savedTimerRef = useRef<number | null>(null)
-
-  useEffect(() => () => {
-    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current)
-  }, [])
 
   const sessionsQuery = useQuery<Session[]>({
     queryKey: ['sessions', 'recent'],
@@ -87,15 +78,11 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
       queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
       queryClient.invalidateQueries({ queryKey: ['recentGames'] }),
     ])
-    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current)
-    savedTimerRef.current = window.setTimeout(() => {
-      savedTimerRef.current = null
-      setShowScorer(false)
-      onDone(createdGame.id, () => {
-        setGameNumber((number) => number + 1)
-        setShowScorer(true)
-      })
-    }, SAVE_COMPLETION_DELAY_MS)
+    setShowScorer(false)
+    onDone(createdGame.id, () => {
+      setGameNumber((number) => number + 1)
+      setShowScorer(true)
+    })
   }
 
   if (showScorer) {

@@ -1,130 +1,137 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Icon } from '../design'
 import { useSettings } from '../hooks/useSettings'
-import BowlingScorer from '../components/BowlingScorer'
+import { QuickLogSheet, type QuickLogDraft } from '../features/today/QuickLogSheet'
+import { RecentSessions } from '../features/today/RecentSessions'
+import { TodayFrameRibbon } from '../features/today/TodayFrameRibbon'
+import {
+  fetchJson,
+  fetchRecentSessions,
+  type Ball,
+  type SavedGame,
+  type Session,
+} from '../api/bowling'
+import {
+  type Game,
+  type GameResponse,
+  type Stats,
+  type TonightLeague,
+  type WeeklyStats,
+  normalizeGame,
+  parseCalendarDate,
+} from '../features/today/data'
+import '../features/today/today.css'
 
-interface TonightLeague {
-  id: number
-  name: string
-  location: string | null
-  season: string | null
-  gamesPerWeek: number
-  startDate: string | null
-  endDate: string | null
-  todayName: string
-  todayIso: string
-  inSeason: boolean
-  nextWeekNumber: number
-  lastOpponent: string | null
-  lastWeekDate: string | null
-  stats: {
-    average: number
-    high: number
-    totalGames: number
-    totalWeeks: number
-    gamesWon: number
-    gamesLost: number
+function formatDate(date: string | undefined) {
+  if (!date) return ''
+  return parseCalendarDate(date).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function localCalendarDate(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function createQuickLogDraft(location = ''): QuickLogDraft {
+  return {
+    date: localCalendarDate(),
+    location,
+    lanes: '',
+    sessionId: null,
+    gameNumber: 1,
+    saved: false,
   }
 }
 
-interface Stats {
-  average: number
-  strikeRate: number
-  spareRate: number
-  totalGames: number
-  totalScore: number
-  totalStrikes: number
-  totalSpares: number
+function gameFrameData(game: Game | undefined) {
+  return game?.frameData ?? null
 }
 
-interface Session {
-  id: number
-  date: string
-  location: string
-  lanes: string
-  notes: string
-  gameCount?: number
-  avgScore?: number
-  highScore?: number
-  perfectGames?: number
+function TodayActions({ onQuickLog }: { onQuickLog: () => void }) {
+  return (
+    <div className="today-next-action">
+      <Link to="/sessions/new" className="today-button today-button--primary">
+        <Icon className="today-icon" name="start" />
+        Start bowling
+      </Link>
+      <button type="button" className="today-button today-button--text" onClick={onQuickLog}>
+        Log a past game
+      </button>
+    </div>
+  )
 }
 
-interface Game {
-  id: number
-  score: number
-  gameNumber: number
-}
-
-interface BallStat {
-  ballId: number
-  ballName: string
-  brand: string
-  gameCount: number
-  average: number
-}
-
-interface Ball {
-  id: number
-  name: string
-  brand?: string
-  thumbnailImage?: string
-}
-
-interface SavedGame {
-  gameNumber: number
-  score: number
-  strikes: number
-  spares: number
-  splits: number
-  ballId: number | null
-  frameData: string
-}
-
-function ScoreTrendChart({ games, average }: { games: Game[]; average: number }) {
-  if (games.length < 2) return null
-
-  const W = 800
-  const H = 250
-  const PAD = { top: 16, right: 14, bottom: 30, left: 36 }
-  const chartW = W - PAD.left - PAD.right
-  const chartH = H - PAD.top - PAD.bottom
-
-  const minScore = Math.max(0, Math.min(...games.map(g => g.score || 0)) - 20)
-  const maxScore = Math.min(300, Math.max(...games.map(g => g.score || 0)) + 20)
-  const range = maxScore - minScore || 1
-
-  const xOf = (i: number) => PAD.left + (i / (games.length - 1)) * chartW
-  const yOf = (score: number) => PAD.top + chartH - ((score - minScore) / range) * chartH
-  const points = games.map((g, i) => `${xOf(i)},${yOf(g.score || 0)}`).join(' ')
-  const yTicks = [minScore, Math.round((minScore + maxScore) / 2), maxScore]
+function DashboardLoading() {
+  const [announcement, setAnnouncement] = useState('')
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setAnnouncement('Loading your latest bowling activity.'), 0)
+    return () => window.clearTimeout(timeout)
+  }, [])
 
   return (
-    <div className="card" style={{ marginBottom: 24 }}>
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>📈 Score Trend</div>
-        <span className="muted" style={{ fontSize: 12 }}>last {games.length} games</span>
+    <div className="today-page" aria-busy="true" aria-label="Loading Today">
+      <div className="today-layout">
+        <div className="today-primary">
+          <header className="today-header">
+            <div className="today-kicker">BowlSense</div>
+            <h1>Today</h1>
+            <div className="today-skeleton today-skeleton--context" />
+          </header>
+          <section className="today-section" aria-hidden="true">
+            <div className="today-section-heading">
+              <span>Latest performance</span>
+            </div>
+            <div className="today-skeleton today-skeleton--ribbon" />
+          </section>
+          <div className="today-skeleton today-skeleton--metrics" />
+          <div className="today-skeleton today-skeleton--action" />
+          <section className="today-section" aria-hidden="true">
+            <div className="today-section-heading">
+              <span>Recent sessions</span>
+            </div>
+            <div className="today-skeleton today-skeleton--rows" />
+          </section>
+        </div>
+        <aside className="today-inspector today-inspector--loading" aria-hidden="true">
+          <div className="today-skeleton today-skeleton--inspector" />
+        </aside>
       </div>
-      <div style={{ width: '100%', overflowX: 'hidden' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 250, display: 'block' }}>
-          {yTicks.map(t => (
-            <line key={t} x1={PAD.left} y1={yOf(t)} x2={W - PAD.right} y2={yOf(t)} stroke="var(--border)" strokeWidth="1" />
-          ))}
+      <span className="bs-visually-hidden" role="status">{announcement}</span>
+    </div>
+  )
+}
 
-          {yTicks.map(t => (
-            <text key={`lbl-${t}`} x={PAD.left - 6} y={yOf(t) + 3} textAnchor="end" fill="var(--muted)" fontSize="11">{t}</text>
-          ))}
-
-          {average > 0 && (
-            <line x1={PAD.left} y1={yOf(average)} x2={W - PAD.right} y2={yOf(average)} stroke="var(--accent)" strokeWidth="1" strokeDasharray="6,4" opacity="0.5" />
-          )}
-
-          <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-          {games.map((g, i) => (
-            <circle key={g.id} cx={xOf(i)} cy={yOf(g.score || 0)} r="4" fill="var(--accent)" stroke="var(--bg)" strokeWidth="2" />
-          ))}
-        </svg>
-      </div>
+function DashboardError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="today-page">
+      <header className="today-header">
+        <div className="today-kicker">BowlSense</div>
+        <h1>Today</h1>
+      </header>
+      <section className="today-state" role="alert">
+        <div className="today-state__icon" aria-hidden="true">
+          <Icon className="today-icon" name="warning" />
+        </div>
+        <h2>Your activity didn’t load</h2>
+        <p>Check your connection and try again. You can still start a new session now.</p>
+        <div className="today-state__actions">
+          <button type="button" className="today-button today-button--secondary" onClick={onRetry}>
+            Try again
+          </button>
+          <Link to="/sessions/new" className="today-button today-button--primary">
+            <Icon className="today-icon" name="start" />
+            Start bowling
+          </Link>
+        </div>
+      </section>
     </div>
   )
 }
@@ -132,593 +139,304 @@ function ScoreTrendChart({ games, average }: { games: Game[]; average: number })
 export default function Dashboard() {
   const { settings } = useSettings()
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'highscore'>('newest')
   const [showQuickLog, setShowQuickLog] = useState(false)
-  const [quickLogDate, setQuickLogDate] = useState(new Date().toISOString().slice(0, 10))
-  const [quickLogLocation, setQuickLogLocation] = useState('')
-  const [quickLogLanes, setQuickLogLanes] = useState('')
-  const [quickLogSessionId, setQuickLogSessionId] = useState<number | null>(null)
-  const [quickLogGameNumber, setQuickLogGameNumber] = useState(1)
-  const [quickLogSaved, setQuickLogSaved] = useState(false)
+  const [quickLogDraft, setQuickLogDraft] = useState<QuickLogDraft>(createQuickLogDraft)
+  const [quickLogSaving, setQuickLogSaving] = useState(false)
+  const quickLogSaveInFlight = useRef(false)
 
-  const { data: stats } = useQuery<Stats>({ queryKey: ['stats'], queryFn: () => fetch('/api/stats').then(r => r.json()) })
-  const { data: weekly } = useQuery<any>({ queryKey: ['stats/weekly'], queryFn: () => fetch('/api/stats/weekly').then(r => r.json()) })
-  const { data: sessions } = useQuery<Session[]>({
-    queryKey: ['sessions'],
+  const statsQuery = useQuery<Stats>({
+    queryKey: ['stats'],
+    queryFn: () => fetchJson<Stats>('/api/stats'),
+  })
+  const weeklyQuery = useQuery<WeeklyStats>({
+    queryKey: ['stats/weekly'],
+    queryFn: () => fetchJson<WeeklyStats>('/api/stats/weekly'),
+  })
+  const sessionsQuery = useQuery<Session[]>({
+    queryKey: ['sessions', 'recent'],
+    queryFn: fetchRecentSessions,
+  })
+  const recentGamesQuery = useQuery<Game[]>({
+    queryKey: ['games-recent'],
     queryFn: async () => {
-      const data = await fetch('/api/sessions?limit=100&offset=0').then(r => r.json())
-      return Array.isArray(data) ? data : (data.sessions ?? [])
+      const games = await fetchJson<GameResponse[]>('/api/games-recent')
+      return games.map(normalizeGame)
     },
   })
-  const { data: recentGames } = useQuery<Game[]>({ queryKey: ['games-recent'], queryFn: () => fetch('/api/games-recent').then(r => r.json()) })
-  const { data: ballStats } = useQuery<BallStat[]>({ queryKey: ['stats/by-ball'], queryFn: () => fetch('/api/stats/by-ball').then(r => r.json()) })
-  const { data: balls = [] } = useQuery<Ball[]>({ queryKey: ['balls'], queryFn: () => fetch('/api/balls').then(r => r.json()) })
-  const { data: tonightLeagues = [] } = useQuery<TonightLeague[]>({
+  const ballsQuery = useQuery<Ball[]>({
+    queryKey: ['balls'],
+    queryFn: () => fetchJson<Ball[]>('/api/balls'),
+  })
+  const tonightQuery = useQuery<TonightLeague[]>({
     queryKey: ['dashboard/tonight'],
-    queryFn: () => fetch('/api/dashboard/tonight').then(r => r.json()),
-    staleTime: 5 * 60 * 1000, // 5 min — day-of-week doesn't change rapidly
+    queryFn: () => fetchJson<TonightLeague[]>('/api/dashboard/tonight'),
+    staleTime: 5 * 60 * 1000,
   })
 
   const createSessionMutation = useMutation({
-    mutationFn: async (payload: { date: string; location: string; lanes: string }) => {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) throw new Error('Failed to create session')
-      return response.json() as Promise<{ id: number }>
-    },
+    mutationFn: async (payload: { date: string; location: string; lanes: string }) => fetchJson<{ id: number }>('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
   })
 
   const createGameMutation = useMutation({
-    mutationFn: async (payload: { sessionId: number; gameNumber: number; score: number; strikes: number; spares: number; splits: number; ballId: number | null; frameData: string }) => {
-      const response = await fetch('/api/games', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!response.ok) throw new Error('Failed to create game')
-      return response.json()
-    },
+    mutationFn: async (payload: SavedGame & { sessionId: number }) => fetchJson('/api/games', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
   })
 
-  const latestSessionLocation = sessions && sessions.length
-    ? [...sessions].sort((a, b) => b.date.localeCompare(a.date))[0]?.location ?? ''
-    : ''
+  const sessions = sessionsQuery.data ?? []
+  const recentGames = recentGamesQuery.data ?? []
+  const tonightLeagues = tonightQuery.data ?? []
+  const latestSession = [...sessions].sort((a, b) => b.date.localeCompare(a.date))[0]
+  const latestGame = recentGames[0]
+  const recentHigh = recentGames.length > 0 ? Math.max(...recentGames.map((game) => Number(game.score) || 0)) : 0
+  const stats = statsQuery.data
+  const weekly = weeklyQuery.data
+  const averageDelta = weekly?.delta.average ?? null
+  const hasGames = (stats?.totalGames ?? 0) > 0
+
+  const isLoading = statsQuery.isLoading || sessionsQuery.isLoading || recentGamesQuery.isLoading
+  const hasCriticalError = statsQuery.isError || sessionsQuery.isError || recentGamesQuery.isError
+  const hasSupportingError = weeklyQuery.isError || tonightQuery.isError || ballsQuery.isError
+
+  const retryDashboard = () => {
+    void Promise.all([
+      statsQuery.refetch(),
+      weeklyQuery.refetch(),
+      sessionsQuery.refetch(),
+      recentGamesQuery.refetch(),
+      ballsQuery.refetch(),
+      tonightQuery.refetch(),
+    ])
+  }
 
   const openQuickLog = () => {
-    setQuickLogDate(new Date().toISOString().slice(0, 10))
-    setQuickLogLocation(latestSessionLocation)
-    setQuickLogLanes('')
-    setQuickLogSessionId(null)
-    setQuickLogGameNumber(1)
-    setQuickLogSaved(false)
+    if (quickLogSaveInFlight.current) return
+    createSessionMutation.reset()
+    createGameMutation.reset()
+    setQuickLogDraft(createQuickLogDraft(latestSession?.location ?? ''))
     setShowQuickLog(true)
   }
 
-  const closeQuickLog = () => {
-    setShowQuickLog(false)
-  }
+  const closeQuickLog = useCallback(() => {
+    if (!quickLogSaveInFlight.current) setShowQuickLog(false)
+  }, [])
 
   const handleQuickLogSave = async (game: SavedGame) => {
-    const sessionId = quickLogSessionId ?? (await createSessionMutation.mutateAsync({
-      date: quickLogDate,
-      location: quickLogLocation,
-      lanes: quickLogLanes,
-    })).id
+    if (quickLogSaveInFlight.current || createSessionMutation.isPending || createGameMutation.isPending) return
+    quickLogSaveInFlight.current = true
+    setQuickLogSaving(true)
+    try {
+      let sessionId = quickLogDraft.sessionId
+      if (sessionId === null) {
+        sessionId = (await createSessionMutation.mutateAsync({
+          date: quickLogDraft.date,
+          location: quickLogDraft.location,
+          lanes: quickLogDraft.lanes,
+        })).id
+        setQuickLogDraft((draft) => ({ ...draft, sessionId }))
+      }
 
-    await createGameMutation.mutateAsync({
-      sessionId,
-      gameNumber: game.gameNumber,
-      score: game.score,
-      strikes: game.strikes,
-      spares: game.spares,
-      splits: game.splits,
-      ballId: game.ballId,
-      frameData: game.frameData,
-    })
-
-    setQuickLogSessionId(sessionId)
-    setQuickLogSaved(true)
-    await queryClient.invalidateQueries({ queryKey: ['sessions'] })
-    await queryClient.invalidateQueries({ queryKey: ['stats'] })
+      await createGameMutation.mutateAsync({ ...game, sessionId })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats/weekly'] }),
+        queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
+      ])
+      setQuickLogDraft((draft) => ({ ...draft, saved: true }))
+    } catch {
+      // Mutation state drives the inline retry message; keep the scorer promise handled.
+    } finally {
+      quickLogSaveInFlight.current = false
+      setQuickLogSaving(false)
+    }
   }
 
-  const sortedSessions = sessions ? [...sessions].sort((a, b) => {
-    if (sortOrder === 'oldest') return a.date.localeCompare(b.date)
-    if (sortOrder === 'highscore') return (b.highScore ?? 0) - (a.highScore ?? 0)
-    return b.date.localeCompare(a.date) // newest first
-  }).slice(0, 5) : []
+  if (isLoading) return <DashboardLoading />
+  if (hasCriticalError) return <DashboardError onRetry={retryDashboard} />
 
-  const highScoreFromRecent = recentGames?.length ? Math.max(...recentGames.map(g => g.score)) : null
+  const relevantLeagues = tonightLeagues.filter((league) => league.inSeason)
+  const contextLeague = relevantLeagues[0]
 
   return (
-    <div>
-      <div
-        style={{
-          background: 'linear-gradient(135deg, rgba(167,139,250,0.15) 0%, rgba(139,92,246,0.08) 50%, transparent 100%)',
-          border: '1px solid rgba(167,139,250,0.2)',
-          borderRadius: 24,
-          padding: '24px 20px',
-          marginBottom: 24,
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: -40,
-            right: -40,
-            width: 160,
-            height: 160,
-            background: 'radial-gradient(circle, rgba(167,139,250,0.2) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }}
-        />
-
-        <div
-          style={{
-            fontSize: 13,
-            color: 'var(--muted)',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            marginBottom: 4,
-          }}
-        >
-          Welcome back{settings.name ? `, ${settings.name}` : ''}
-        </div>
-
-        <h1 style={{ fontSize: 'clamp(1.6rem, 6vw, 2.4rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 16 }}>
-          Your Bowling
-          <br />
-          Dashboard
-        </h1>
-
-        {(stats?.totalGames ?? 0) > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
-            <span
-              style={{
-                background: 'rgba(167,139,250,0.18)',
-                border: '1px solid rgba(167,139,250,0.3)',
-                borderRadius: 999,
-                padding: '4px 12px',
-                fontSize: 13,
-                fontWeight: 700,
-                color: 'var(--accent)',
-              }}
-            >
-              🎳 {stats?.totalGames ?? 0} games bowled
-            </span>
-            {(stats?.average ?? 0) > 0 && (
-              <span
-                style={{
-                  background: 'rgba(52,211,153,0.12)',
-                  border: '1px solid rgba(52,211,153,0.25)',
-                  borderRadius: 999,
-                  padding: '4px 12px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: '#34d399',
-                }}
+    <div className="today-page">
+      <div className="today-layout">
+        <div className="today-primary">
+          <header className="today-header">
+            <div className="today-kicker">{settings.name ? `For ${settings.name}` : 'BowlSense'}</div>
+            <h1>Today</h1>
+            {contextLeague ? (
+              <Link
+                to={`/leagues/${contextLeague.id}`}
+                className="today-context today-context--league"
+                aria-label={`View ${contextLeague.name}, week ${contextLeague.nextWeekNumber}`}
               >
-                Avg {stats?.average}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link to="/sessions/new" className="btn btn-primary" style={{ fontSize: 15, fontWeight: 800 }}>
-            🎳 Start a Session
-          </Link>
-          <button type="button" className="btn" onClick={openQuickLog} style={{ fontSize: 15, fontWeight: 800 }}>
-            ⚡ Quick Log
-          </button>
-        </div>
-      </div>
-
-      {/* Tonight's League — surfaces when a league is scheduled for today's day-of-week */}
-      {tonightLeagues.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          {tonightLeagues.map((lg) => (
-            <div
-              key={lg.id}
-              style={{
-                background: 'linear-gradient(135deg, rgba(251,191,36,0.16) 0%, rgba(245,158,11,0.08) 50%, transparent 100%)',
-                border: '1px solid rgba(251,191,36,0.32)',
-                borderRadius: 18,
-                padding: '16px 16px 14px',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: -30,
-                  right: -30,
-                  width: 120,
-                  height: 120,
-                  background: 'radial-gradient(circle, rgba(251,191,36,0.18) 0%, transparent 70%)',
-                  pointerEvents: 'none',
-                }}
-              />
-              <div
-                style={{
-                  display: 'inline-flex',
-                  padding: '3px 10px',
-                  borderRadius: 999,
-                  background: 'rgba(251,191,36,0.22)',
-                  color: '#fcd34d',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  letterSpacing: 0.6,
-                  marginBottom: 8,
-                  textTransform: 'uppercase',
-                }}
-              >
-                🏆 League Night — {lg.todayName}
-              </div>
-              <div style={{ fontSize: 17, fontWeight: 850, marginBottom: 2, lineHeight: 1.2 }}>
-                {lg.name}
-              </div>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                {lg.location ?? 'Location not set'}{lg.season ? ` · ${lg.season}` : ''}
-                {!lg.inSeason && (
-                  <span style={{ color: '#fca5a5', marginLeft: 8, fontWeight: 700 }}>
-                    · Out of season
+                <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="league" /></span>
+                <span className="today-context__copy">
+                  <strong>{contextLeague.name} tonight</strong>
+                  <span>
+                    {formatDate(contextLeague.todayIso)} · {contextLeague.location ?? 'Center not set'} · Week {contextLeague.nextWeekNumber} · Opponent not set
                   </span>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <span
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 999,
-                    padding: '3px 10px',
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  Week {lg.nextWeekNumber}
                 </span>
-                {lg.stats.totalGames > 0 && (
-                  <>
-                    <span
-                      style={{
-                        background: 'rgba(167,139,250,0.16)',
-                        border: '1px solid rgba(167,139,250,0.32)',
-                        borderRadius: 999,
-                        padding: '3px 10px',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#c4b5fd',
-                      }}
-                    >
-                      Avg {lg.stats.average}
-                    </span>
-                    {lg.stats.high > 0 && (
-                      <span
-                        style={{
-                          background: 'rgba(251,191,36,0.14)',
-                          border: '1px solid rgba(251,191,36,0.32)',
-                          borderRadius: 999,
-                          padding: '3px 10px',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: '#fcd34d',
-                        }}
-                      >
-                        🏆 {lg.stats.high}
+                {relevantLeagues.length > 1 && <span className="today-context__count">+{relevantLeagues.length - 1}</span>}
+                <Icon className="today-icon" name="chevron-right" />
+              </Link>
+            ) : (
+              <div className="today-context">
+                <span className="today-context__icon" aria-hidden="true"><Icon className="today-icon" name="location" /></span>
+                <span className="today-context__copy">
+                  <strong>{latestSession?.location || 'Ready when you are'}</strong>
+                  <span>{latestSession ? `Last bowled ${formatDate(latestSession.date)}` : 'Your first frame starts here'}</span>
+                </span>
+              </div>
+            )}
+          </header>
+
+          {hasSupportingError && (
+            <div className="today-inline-error" role="status">
+              Some context is unavailable. Your sessions are still up to date.
+              <button type="button" onClick={retryDashboard}>Refresh</button>
+            </div>
+          )}
+
+          {hasGames ? (
+            <>
+              <section className="today-section" aria-labelledby="latest-performance-heading">
+                <div className="today-section-heading">
+                  <h2 id="latest-performance-heading">Latest performance</h2>
+                  {latestSession && <Link to={`/sessions/${latestSession.id}`}>Open session</Link>}
+                </div>
+                <TodayFrameRibbon
+                  frames={gameFrameData(latestGame)}
+                  score={latestGame?.score ?? latestSession?.highScore ?? 0}
+                  gameNumber={latestGame?.gameNumber}
+                  location={latestGame?.location ?? latestSession?.location ?? undefined}
+                />
+              </section>
+
+              <section className="today-metrics" aria-label="Current form">
+                <div className="today-metric today-metric--primary">
+                  <span className="today-metric__label">Average</span>
+                  <div className="today-metric__value-row">
+                    <strong>{stats?.average ?? '—'}</strong>
+                    {averageDelta !== null && (
+                      <span className={`today-delta ${averageDelta > 0 ? 'today-delta--up' : averageDelta < 0 ? 'today-delta--down' : ''}`}>
+                        {averageDelta !== 0 && (
+                          <Icon
+                            className={`today-icon today-icon--${averageDelta > 0 ? 'trendUp' : 'trendDown'}`}
+                            name="back"
+                          />
+                        )}
+                        {averageDelta === 0 ? 'No change' : `${averageDelta > 0 ? 'Up' : 'Down'} ${Math.abs(averageDelta)} vs last week`}
                       </span>
                     )}
-                    <span
-                      style={{
-                        background: 'rgba(52,211,153,0.12)',
-                        border: '1px solid rgba(52,211,153,0.28)',
-                        borderRadius: 999,
-                        padding: '3px 10px',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#34d399',
-                      }}
-                    >
-                      {lg.stats.gamesWon}W–{lg.stats.gamesLost}L
-                    </span>
-                  </>
-                )}
-              </div>
-
-              {lg.lastOpponent && (
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-                  Last match: <strong style={{ color: 'var(--text)' }}>{lg.lastOpponent}</strong>
-                  {lg.lastWeekDate && (
-                    <span> · {new Date(lg.lastWeekDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                  )}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => navigate(`/leagues/${lg.id}?logWeek=1&date=${lg.todayIso}`)}
-                  style={{ fontSize: 14, fontWeight: 800, background: 'linear-gradient(135deg, #f59e0b, #d97706)', borderColor: 'transparent', color: '#1a1a0f' }}
-                >
-                  🎳 Log This Week
-                </button>
-                <Link
-                  to={`/leagues/${lg.id}`}
-                  className="btn btn-ghost"
-                  style={{ fontSize: 14, fontWeight: 700, color: '#fcd34d', borderColor: 'rgba(251,191,36,0.4)' }}
-                >
-                  View League →
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
-        <div className="card card-accent-top" style={{ padding: 14 }}>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Average Score</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 900, color: 'var(--accent)' }}>{stats?.average ?? '—'}</div>
-            {(stats?.average ?? 0) >= 200 && <span style={{ fontSize: 16, color: '#34d399' }}>🔥</span>}
-          </div>
-        </div>
-
-        <div className="card card-accent-top" style={{ padding: 14 }}>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{highScoreFromRecent !== null ? 'High Score' : 'Total Games'}</div>
-          <div style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 900, color: 'var(--accent)' }}>
-            {highScoreFromRecent ?? (stats?.totalGames ?? '—')}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 24 }}>
-        <div className="card card-accent-top" style={{ padding: 14 }}>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Strike Rate</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ fontSize: 24, lineHeight: 1.1, fontWeight: 700, color: 'var(--accent)' }}>
-              {stats?.strikeRate ? `${stats.strikeRate}%` : '—'}
-            </div>
-            {(stats?.strikeRate ?? 0) >= 30 && <span style={{ fontSize: 15 }}>⚡</span>}
-          </div>
-        </div>
-
-        <div className="card card-accent-top" style={{ padding: 14 }}>
-          <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Spare Rate</div>
-          <div style={{ fontSize: 24, lineHeight: 1.1, fontWeight: 700, color: 'var(--accent)' }}>
-            {stats?.spareRate ? `${stats.spareRate}%` : '—'}
-          </div>
-        </div>
-      </div>
-
-      {weekly && (weekly.thisWeek?.games > 0 || weekly.lastWeek?.games > 0) && (
-        <div className="card" style={{ marginBottom: 24, padding: '16px 16px 12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>📅 Weekly Summary</div>
-              <div className="muted" style={{ fontSize: 11 }}>{weekly.dayOfWeek}</div>
-            </div>
-            {weekly.delta?.average !== null && weekly.delta?.average !== undefined && (
-              <div style={{
-                fontSize: 13,
-                fontWeight: 800,
-                color: weekly.delta.average > 0 ? '#34d399' : weekly.delta.average < 0 ? '#ef4444' : 'var(--muted)',
-                background: weekly.delta.average > 0 ? 'rgba(52,211,153,0.12)' : weekly.delta.average < 0 ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${weekly.delta.average > 0 ? 'rgba(52,211,153,0.3)' : weekly.delta.average < 0 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-                borderRadius: 999,
-                padding: '3px 10px',
-              }}>
-                {weekly.delta.average > 0 ? '↑' : weekly.delta.average < 0 ? '↓' : '—'}
-                {Math.abs(weekly.delta.average)} avg
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            {/* This week */}
-            <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 12, padding: '10px 10px 8px' }}>
-              <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.04em' }}>THIS WEEK</div>
-              <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, color: 'var(--accent)' }}>{weekly.thisWeek?.average ?? '—'}</div>
-              <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>avg · {weekly.thisWeek?.games ?? 0}g</div>
-              {weekly.thisWeek?.highGame > 0 && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginTop: 4 }}>🏆 {weekly.thisWeek.highGame}</div>
-              )}
-            </div>
-
-            {/* Last week */}
-            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 10px 8px' }}>
-              <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.04em' }}>LAST WEEK</div>
-              <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, color: 'var(--muted)' }}>{weekly.lastWeek?.average ?? '—'}</div>
-              <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>avg · {weekly.lastWeek?.games ?? 0}g</div>
-              {weekly.lastWeek?.highGame > 0 && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginTop: 4 }}>🏆 {weekly.lastWeek.highGame}</div>
-              )}
-            </div>
-
-            {/* Best recent */}
-            <div style={{ background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 12, padding: '10px 10px 8px' }}>
-              <div style={{ fontSize: 11, color: '#fbbf24', fontWeight: 700, marginBottom: 6, letterSpacing: '0.04em' }}>BEST RECENT</div>
-              <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.1, color: '#fbbf24' }}>{Math.max(weekly.thisWeek?.highGame ?? 0, weekly.lastWeek?.highGame ?? 0) || '—'}</div>
-              <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>high game</div>
-              {weekly.delta?.games !== 0 && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: weekly.delta.games > 0 ? '#34d399' : '#ef4444', marginTop: 4 }}>
-                  {weekly.delta.games > 0 ? '+' : ''}{weekly.delta.games} game{weekly.delta.games !== 1 ? 's' : ''}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 24 }}>
-        {[
-          { to: '/leagues', icon: '🏆', label: 'Leagues' },
-          { to: '/tournaments', icon: '🎯', label: 'Events' },
-          { to: '/arsenals', icon: '💼', label: 'Arsenal' },
-        ].map(item => (
-          <Link key={item.to} to={item.to} className="card" style={{ textDecoration: 'none', textAlign: 'center', padding: '14px 8px' }}>
-            <div style={{ fontSize: 24, marginBottom: 6 }}>{item.icon}</div>
-            <div style={{ fontSize: 12, fontWeight: 700 }}>{item.label}</div>
-          </Link>
-        ))}
-      </div>
-
-      {recentGames && recentGames.length >= 2 && <ScoreTrendChart games={recentGames} average={stats?.average ?? 0} />}
-
-      {ballStats && ballStats.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>🎳 Ball Performance</div>
-          <div className="ball-performance-row" style={{ display: 'flex', gap: 10, overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%', paddingBottom: 4 }}>
-            {ballStats.map((b) => (
-              <div key={b.ballId} className="ball-performance-item" style={{ minWidth: 180, background: '#121228', border: '1px solid var(--border)', borderRadius: 14, padding: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{b.ballName}</div>
-                <div className="muted" style={{ fontSize: 12, margin: '2px 0 10px' }}>{b.brand}</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent)' }}>{b.average}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{b.gameCount} games</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <h2>Recent Sessions</h2>
-        <select
-          value={sortOrder}
-          onChange={e => setSortOrder(e.target.value as 'newest' | 'oldest' | 'highscore')}
-          style={{ width: 'auto', minHeight: 34, padding: '6px 10px', fontSize: 13, borderRadius: 10 }}
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="highscore">High score</option>
-        </select>
-      </div>
-      {!sessions?.length && (
-        <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🎳</div>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>No sessions yet</div>
-          <div className="muted" style={{ fontSize: 14, marginBottom: 16 }}>Bowl your first game and start tracking your progress.</div>
-          <Link to="/sessions/new" className="btn btn-primary" style={{ width: '100%' }}>Start First Session</Link>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {sortedSessions.map(s => (
-          <Link
-            key={s.id}
-            to={`/sessions/${s.id}`}
-            className="card card-hover"
-            style={{
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              padding: '14px 16px',
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>{s.location || 'Unknown Lanes'}</div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                {s.date}
-                {s.lanes ? ` · Lanes ${s.lanes}` : ''}
-                {s.gameCount ? ` · ${s.gameCount} game${s.gameCount !== 1 ? 's' : ''}` : ''}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              {s.highScore ? (
-                <>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: s.highScore === 300 ? '#34d399' : 'var(--accent)', lineHeight: 1 }}>
-                    {s.highScore === 300 ? '🏆 ' : ''}
-                    {s.highScore}
                   </div>
-                  <div className="muted" style={{ fontSize: 11 }}>high score</div>
-                </>
-              ) : (
-                <span style={{ color: 'var(--accent)', fontSize: 20 }}>›</span>
-              )}
+                </div>
+                <div className="today-metric">
+                  <span className="today-metric__label">Strike rate</span>
+                  <strong>{stats?.strikeRate == null ? '—' : `${stats.strikeRate}%`}</strong>
+                </div>
+                <div className="today-metric">
+                  <span className="today-metric__label">Spare rate</span>
+                  <strong>{stats?.spareRate == null ? '—' : `${stats.spareRate}%`}</strong>
+                </div>
+              </section>
+
+              <details className="today-details">
+                <summary>More stats</summary>
+                <dl>
+                  <div><dt>Total games</dt><dd>{stats?.totalGames ?? 0}</dd></div>
+                  <div><dt>This week</dt><dd>{weekly?.thisWeek.games ?? 0} games</dd></div>
+                  <div><dt>Weekly high</dt><dd>{weekly?.thisWeek.highGame || '—'}</dd></div>
+                </dl>
+              </details>
+
+              <TodayActions onQuickLog={openQuickLog} />
+            </>
+          ) : (
+            <section className="today-state today-state--empty">
+              <div className="today-state__lane" aria-hidden="true"><span /><span /><span /></div>
+              <h2>Set your starting line</h2>
+              <p>Record one game to see your frame ribbon, average, and next useful adjustment.</p>
+              <TodayActions onQuickLog={openQuickLog} />
+            </section>
+          )}
+
+          <section className="today-section" aria-labelledby="recent-sessions-heading">
+            <div className="today-section-heading">
+              <h2 id="recent-sessions-heading">Recent sessions</h2>
+              {sessions.length > 0 && <Link to="/sessions">See all</Link>}
             </div>
-          </Link>
-        ))}
+            <RecentSessions sessions={sessions} />
+          </section>
+        </div>
+
+        <aside className="today-inspector" aria-label="Tonight and recent context">
+          {contextLeague ? (
+            <section className="today-inspector__section">
+              <span className="today-inspector__eyebrow">Tonight</span>
+              <h2>{contextLeague.name}</h2>
+              <dl>
+                <div><dt>Center</dt><dd>{contextLeague.location ?? 'Not set'}</dd></div>
+                <div><dt>Start</dt><dd>Tonight · {formatDate(contextLeague.todayIso)}</dd></div>
+                <div><dt>Week</dt><dd>{contextLeague.nextWeekNumber}</dd></div>
+                <div><dt>Opponent</dt><dd>Not set</dd></div>
+                {contextLeague.lastOpponent && <div><dt>Last faced</dt><dd>{contextLeague.lastOpponent}</dd></div>}
+              </dl>
+              <Link
+                to={`/leagues/${contextLeague.id}?logWeek=1&date=${contextLeague.todayIso}`}
+                className="today-button today-button--secondary"
+              >
+                Log league week
+              </Link>
+            </section>
+          ) : (
+            <section className="today-inspector__section">
+              <span className="today-inspector__eyebrow">Next time</span>
+              <h2>{latestSession?.location || 'Choose a center'}</h2>
+              <p>{latestSession ? 'Your most recent center is ready as the starting point for a past-game log.' : 'Add the center when you start your first session.'}</p>
+              <button type="button" className="today-button today-button--secondary" onClick={openQuickLog}>Log a past game</button>
+            </section>
+          )}
+          {hasGames && (
+            <section className="today-inspector__section today-inspector__section--compact">
+              <span className="today-inspector__eyebrow">Recent high</span>
+              <strong className="today-inspector__score">{recentHigh || '—'}</strong>
+              <span>Across your latest {recentGames.length} game{recentGames.length === 1 ? '' : 's'}</span>
+            </section>
+          )}
+        </aside>
       </div>
 
-      {showQuickLog && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16 }}>
-          <div style={{ background: '#0d0d1a', border: '1px solid var(--border)', borderRadius: 20, padding: 20, maxHeight: '90vh', overflowY: 'auto', maxWidth: 560, width: '90%', position: 'relative' }}>
-            <button
-              type="button"
-              onClick={closeQuickLog}
-              style={{ position: 'absolute', top: 14, right: 14, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', width: 32, height: 32, borderRadius: 999, cursor: 'pointer' }}
-            >
-              ✕
-            </button>
-
-            <h3 style={{ margin: 0, marginBottom: 14 }}>⚡ Quick Log</h3>
-
-            <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Location</span>
-                <input value={quickLogLocation} onChange={(e) => setQuickLogLocation(e.target.value)} placeholder="Bowling alley" />
-              </label>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Date</span>
-                <input type="date" value={quickLogDate} onChange={(e) => setQuickLogDate(e.target.value)} />
-              </label>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Lanes (optional)</span>
-                <input value={quickLogLanes} onChange={(e) => setQuickLogLanes(e.target.value)} placeholder="e.g. 12" />
-              </label>
-            </div>
-
-            {quickLogSaved && quickLogSessionId ? (
-              <div style={{ border: '1px solid rgba(52,211,153,0.35)', background: 'rgba(52,211,153,0.1)', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontWeight: 700, marginBottom: 10 }}>
-                  ✅ Logged! <Link to={`/sessions/${quickLogSessionId}`} style={{ color: 'var(--accent)' }}>View Session</Link>
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => {
-                      setQuickLogGameNumber((n) => n + 1)
-                      setQuickLogSaved(false)
-                    }}
-                  >
-                    Log Another Game
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={closeQuickLog}>Done</button>
-                </div>
-              </div>
-            ) : (
-              <BowlingScorer
-                gameNumber={quickLogGameNumber}
-                balls={balls}
-                defaultBallId={settings.defaultBallId}
-                onSave={(game) => { void handleQuickLogSave(game) }}
-                onCancel={closeQuickLog}
-              />
-            )}
-
-            {(createSessionMutation.isPending || createGameMutation.isPending) && (
-              <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>Saving...</div>
-            )}
-            {(createSessionMutation.isError || createGameMutation.isError) && (
-              <div style={{ color: '#fca5a5', fontSize: 13, marginTop: 8 }}>Could not save game. Please try again.</div>
-            )}
-          </div>
-        </div>
-      )}
+      <QuickLogSheet
+        open={showQuickLog}
+        draft={quickLogDraft}
+        status={{
+          saving: quickLogSaving,
+          error: createSessionMutation.isError || createGameMutation.isError,
+        }}
+        balls={ballsQuery.data ?? []}
+        defaultBallId={settings.defaultBallId}
+        onDraftChange={(change) => setQuickLogDraft((draft) => ({ ...draft, ...change }))}
+        onSave={handleQuickLogSave}
+        onClose={closeQuickLog}
+        onLogAnother={() => {
+          if (quickLogSaveInFlight.current) return
+          createSessionMutation.reset()
+          createGameMutation.reset()
+          setQuickLogDraft((draft) => ({
+            ...draft,
+            gameNumber: draft.gameNumber + 1,
+            saved: false,
+          }))
+        }}
+      />
     </div>
   )
 }

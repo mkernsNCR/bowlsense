@@ -9,10 +9,15 @@ export async function copyText(text: string): Promise<void> {
     }
   }
 
+  const previouslyFocused = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null
   const field = document.createElement('textarea')
   field.value = text
   field.setAttribute('readonly', '')
   field.style.position = 'fixed'
+  field.style.top = '0'
+  field.style.left = '0'
   field.style.opacity = '0'
   document.body.appendChild(field)
   try {
@@ -22,5 +27,6 @@ export async function copyText(text: string): Promise<void> {
     if (!document.execCommand('copy')) throw new Error('Clipboard is unavailable')
   } finally {
     field.remove()
+    previouslyFocused?.focus()
   }
 }

@@ -29,6 +29,7 @@ interface BowlingScorerProps {
   balls: ScoringBall[]
   defaultBallId?: string
   initialFrameData?: string | null
+  initialSplits?: number
   saving?: boolean
   onSave: (game: SavedBowlingGame) => void | Promise<void>
   onCancel: () => void
@@ -121,6 +122,7 @@ export default function BowlingScorer({
   balls,
   defaultBallId,
   initialFrameData,
+  initialSplits,
   saving = false,
   onSave,
   onCancel,
@@ -159,10 +161,12 @@ export default function BowlingScorer({
     [state.frames],
   )
   const spares = useMemo(() => state.frames.filter((frame) => frame.isSpare).length, [state.frames])
+  const splits = initialSplits ?? 0
   const frameData = JSON.stringify({
     rolls: state.rolls,
     frames: state.frames,
     pinSelections: state.pinSelections,
+    splits,
   })
   const ribbonFrames = toFrameRibbonFrames(
     state.frames,
@@ -174,7 +178,7 @@ export default function BowlingScorer({
     score: state.totalScore,
     strikes,
     spares,
-    splits: 0,
+    splits,
     ballId: selectedBallId ? Number(selectedBallId) : null,
     frameData,
     pinLeaves: JSON.stringify(state.pinSelections),

@@ -74,8 +74,7 @@ function renderDashboard() {
 
 async function finishGutterGame(user: ReturnType<typeof userEvent.setup>) {
   for (let roll = 0; roll < 20; roll += 1) {
-    const recordZero = screen.queryByRole('button', { name: 'Record 0' })
-    await user.click(recordZero ?? screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Record 0' }))
   }
 }
 
@@ -213,7 +212,7 @@ describe('Today behavior', () => {
 
     await finishGutterGame(user)
 
-    expect((await screen.findByRole('button', { name: /Save Game|Save game|Saving…/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((await screen.findByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Retake' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
@@ -256,7 +255,7 @@ describe('Today behavior', () => {
     await user.click(screen.getAllByRole('button', { name: 'Log a past game' })[0]!)
     await finishGutterGame(user)
 
-    const save = await screen.findByRole('button', { name: /Save Game|Save game/ })
+    const save = await screen.findByRole('button', { name: 'Save game' })
     act(() => {
       fireEvent.click(save)
       fireEvent.click(save)
@@ -275,7 +274,7 @@ describe('Today behavior', () => {
 
     await user.click(screen.getByRole('button', { name: 'Log another game' }))
     expect(screen.queryByText('Game logged')).toBeNull()
-    expect(screen.getByRole('button', { name: /Next|Record 0/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Record 0' })).toBeTruthy()
   })
 
   it('clears a failed save when the quick log is reopened', async () => {
@@ -296,7 +295,7 @@ describe('Today behavior', () => {
     await screen.findByRole('link', { name: /View Thursday League/i })
     await user.click(screen.getAllByRole('button', { name: 'Log a past game' })[0]!)
     await finishGutterGame(user)
-    await user.click(screen.getByRole('button', { name: /Save Game|Save game/ }))
+    await user.click(screen.getByRole('button', { name: 'Save game' }))
 
     await screen.findByText('The game wasn’t saved. Check your connection and try again.')
     expect(sessionAttempts).toBe(1)
@@ -305,6 +304,6 @@ describe('Today behavior', () => {
     await user.click(screen.getByRole('button', { name: 'Discard game' }))
     await user.click(screen.getAllByRole('button', { name: 'Log a past game' })[0]!)
     expect(screen.queryByText('The game wasn’t saved. Check your connection and try again.')).toBeNull()
-    expect(screen.getByRole('button', { name: /Next|Record 0/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Record 0' })).toBeTruthy()
   })
 })

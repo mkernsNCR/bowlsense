@@ -36,7 +36,11 @@ export async function fetchJson<T = unknown>(input: RequestInfo | URL, init?: Re
   return response.json() as Promise<T>
 }
 
-export async function fetchRecentSessions() {
-  const data = await fetchJson<Session[] | { sessions?: Session[] }>('/api/sessions?limit=100&offset=0')
+export async function fetchBalls() {
+  return fetchJson<Ball[]>('/api/balls')
+}
+
+export async function fetchRecentSessions(limit = 100) {
+  const data = await fetchJson<Session[] | { sessions?: Session[] }>(`/api/sessions?limit=${limit}&offset=0`)
   return Array.isArray(data) ? data : (data.sessions ?? [])
 }

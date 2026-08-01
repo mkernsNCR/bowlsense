@@ -78,6 +78,14 @@ function displayDate(value: string) {
   })
 }
 
+function getNextGameNumber(games: ReadonlyArray<{ gameNumber: number }>) {
+  return Math.max(0, ...games.map((game) => game.gameNumber)) + 1
+}
+
+function resolveSessionForm(draft: SessionForm | null, session: SessionForm) {
+  return draft ?? session
+}
+
 export default function SessionDetail() {
   const { id } = useParams()
   const sessionId = Number(id)
@@ -93,7 +101,7 @@ export default function SessionDetail() {
   const [confirmDeleteGame, setConfirmDeleteGame] = useState(false)
   const [editingGame, setEditingGame] = useState<Game | null>(null)
   const [shareGame, setShareGame] = useState<Game | null>(null)
-  const [sessionForm, setSessionForm] = useState<SessionForm>({ date: '', location: '', lanes: '', notes: '' })
+  const [sessionForm, setSessionForm] = useState<SessionForm | null>(null)
   const [shareStatus, setShareStatus] = useState<'idle' | 'busy' | 'copied' | 'error'>('idle')
   const [savedNotice, setSavedNotice] = useState<string | null>(null)
 
@@ -149,6 +157,7 @@ export default function SessionDetail() {
     },
     onSuccess: async () => {
       setShowEditSession(false)
+      setSessionForm(null)
       setSearchParams({}, { replace: true })
       await refreshSession()
     },
@@ -197,15 +206,24 @@ export default function SessionDetail() {
   const balls = ballsQuery.data ?? []
   const average = games.length ? Math.round(games.reduce((sum, game) => sum + game.score, 0) / games.length) : null
   const high = games.length ? Math.max(...games.map((game) => game.score)) : null
-  const activeSessionForm = sessionForm.date || !session
-    ? sessionForm
-    : { date: session.date, location: session.location, lanes: session.lanes, notes: session.notes }
+  const activeSessionForm = resolveSessionForm(sessionForm, {
+    date: session?.date ?? '',
+    location: session?.location ?? '',
+    lanes: session?.lanes ?? '',
+    notes: session?.notes ?? '',
+  })
 
   const openEditSession = () => {
     if (!session) return
     setSessionForm({ date: session.date, location: session.location, lanes: session.lanes, notes: session.notes })
     setShowSessionActions(false)
     setShowEditSession(true)
+  }
+
+  const closeEditSession = () => {
+    setShowEditSession(false)
+    setSessionForm(null)
+    setSearchParams({}, { replace: true })
   }
 
   const handleSessionShare = async () => {
@@ -266,7 +284,7 @@ export default function SessionDetail() {
     return (
       <div className="scoring-flow scoring-page scoring-page--focused">
         <BowlingScorer
-          gameNumber={games.length + 1}
+          gameNumber={getNextGameNumber(games)}
           balls={balls}
           defaultBallId={settings.defaultBallId}
           onSave={async (game) => {
@@ -350,6 +368,7 @@ export default function SessionDetail() {
           className="scoring-sheet-theme scoring-sheet-wide"
         >
           <BowlingScorer
+            key={editingGame.id}
             gameNumber={editingGame.gameNumber}
             balls={balls}
             defaultBallId={editingGame.ballId ? String(editingGame.ballId) : settings.defaultBallId}
@@ -396,7 +415,7 @@ export default function SessionDetail() {
       )}
 
       {showEditSession && (
-        <Sheet open onClose={() => setShowEditSession(false)} title="Edit session" closeLabel="Close session editor" className="scoring-sheet-theme">
+        <Sheet open onClose={closeEditSession} title="Edit session" closeLabel="Close session editor" className="scoring-sheet-theme">
           <div className="scoring-fields">
             <div className="scoring-field"><label htmlFor="edit-session-date">Date</label><input id="edit-session-date" type="date" value={activeSessionForm.date} onChange={(event) => setSessionForm({ ...activeSessionForm, date: event.target.value })} /></div>
             <div className="scoring-field"><label htmlFor="edit-session-location">Center</label><input id="edit-session-location" value={activeSessionForm.location} onChange={(event) => setSessionForm({ ...activeSessionForm, location: event.target.value })} /></div>
@@ -405,7 +424,7 @@ export default function SessionDetail() {
           </div>
           {updateSession.isError && <p className="scoring-error">Changes were not saved. Try again.</p>}
           <div className="scoring-sheet-actions">
-            <button type="button" className="scoring-button secondary" autoFocus onClick={() => setShowEditSession(false)}>Cancel</button>
+            <button type="button" className="scoring-button secondary" autoFocus onClick={closeEditSession}>Cancel</button>
             <button type="button" className="scoring-button primary" disabled={!activeSessionForm.date || !activeSessionForm.location.trim() || updateSession.isPending} onClick={() => updateSession.mutate(activeSessionForm)}>{updateSession.isPending ? 'Saving…' : 'Save changes'}</button>
           </div>
         </Sheet>

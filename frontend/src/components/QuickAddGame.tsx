@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer, { type SavedBowlingGame } from './BowlingScorer'
 import { useSettings } from '../hooks/useSettings'
@@ -9,12 +9,17 @@ import type { ScoringBall } from '../features/scoring/types'
 import '../features/scoring/scoring.css'
 
 interface QuickAddGameProps {
-  onDone?: (gameId: number) => void
+  onDone: (gameId: number, startAnother: () => void) => void
 }
 
 interface CreatedRecord {
   id: number
 }
+
+const SAVE_CONFIRMATION_ANIMATION_MS = 440
+const SAVE_COMPLETION_BUFFER_MS = 80
+const SAVE_COMPLETION_DELAY_MS = SAVE_CONFIRMATION_ANIMATION_MS + SAVE_COMPLETION_BUFFER_MS
+
 export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const queryClient = useQueryClient()
   const { settings } = useSettings()
@@ -25,7 +30,11 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
   const [location, setLocation] = useState(settings.homeLanes || 'Home Lanes')
   const [lanes, setLanes] = useState('')
   const [gameNumber, setGameNumber] = useState(1)
-  const [saved, setSaved] = useState(false)
+  const savedTimerRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current)
+  }, [])
 
   const sessionsQuery = useQuery<Session[]>({
     queryKey: ['sessions', 'recent'],
@@ -82,11 +91,15 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
       queryClient.invalidateQueries({ queryKey: ['games-recent'] }),
       queryClient.invalidateQueries({ queryKey: ['recentGames'] }),
     ])
-    setSaved(true)
-    window.setTimeout(() => {
+    if (savedTimerRef.current !== null) window.clearTimeout(savedTimerRef.current)
+    savedTimerRef.current = window.setTimeout(() => {
+      savedTimerRef.current = null
       setShowScorer(false)
-      onDone?.(createdGame.id)
-    }, 520)
+      onDone(createdGame.id, () => {
+        setGameNumber((number) => number + 1)
+        setShowScorer(true)
+      })
+    }, SAVE_COMPLETION_DELAY_MS)
   }
 
   if (showScorer) {
@@ -103,38 +116,24 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
     )
   }
 
-  if (saved) {
-    return (
-      <div className="scoring-flow scoring-status" role="status">
-        <div className="scoring-save-check"><Icon name="check" size={34} /></div>
-        <h2>Game saved</h2>
-        <p>{location} · Game {gameNumber}</p>
-        <div className="scoring-toolbar" style={{ justifyContent: 'center' }}>
-          <button type="button" className="scoring-button primary" onClick={() => { setSaved(false); setGameNumber((number) => number + 1); setShowScorer(true) }}>
-            <Icon name="plus" /> Add another
-          </button>
-          <a href="/sessions" className="scoring-button secondary">View sessions</a>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="scoring-flow">
       <section className="scoring-group" aria-label="Quick game setup">
         <div className="scoring-field">
           <label htmlFor="quick-date">Date</label>
-          <input id="quick-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+          <input id="quick-date" type="date" value={date} disabled={sessionId !== null} onChange={(event) => setDate(event.target.value)} />
         </div>
         <div className="scoring-field">
           <label htmlFor="quick-location">Center</label>
-          <input id="quick-location" type="text" value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Home Lanes" />
+          <input id="quick-location" type="text" value={location} disabled={sessionId !== null} onChange={(event) => setLocation(event.target.value)} placeholder="Home Lanes" />
         </div>
       </section>
 
-      {recentLocation && recentLocation !== location && (
+      {sessionId === null && recentLocation && recentLocation !== location && (
         <button type="button" className="scoring-button quiet" onClick={() => setLocation(recentLocation)}>Use recent center: {recentLocation}</button>
       )}
+
+      {sessionId !== null && <p className="scoring-subtitle">Additional games stay in this created session.</p>}
 
       <div className="scoring-disclosure">
         <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
@@ -146,7 +145,7 @@ export default function QuickAddGame({ onDone }: QuickAddGameProps) {
         <section className="scoring-group">
           <div className="scoring-field">
             <label htmlFor="quick-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
-            <input id="quick-lanes" type="text" inputMode="numeric" value={lanes} onChange={(event) => setLanes(event.target.value)} placeholder="5–6" />
+            <input id="quick-lanes" type="text" disabled={sessionId !== null} value={lanes} onChange={(event) => setLanes(event.target.value)} placeholder="5–6" />
           </div>
         </section>
       )}

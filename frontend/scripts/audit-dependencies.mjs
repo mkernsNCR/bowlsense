@@ -4,6 +4,8 @@ import { extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const ALLOWED_ADVISORY = Object.freeze({
+  // Re-verified against GitHub's reviewed advisory on 2026-07-31: affected
+  // >=7.12.0 <8.3.0, patched in 8.3.0, and limited to unstable RSC APIs.
   source: 1124282,
   url: 'https://github.com/advisories/GHSA-qwww-vcr4-c8h2',
   package: 'react-router',
@@ -130,6 +132,8 @@ export function findRscUsage(sourceRoot) {
 }
 
 function run() {
+  // spawnSync fails closed: output beyond Node's default maxBuffer is truncated,
+  // cannot be parsed as JSON below, and exits the audit with status 1.
   const audit = spawnSync(
     process.platform === 'win32' ? 'npm.cmd' : 'npm',
     ['audit', '--json'],

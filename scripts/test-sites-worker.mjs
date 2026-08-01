@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 
 import worker from "../dist/server/index.js";
-import { schemaStatements } from "../db/schema.ts";
 
 const packagedMigration = await readFile(
   new URL("../dist/.openai/drizzle/0000_bowlsense.sql", import.meta.url),
@@ -13,29 +12,13 @@ const packagedTournamentActiveMigration = await readFile(
   new URL("../dist/.openai/drizzle/0001_tournament_active.sql", import.meta.url),
   "utf8",
 );
+const packagedBallIndexesMigration = await readFile(
+  new URL("../dist/.openai/drizzle/0002_ball_indexes.sql", import.meta.url),
+  "utf8",
+);
 assert.match(packagedMigration, /CREATE TABLE IF NOT EXISTS games/);
 assert.match(packagedTournamentActiveMigration, /ALTER TABLE tournaments ADD COLUMN active/);
-
-function schemaSnapshot(database) {
-  const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
-  return tables.map(({ name }) => ({
-    name,
-    columns: database.prepare(`PRAGMA table_info("${name}")`).all()
-      .map(({ cid: _cid, ...column }) => column)
-      .sort((left, right) => left.name.localeCompare(right.name)),
-    foreignKeys: database.prepare(`PRAGMA foreign_key_list("${name}")`).all(),
-  }));
-}
-
-const migrationDatabase = new DatabaseSync(":memory:");
-migrationDatabase.exec(`${packagedMigration}\n${packagedTournamentActiveMigration}`);
-const runtimeSchemaDatabase = new DatabaseSync(":memory:");
-runtimeSchemaDatabase.exec(schemaStatements.join(";\n"));
-assert.deepEqual(
-  schemaSnapshot(migrationDatabase),
-  schemaSnapshot(runtimeSchemaDatabase),
-  "The packaged D1 migrations must produce the same schema as worker runtime initialization",
-);
+assert.match(packagedBallIndexesMigration, /CREATE INDEX IF NOT EXISTS games_ball_idx/);
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -75,7 +58,7 @@ class D1Mock {
   async batch(statements) {
     this.batchSizes.push(statements.length);
     this.batchSql.push(statements.map((statement) => statement.sql));
-    assert.ok(statements.length <= 50, `D1 batch exceeded the 50-statement budget: ${statements.length}`);
+    assert.ok(statements.length <= 100, `D1 batch exceeded the 100-statement budget: ${statements.length}`);
     this.database.exec("BEGIN");
     try {
       const results = [];
@@ -90,6 +73,7 @@ class D1Mock {
 }
 
 const database = new DatabaseSync(":memory:");
+database.exec(`${packagedMigration}\n${packagedTournamentActiveMigration}\n${packagedBallIndexesMigration}`);
 const indexHtml = `<!doctype html><html><head><title>BowlSense</title><meta name="description" content="generic"><meta property="og:title" content="generic"><meta property="og:description" content="generic"><meta property="og:image" content="generic"><meta name="twitter:title" content="generic"><meta name="twitter:description" content="generic"><meta name="twitter:image" content="generic"></head><body><div id="root"></div></body></html>`;
 const assetRequests = [];
 const env = {
@@ -153,7 +137,7 @@ let response = await request("/api/restore", {
   body: JSON.stringify(backup),
 });
 assert.equal(response.status, 200);
-assert.ok(env.DB.batchSizes[0] + env.DB.batchSizes[1] <= 50, "schema setup and restore must fit the D1 request budget");
+assert.ok(env.DB.batchSizes[0] <= 50, "restore must fit the D1 request budget");
 
 response = await request("/api/data-health");
 const health = await response.json();
@@ -243,8 +227,15 @@ if (backup.sessions.length > 0) {
   response = await publicRequest(`/sessions/${backup.sessions[0].id}/share`);
   assert.equal(response.status, 200);
   const shareHtml = await response.text();
-  assert.match(shareHtml, new RegExp(`${backup.sessions[0].location}.*averaging`, "i"));
+  const escapedLocation = backup.sessions[0].location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  assert.match(shareHtml, new RegExp(`${escapedLocation}.*averaging`, "i"));
   assert.match(shareHtml, new RegExp(`/api/sessions/${backup.sessions[0].id}/og-image`));
+
+  database.prepare("UPDATE sessions SET location = ? WHERE id = ?").run("Dollar $& Lanes", backup.sessions[0].id);
+  response = await publicRequest(`/sessions/${backup.sessions[0].id}/share`);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Dollar \$&amp; Lanes/);
+  database.prepare("UPDATE sessions SET location = ? WHERE id = ?").run(backup.sessions[0].location, backup.sessions[0].id);
 
   response = await publicRequest(`/sessions/${backup.sessions[0].id}/share/`, {
     headers: {
@@ -520,7 +511,7 @@ response = await request("/api/restore", {
   body: JSON.stringify(fiftyThousandRowBackup),
 });
 assert.equal(response.status, 200);
-assert.ok(env.DB.batchSizes.at(-1) + 15 <= 50, "50,000-row restore plus schema reserve must fit the D1 request budget");
+assert.ok(env.DB.batchSizes.at(-1) <= 100, "50,000-row, 5 MiB-bounded restore must fit the D1 request budget");
 response = await request("/api/data-health");
 assert.equal((await response.json()).tableCounts.find((entry) => entry.table === "sessions").count, 50_000);
 response = await request("/api/restore", {

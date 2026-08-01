@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Sheet } from '../../design'
 import ShellIcon from './ShellIcon'
@@ -6,7 +6,6 @@ import { moreGroups } from './navigation'
 
 interface MoreSheetProps {
   onClose: () => void
-  restoreFocusRef: RefObject<HTMLButtonElement | null>
 }
 
 export default function MoreSheet({ onClose }: MoreSheetProps) {

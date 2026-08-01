@@ -38,8 +38,6 @@ export type IconName =
   | 'edit'
   | 'trash'
   | 'search'
-  | 'download'
-  | 'undo'
   | 'warning'
   | 'error'
   | 'empty'

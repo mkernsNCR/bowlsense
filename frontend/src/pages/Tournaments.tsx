@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from '../components/BowlingScorer'
+import { requestJson } from '../api/requestJson'
 import { Icon } from '../design'
 import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
 import { useCompetitionArchive } from '../features/competition/archive'
@@ -86,16 +87,6 @@ const emptyForm = {
   prizeFund: '',
   placement: '',
   notes: '',
-}
-
-async function requestJson<T = unknown>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
-  if (!response.ok) {
-    const message = await response.json().then((body) => body?.error).catch(() => null)
-    throw new Error(message || `Request failed (${response.status})`)
-  }
-  if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
 }
 
 export default function TournamentsPage() {
@@ -304,7 +295,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
   const [copiedLink, setCopiedLink] = useState(false)
   const [sharing, setSharing] = useState(false)
 
-  const { data: bracket, isLoading: isBracketLoading } = useQuery<TournamentBracket>({
+  const { data: bracket, isLoading: isBracketLoading, isError: isBracketError, refetch: refetchBracket } = useQuery<TournamentBracket>({
     queryKey: ['tournament-bracket', id],
     queryFn: () => requestJson(`/api/tournaments/${id}/bracket`),
     enabled: view === 'standings',
@@ -389,7 +380,15 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
           ? <button className="btn btn-primary" onClick={() => setArchiveSheetOpen(true)}>Restore tournament</button>
           : <button className="btn btn-primary" onClick={() => setShowScorer(true)}><Icon className="competition-action-icon" name="plus" /> Add game</button>}
       />
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', marginBottom: 14 }}>
+      <div
+        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', position: 'relative', marginBottom: 14 }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && shareMenuOpen) {
+            event.preventDefault()
+            setShareMenuOpen(false)
+          }
+        }}
+      >
           <button
             className="btn btn-primary"
             onClick={() => setShareMenuOpen((v) => !v)}
@@ -414,12 +413,6 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
                 zIndex: 200,
                 minWidth: 200,
                 boxShadow: 'var(--shadow)',
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  setShareMenuOpen(false)
-                }
               }}
               onMouseLeave={() => setShareMenuOpen(false)}
             >
@@ -581,11 +574,18 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
         <div style={{ display: 'grid', gap: 12 }}>
           {isBracketLoading && <div className="muted">Loading standings...</div>}
 
-          {!isBracketLoading && (bracket?.standings?.length || 0) === 0 && (
+          {isBracketError && (
+            <div className="card" role="alert">
+              <p>Standings could not be loaded. Check your connection or sign-in.</p>
+              <button className="btn btn-primary" type="button" onClick={() => void refetchBracket()}>Retry standings</button>
+            </div>
+          )}
+
+          {!isBracketLoading && !isBracketError && (bracket?.standings?.length || 0) === 0 && (
             <div className="card muted">No games yet</div>
           )}
 
-          {!isBracketLoading && (bracket?.standings?.length || 0) > 0 && (
+          {!isBracketLoading && !isBracketError && (bracket?.standings?.length || 0) > 0 && (
             <>
               {(bracket?.blocks || []).map((block, idx) => (
                 <div className="card" key={`${block.label}-${idx}`}>

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import BowlingScorer from '../components/BowlingScorer'
+import { requestJson } from '../api/requestJson'
 import { Icon } from '../design'
 import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
 import { useCompetitionArchive } from '../features/competition/archive'
@@ -69,16 +70,6 @@ interface WeekGameScore {
 }
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
-async function requestJson<T = unknown>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
-  if (!response.ok) {
-    const message = await response.json().then((body) => body?.error).catch(() => null)
-    throw new Error(message || `Request failed (${response.status})`)
-  }
-  if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
-}
 
 export default function LeaguesPage() {
   const { id } = useParams()
@@ -393,6 +384,7 @@ function LeagueDetail({ id }: { id: string }) {
               </button>
               <button className="btn btn-ghost" style={{ minHeight: 44, padding: '6px 16px' }} onClick={() => setEditingLeague(false)}>Cancel</button>
             </div>
+            {updateLeague.isError && <p className="scoring-error" role="alert">The league changes were not saved. Check your connection or sign-in and try again.</p>}
           </div>
         </div>
         </CompetitionSheet>
@@ -491,6 +483,7 @@ function LeagueDetail({ id }: { id: string }) {
                       <button className="btn btn-primary" disabled={!weekForm.date || updateWeek.isPending} style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => updateWeek.mutate({ weekId: week.id, data: { date: weekForm.date, opponent: weekForm.opponent, gamesWon: Number(weekForm.gamesWon || 0), gamesLost: Number(weekForm.gamesLost || 0), notes: weekForm.notes } })}>{updateWeek.isPending ? 'Saving…' : 'Save'}</button>
                       <button className="btn btn-ghost" style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => setEditingWeekId(null)}>Cancel</button>
                     </div>
+                    {updateWeek.isError && <p className="scoring-error" role="alert">The week changes were not saved. Check your connection or sign-in and try again.</p>}
                   </div>
                 </div>
                 </CompetitionSheet>
@@ -548,6 +541,7 @@ function LeagueDetail({ id }: { id: string }) {
                   <button className="btn btn-danger" style={{ marginTop: 10, width: '100%' }} onClick={() => { if (confirm('Delete this week and all games in it?')) deleteWeek.mutate(week.id) }}>
                     Delete Week
                   </button>
+                  {deleteWeek.isError && <p className="scoring-error" role="alert">The week was not deleted. Check your connection or sign-in and try again.</p>}
                 </div>
               )}
             </div>
@@ -574,32 +568,47 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, 
   const [notes, setNotes] = useState('')
   const [weekGames, setWeekGames] = useState<WeekGameScore[]>([])
   const [scoringGame, setScoringGame] = useState<number | null>(null)
+  const [createdWeekId, setCreatedWeekId] = useState<number | null>(null)
+  const [savedGameNumbers, setSavedGameNumbers] = useState<number[]>([])
 
   const submitWeek = useMutation({
     mutationFn: async () => {
-      const week = await requestJson<{ id: number }>(`/api/leagues/${leagueId}/weeks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          weekNumber: Number(weekNumber || nextWeekNumber),
-          date,
-          opponent,
-          gamesWon: Number(gamesWon || 0),
-          gamesLost: Number(gamesLost || 0),
-          notes,
-        }),
-      })
+      let weekId = createdWeekId
+      if (weekId == null) {
+        const week = await requestJson<{ id: number }>(`/api/leagues/${leagueId}/weeks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            weekNumber: Number(weekNumber || nextWeekNumber),
+            date,
+            opponent,
+            gamesWon: Number(gamesWon || 0),
+            gamesLost: Number(gamesLost || 0),
+            notes,
+          }),
+        })
+        weekId = week.id
+        setCreatedWeekId(weekId)
+      }
 
       const sortedGames = [...weekGames].sort((a, b) => a.gameNumber - b.gameNumber)
+      const saved = new Set(savedGameNumbers)
       for (const game of sortedGames) {
-        await requestJson(`/api/leagues/weeks/${week.id}/games`, {
+        if (saved.has(game.gameNumber)) continue
+        await requestJson(`/api/leagues/weeks/${weekId}/games`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(game),
         })
+        saved.add(game.gameNumber)
+        setSavedGameNumbers([...saved])
       }
     },
-    onSuccess: onSaved,
+    onSuccess: () => {
+      setCreatedWeekId(null)
+      setSavedGameNumbers([])
+      onSaved()
+    },
   })
 
   const nextGameNumber = weekGames.length + 1
@@ -662,6 +671,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, 
       <button className="btn btn-primary" onClick={() => submitWeek.mutate()} disabled={submitWeek.isPending || !date || !allGamesLogged}>
         {submitWeek.isPending ? 'Saving…' : 'Save week'}
       </button>
+      {submitWeek.isError && <p className="scoring-error" role="alert">Saving the week failed partway through. Tap “Save week” again to finish without duplicating saved games.</p>}
       {!allGamesLogged && <div className="muted" style={{ fontSize: 12 }}>Complete all {gamesPerWeek} games to submit this week.</div>}
     </div>
   )

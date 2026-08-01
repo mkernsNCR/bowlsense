@@ -8,7 +8,6 @@ export interface FrameRibbonFrame {
   state?: FrameState
   label?: string
   ariaLabel?: string
-  selectable?: boolean
 }
 
 export interface FrameRibbonProps {
@@ -16,7 +15,6 @@ export interface FrameRibbonProps {
   label?: string
   compact?: boolean
   className?: string
-  onSelectFrame?: (index: number) => void
 }
 
 function frameDescription(frame: FrameRibbonFrame, index: number) {
@@ -26,7 +24,7 @@ function frameDescription(frame: FrameRibbonFrame, index: number) {
   return frame.ariaLabel ?? frame.label ?? `Frame ${index + 1}, ${state}, ${rolls}${score}`
 }
 
-export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false, className = '', onSelectFrame }: FrameRibbonProps) {
+export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false, className = '' }: FrameRibbonProps) {
   const ribbonRef = useRef<HTMLDivElement>(null)
   const normalized = Array.from({ length: 10 }, (_, index) => frames[index] ?? { state: 'pending' as const })
   const currentIndex = normalized.findIndex((frame) => frame.state === 'current')
@@ -46,35 +44,20 @@ export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false,
           {normalized.map((frame, index) => {
             const state = frame.state ?? 'pending'
             const description = frameDescription(frame, index)
-            const content = (
-              <>
+            return (
+              <li
+                key={index}
+                className={`bs-frame-ribbon__frame is-${state}`}
+                aria-label={description}
+                aria-current={state === 'current' ? 'step' : undefined}
+                data-frame={index}
+              >
                 <span className="bs-frame-ribbon__number">{index + 1}</span>
                 <span className="bs-frame-ribbon__rolls" aria-hidden="true">
                   {frame.rolls?.length ? frame.rolls.join(' ') : '·'}
                 </span>
                 <span className="bs-frame-ribbon__score" aria-hidden="true">{frame.score ?? '—'}</span>
                 {state === 'current' ? <span className="bs-visually-hidden">Current frame</span> : null}
-              </>
-            )
-            const isSelectable = Boolean(onSelectFrame && frame.selectable)
-            return (
-              <li
-                key={index}
-                className={`bs-frame-ribbon__frame is-${state}${isSelectable ? ' is-selectable' : ''}`}
-                aria-label={isSelectable ? undefined : description}
-                aria-current={state === 'current' ? 'step' : undefined}
-                data-frame={index}
-              >
-                {isSelectable ? (
-                  <button
-                    type="button"
-                    className="bs-frame-ribbon__action"
-                    onClick={() => onSelectFrame?.(index)}
-                    aria-label={`Edit ${description.toLowerCase()}`}
-                  >
-                    {content}
-                  </button>
-                ) : content}
               </li>
             )
           })}

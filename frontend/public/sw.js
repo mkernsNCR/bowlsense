@@ -11,6 +11,25 @@ const SHELL_ASSETS = [
   '/manifest.webmanifest',
 ];
 
+const NAVIGATION_TIMEOUT_MS = 8000;
+
+function isPublicShareNavigation(pathname) {
+  return /^\/bowl\/?$/.test(pathname) ||
+    /^\/sessions\/\d+\/share\/?$/.test(pathname) ||
+    /^\/leagues\/\d+\/(?:public|leaderboard|share|recap\/share|week\/\d+\/share)\/?$/.test(pathname) ||
+    /^\/tournaments\/\d+\/(?:share|standings|standings\/share)\/?$/.test(pathname);
+}
+
+async function fetchWithTimeout(request, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(request, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Install: cache the app shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -59,9 +78,9 @@ self.addEventListener('fetch', (event) => {
   // This keeps a newly deployed app from being pinned behind stale cached HTML.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS)
         .then((networkResponse) => {
-          if (networkResponse.ok) {
+          if (networkResponse.ok && !isPublicShareNavigation(url.pathname)) {
             const clone = networkResponse.clone();
             event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put('/index.html', clone)));
           }

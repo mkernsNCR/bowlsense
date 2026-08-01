@@ -135,7 +135,7 @@ export default function LeagueRecap() {
         )}
 
         {error && (
-          <div style={{ textAlign: 'center', padding: 80 }}>
+          <div role="alert" style={{ textAlign: 'center', padding: 80 }}>
             <div style={{ color: 'var(--danger)', marginBottom: 16 }}>{error}</div>
             <p style={{ color: 'color-mix(in srgb, var(--ink) 60%, transparent)' }}>No league weeks have been logged yet. Log your first week to generate a recap! 🎳</p>
             <Link to="/leagues" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-block' }}>

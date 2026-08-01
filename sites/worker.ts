@@ -1,4 +1,3 @@
-import { schemaStatements } from "../db/schema";
 import { emailIsExplicitlyAllowed } from "../shared/email-allowlist";
 
 interface D1Result<T = Record<string, unknown>> {
@@ -33,27 +32,14 @@ const MAX_BODY_BYTES = 256 * 1024;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 const MAX_STRUCTURED_JSON_BYTES = 256 * 1024;
 const MAX_D1_JSON_BIND_BYTES = 1024 * 1024;
-const MAX_D1_STATEMENTS_PER_REQUEST = 50;
+const MAX_D1_STATEMENTS_PER_REQUEST = 100;
+const UPSTREAM_TIMEOUT_MS = 8000;
 const DEFAULT_TIME_ZONE = "America/New_York";
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
-}
-
-let schemaReady: Promise<void> | undefined;
-
-async function ensureSchema(db: D1Database): Promise<void> {
-  if (!schemaReady) {
-    schemaReady = db.batch(schemaStatements.map((statement) => db.prepare(statement)))
-      .then(() => undefined)
-      .catch((caught) => {
-        schemaReady = undefined;
-        throw caught;
-      });
-  }
-  return schemaReady;
 }
 
 function json(value: unknown, status = 200, headers: HeadersInit = {}): Response {
@@ -311,7 +297,7 @@ async function sessionList(db: D1Database, url: URL): Promise<Response> {
   const limit = Math.min(100, Math.max(1, number(url.searchParams.get("limit")) ?? 20));
   const page = Math.max(1, number(url.searchParams.get("page")) ?? 1);
   const explicitOffset = number(url.searchParams.get("offset"));
-  const offset = explicitOffset ?? (page - 1) * limit;
+  const offset = Math.max(0, Math.floor(explicitOffset ?? (page - 1) * limit));
   const location = (url.searchParams.get("location") ?? "").trim();
   const order = url.searchParams.get("order") === "asc" ? "ASC" : "DESC";
   const sort = url.searchParams.get("sort") === "score" ? "avg_score" : "s.date";
@@ -480,19 +466,51 @@ async function leagueDetail(db: D1Database, id: number): Promise<Row | null> {
 
 async function leagueList(db: D1Database): Promise<Row[]> {
   const leagues = camelizeAll(await all(db, "SELECT * FROM leagues ORDER BY active DESC, created_at DESC, id DESC"));
-  return Promise.all(leagues.map(async (league) => {
-    const detail = await leagueDetail(db, Number(league.id));
+  if (!leagues.length) return [];
+  const weeks = camelizeAll(await all(db, "SELECT * FROM league_weeks ORDER BY league_id ASC, week_number ASC, id ASC"));
+  const games = camelizeAll(await all(db, "SELECT * FROM league_games ORDER BY week_id ASC, game_number ASC, id ASC"));
+  const gamesByWeek = new Map<number, Row[]>();
+  for (const game of games) {
+    const weekGames = gamesByWeek.get(Number(game.weekId)) ?? [];
+    weekGames.push(game);
+    gamesByWeek.set(Number(game.weekId), weekGames);
+  }
+  const weeksByLeague = new Map<number, Row[]>();
+  for (const week of weeks) {
+    week.games = gamesByWeek.get(Number(week.id)) ?? [];
+    const leagueWeeks = weeksByLeague.get(Number(week.leagueId)) ?? [];
+    leagueWeeks.push(week);
+    weeksByLeague.set(Number(week.leagueId), leagueWeeks);
+  }
+  return leagues.map((league) => {
+    const leagueWeeks = weeksByLeague.get(Number(league.id)) ?? [];
+    const scores = leagueWeeks.flatMap((week) => week.games)
+      .map((game: Row) => game.score)
+      .filter((score: unknown) => score != null)
+      .map(Number);
+    const gamesWon = leagueWeeks.reduce((sum, week) => sum + Number(week.gamesWon ?? 0), 0);
+    const gamesLost = leagueWeeks.reduce((sum, week) => sum + Number(week.gamesLost ?? 0), 0);
+    const gamesTied = leagueWeeks.reduce((sum, week) => sum + Number(week.gamesTied ?? 0), 0);
+    const stats = {
+      average: average(scores), high: scores.length ? Math.max(...scores) : 0,
+      low: scores.length ? Math.min(...scores) : 0,
+      totalPins: scores.reduce((sum, score) => sum + score, 0), totalGames: scores.length,
+      gamesWon, gamesLost, gamesTied, totalWeeks: leagueWeeks.length,
+      weekByWeekAverages: leagueWeeks.map((week) => {
+        const weekScores = week.games.map((game: Row) => game.score)
+          .filter((score: unknown) => score != null).map(Number);
+        return { weekId: week.id, weekNumber: week.weekNumber, date: week.date, average: average(weekScores), games: weekScores.length };
+      }),
+    };
     return {
       ...league,
-      weekCount: detail?.weeks?.length ?? 0,
-      gamesWon: detail?.stats?.gamesWon ?? 0,
-      gamesLost: detail?.stats?.gamesLost ?? 0,
-      gamesTied: detail?.stats?.gamesTied ?? 0,
-      lastOpponent: detail?.weeks?.at(-1)?.opponent ?? null,
-      lastWeekDate: detail?.weeks?.at(-1)?.date ?? null,
-      stats: detail?.stats,
+      weekCount: leagueWeeks.length,
+      gamesWon, gamesLost, gamesTied,
+      lastOpponent: leagueWeeks.at(-1)?.opponent ?? null,
+      lastWeekDate: leagueWeeks.at(-1)?.date ?? null,
+      stats,
     };
-  }));
+  });
 }
 
 async function tournamentDetail(db: D1Database, id: number): Promise<Row | null> {
@@ -524,10 +542,24 @@ async function tournamentDetail(db: D1Database, id: number): Promise<Row | null>
 
 async function tournamentList(db: D1Database): Promise<Row[]> {
   const tournaments = camelizeAll(await all(db, "SELECT * FROM tournaments ORDER BY date DESC, id DESC"));
-  return Promise.all(tournaments.map(async (tournament) => {
-    const detail = await tournamentDetail(db, Number(tournament.id)) as Row;
-    return { ...tournament, totalGames: detail.stats?.totalGames ?? 0, series: detail.stats?.series ?? 0, high: detail.stats?.high ?? 0 };
-  }));
+  if (!tournaments.length) return [];
+  const games = camelizeAll(await all(db, "SELECT tournament_id, score FROM tournament_games ORDER BY tournament_id ASC, game_number ASC, id ASC"));
+  const scoresByTournament = new Map<number, number[]>();
+  for (const game of games) {
+    if (game.score == null) continue;
+    const scores = scoresByTournament.get(Number(game.tournamentId)) ?? [];
+    scores.push(Number(game.score));
+    scoresByTournament.set(Number(game.tournamentId), scores);
+  }
+  return tournaments.map((tournament) => {
+    const scores = scoresByTournament.get(Number(tournament.id)) ?? [];
+    return {
+      ...tournament,
+      totalGames: scores.length,
+      series: scores.reduce((sum, score) => sum + score, 0),
+      high: scores.length ? Math.max(...scores) : 0,
+    };
+  });
 }
 
 async function publicSessionPayload(db: D1Database, id: number): Promise<Row | null> {
@@ -921,8 +953,8 @@ function multiRowInsertStatements(
 }
 
 function enforceD1StatementBudget(statements: D1PreparedStatement[], directQueries = 0): void {
-  if (schemaStatements.length + directQueries + statements.length > MAX_D1_STATEMENTS_PER_REQUEST) {
-    throw new HttpError(413, "Import is too complex to process safely");
+  if (directQueries + statements.length > MAX_D1_STATEMENTS_PER_REQUEST) {
+    throw new HttpError(413, `Import exceeds the ${MAX_D1_STATEMENTS_PER_REQUEST}-statement safety limit`);
   }
 }
 
@@ -1212,11 +1244,11 @@ function injectShareMetadata(html: string, metadata: ShareMetadata, canonical: s
     title: escapeHtmlAttribute(metadata.title), description: escapeHtmlAttribute(metadata.description),
     image: escapeHtmlAttribute(metadata.image), canonical: escapeHtmlAttribute(canonical),
   };
-  let updated = html.replace(/<title>[^<]*<\/title>/i, `<title>${values.title}</title>`);
+  let updated = html.replace(/<title>[^<]*<\/title>/i, () => `<title>${values.title}</title>`);
   const replaceMeta = (attribute: "name" | "property", key: string, value: string) => {
     const pattern = new RegExp(`<meta\\s+${attribute}=["']${key}["']\\s+content=["'][^"']*["']\\s*\\/?\\s*>`, "i");
     const tag = `<meta ${attribute}="${key}" content="${value}" />`;
-    updated = pattern.test(updated) ? updated.replace(pattern, tag) : updated.replace("</head>", `  ${tag}\n  </head>`);
+    updated = pattern.test(updated) ? updated.replace(pattern, () => tag) : updated.replace("</head>", () => `  ${tag}\n  </head>`);
   };
   replaceMeta("name", "description", values.description);
   replaceMeta("property", "og:title", values.title);
@@ -1226,7 +1258,7 @@ function injectShareMetadata(html: string, metadata: ShareMetadata, canonical: s
   replaceMeta("name", "twitter:title", values.title);
   replaceMeta("name", "twitter:description", values.description);
   replaceMeta("name", "twitter:image", values.image);
-  return updated.replace("</head>", `  <link rel="canonical" href="${values.canonical}" />\n  </head>`);
+  return updated.replace("</head>", () => `  <link rel="canonical" href="${values.canonical}" />\n  </head>`);
 }
 
 function injectNoIndex(html: string): string {
@@ -1360,7 +1392,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   if (path === "/balls/search" && method === "GET") {
     const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
     if (query.length < 2) return json([]);
-    const upstream = await fetch("https://www.bowwwl.com/restapi/balls?_format=json");
+    let upstream: Response;
+    try {
+      upstream = await fetch("https://www.bowwwl.com/restapi/balls?_format=json", { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    } catch {
+      return error("Ball catalog unavailable", 502);
+    }
     if (!upstream.ok) return error("Ball catalog unavailable", 502);
     const catalog = (await upstream.json()) as Row[];
     return json(catalog.filter((item) => `${item.ball_name ?? ""} ${item.brand_name ?? ""}`.toLowerCase().includes(query)).slice(0, 20));
@@ -1370,7 +1407,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!imagePath?.startsWith("/sites/default/files/")) return error("Only bowwwl.com media paths are allowed");
     const upstreamUrl = new URL(imagePath, "https://www.bowwwl.com");
     if (upstreamUrl.origin !== "https://www.bowwwl.com") return error("Invalid media path");
-    const upstream = await fetch(upstreamUrl);
+    let upstream: Response;
+    try {
+      upstream = await fetch(upstreamUrl, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+    } catch {
+      return error("Ball image unavailable", 502);
+    }
     if (!upstream.ok) return error(`Upstream ${upstream.status}`, 502);
     const contentType = (upstream.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
@@ -1609,11 +1651,9 @@ export default {
         if (!isPublicApiRequest(request.method.toUpperCase(), url.pathname) && !isAuthorizedRequest(request, env)) {
           return error("Authentication required", 401);
         }
-        await ensureSchema(env.DB);
         return await handleApi(request, env, url);
       }
       if (isPublicSharePage(url.pathname)) {
-        await ensureSchema(env.DB);
         return await spaResponse(request, env, url, true);
       }
       const asset = await env.ASSETS.fetch(request);

@@ -32,3 +32,32 @@ test('trusted proxy authorization accepts a normalized email in the allowlist', 
     configuredAllowedEmails: 'other@example.com, mkerns5@student.umgc.edu',
   }), true);
 });
+
+test('trusted proxy authorization fails closed when the configured secret is empty', () => {
+  assert.equal(trustedProxyEmailIsAllowed({
+    ...proxyRequest,
+    configuredProxySecret: '',
+    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+  }), false);
+});
+
+test('trusted proxy authorization rejects an equal-length mismatched secret', () => {
+  assert.equal(trustedProxyEmailIsAllowed({
+    ...proxyRequest,
+    suppliedProxySecret: 'wrong-secret!',
+    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+  }), false);
+});
+
+test('trusted proxy authorization rejects a different-length secret without throwing', () => {
+  assert.doesNotThrow(() => trustedProxyEmailIsAllowed({
+    ...proxyRequest,
+    suppliedProxySecret: 'short',
+    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+  }));
+  assert.equal(trustedProxyEmailIsAllowed({
+    ...proxyRequest,
+    suppliedProxySecret: 'short',
+    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+  }), false);
+});

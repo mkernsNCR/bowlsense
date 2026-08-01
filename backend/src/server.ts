@@ -17,9 +17,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FRONTEND_DIST = process.env.BOWLSENSE_FRONTEND_DIST?.trim() || join(__dirname, '..', '..', 'frontend', 'dist');
 const INDEX_PATH = join(FRONTEND_DIST, 'index.html');
+const SHARE_OG_SVG_PATH = join(__dirname, 'assets', 'share-og.svg');
 // Deployment must finish the frontend build before starting (or restarting)
 // this process so the cached HTML and its asset hashes match the release.
 const CACHED_INDEX_HTML = existsSync(INDEX_PATH) ? readFileSync(INDEX_PATH, 'utf8') : null;
+const CACHED_SHARE_OG_SVG = readFileSync(SHARE_OG_SVG_PATH, 'utf8');
 
 const sqlite = new Database(process.env.BOWLSENSE_DB_PATH?.trim() || 'bowling.db');
 const db = drizzle(sqlite);
@@ -52,10 +54,12 @@ function isPublicDataRequest(method: string, pathname: string) {
     || /^\/(?:api\/)?tournaments\/\d+\/(?:share|og-image|standings(?:\/og-image)?)$/.test(pathname);
 }
 
-function isPrivateDataRequest(pathname: string) {
-  return pathname.startsWith('/api/')
-    || /^\/(?:sessions|games|games-recent|balls|stats|dashboard|leagues|tournaments|arsenals)(?:\/|$)/.test(pathname)
-    || /^\/(?:api\/)?(?:backup|backups|backup-log|restore|import|export|data-health)(?:\/|$)/.test(pathname);
+function isStaticAssetRequest(method: string, pathname: string) {
+  return method === 'GET' && (
+    pathname.startsWith('/assets/')
+    || pathname.startsWith('/icons/')
+    || /\.(?:css|js|mjs|map|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|webmanifest)$/i.test(pathname)
+  );
 }
 
 fastify.addHook('onRequest', async (request, reply) => {
@@ -74,7 +78,10 @@ fastify.addHook('onRequest', async (request, reply) => {
     }
   }
 
-  if (!isPrivateDataRequest(pathname) || isPublicDataRequest(request.method, pathname)) return;
+  // Default-deny every non-static request that is not explicitly public above.
+  // This keeps newly added data routes private without maintaining a second
+  // allowlist of every API and legacy alias.
+  if (isStaticAssetRequest(request.method, pathname) || isPublicDataRequest(request.method, pathname)) return;
 
   const internalHeader = String(request.headers['x-bowlsense-internal'] || '');
   if (secretsMatch(internalHeader, internalRelayToken)) return;
@@ -108,6 +115,7 @@ function relayInjectedResponse(reply: any, response: any) {
   reply.status(response.statusCode);
   if (contentType) reply.header('Content-Type', contentType);
   if (response.headers['cache-control']) reply.header('Cache-Control', response.headers['cache-control']);
+  if (response.headers['content-disposition']) reply.header('Content-Disposition', response.headers['content-disposition']);
   if (response.statusCode === 204) return reply.send();
   if (contentType.includes('application/json')) return reply.send(response.json());
   return reply.send(response.rawPayload);
@@ -116,11 +124,18 @@ function relayInjectedResponse(reply: any, response: any) {
 fastify.get('/health', async () => ({ status: 'ok', service: 'bowlsense-api' }));
 
 async function buildPublicStats() {
-  const allGames = await db.select().from(games);
-  const totalGames = allGames.length;
-  const totalScore = allGames.reduce((sum, game) => sum + (game.score || 0), 0);
-  const totalStrikes = allGames.reduce((sum, game) => sum + (game.strikes || 0), 0);
-  const totalSpares = allGames.reduce((sum, game) => sum + (game.spares || 0), 0);
+  const totals = sqlite.prepare(`
+    SELECT COUNT(*) AS totalGames,
+           COALESCE(SUM(score), 0) AS totalScore,
+           COALESCE(SUM(strikes), 0) AS totalStrikes,
+           COALESCE(SUM(spares), 0) AS totalSpares
+    FROM games
+    WHERE score IS NOT NULL
+  `).get() as any;
+  const totalGames = Number(totals?.totalGames || 0);
+  const totalScore = Number(totals?.totalScore || 0);
+  const totalStrikes = Number(totals?.totalStrikes || 0);
+  const totalSpares = Number(totals?.totalSpares || 0);
   const profileName = (process.env.BOWLSENSE_PUBLIC_PROFILE_NAME || '').trim().slice(0, 80) || null;
   return {
     average: totalGames ? Math.round(totalScore / totalGames) : 0,
@@ -235,6 +250,7 @@ const getStatsTrend = async () => {
       SELECT g.id, g.score, g.game_number, g.session_id, s.date, s.location
       FROM games g
       JOIN sessions s ON s.id = g.session_id
+      WHERE g.score IS NOT NULL
       ORDER BY s.date DESC, g.id DESC
       LIMIT 30
     ) recent
@@ -723,11 +739,13 @@ if (!lwCols.map((c: any) => c.name).includes('games_tied')) {
 // Routes
 
 // Create session
-fastify.post('/sessions', async (request) => {
+const createSession = async (request: any) => {
   const { date, location, lanes, notes } = request.body as any;
   const result = await db.insert(sessions).values({ date, location, lanes, notes }).returning();
   return result[0];
-});
+};
+fastify.post('/sessions', createSession);
+fastify.post('/api/sessions', createSession);
 
 // List sessions
 fastify.get('/sessions', async (request, reply) => {
@@ -808,7 +826,7 @@ fastify.get('/sessions/count', async () => {
 });
 
 // Get session with games
-fastify.get('/sessions/:id', async (request, reply) => {
+const getSession = async (request: any, reply: any) => {
   const { id } = request.params as any;
   // Guard: reject non-numeric IDs that are client-side routes (new, count, etc.)
   // so they fall through to the SPA fallback instead of returning JSON API responses
@@ -818,7 +836,9 @@ fastify.get('/sessions/:id', async (request, reply) => {
   const session = await db.select().from(sessions).where(eq(sessions.id, parseInt(id)));
   const sessionGames = await db.select().from(games).where(eq(games.sessionId, parseInt(id)));
   return { ...session[0], games: sessionGames };
-});
+};
+fastify.get('/sessions/:id', getSession);
+fastify.get('/api/sessions/:id', getSession);
 
 // Public session payload for share pages
 const getPublicSessionPayload = (sessionId: number) => {
@@ -1073,9 +1093,7 @@ fastify.get('/api/sessions/:id/og-image', async (request, reply) => {
 
 // Static OG share image (PNG rendered from SVG)
 fastify.get('/sessions/share-og.png', async (_request, reply) => {
-  const svgPath = join(__dirname, 'assets', 'share-og.svg');
-  const svg = readFileSync(svgPath, 'utf8');
-  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  const png = await sharp(Buffer.from(CACHED_SHARE_OG_SVG)).png().toBuffer();
 
   reply.header('Content-Type', 'image/png');
   reply.header('Cache-Control', 'public, max-age=3600');
@@ -1083,7 +1101,7 @@ fastify.get('/sessions/share-og.png', async (_request, reply) => {
 });
 
 // Edit session
-fastify.put('/sessions/:id', async (request, reply) => {
+const updateSession = async (request: any, reply: any) => {
   const { id } = request.params as any;
   const { date, location, lanes, notes } = request.body as any;
   const result = sqlite.prepare(
@@ -1091,15 +1109,19 @@ fastify.put('/sessions/:id', async (request, reply) => {
   ).run(date, location, lanes, notes, parseInt(id));
   if (result.changes === 0) return reply.status(404).send({ error: 'Not found' });
   return sqlite.prepare('SELECT * FROM sessions WHERE id=?').get(parseInt(id));
-});
+};
+fastify.put('/sessions/:id', updateSession);
+fastify.put('/api/sessions/:id', updateSession);
 
 // Delete session + games
-fastify.delete('/sessions/:id', async (request, reply) => {
+const deleteSession = async (request: any, reply: any) => {
   const { id } = request.params as any;
   sqlite.prepare('DELETE FROM games WHERE session_id=?').run(parseInt(id));
   sqlite.prepare('DELETE FROM sessions WHERE id=?').run(parseInt(id));
   return reply.status(204).send();
-});
+};
+fastify.delete('/sessions/:id', deleteSession);
+fastify.delete('/api/sessions/:id', deleteSession);
 
 // Add game to session
 fastify.post('/games', async (request) => {
@@ -2698,9 +2720,25 @@ fastify.post('/leagues/weeks/:weekId/games', async (request, reply) => {
   };
 });
 
-fastify.put('/leagues/games/:gameId', async (request, reply) => {
+const numericGameField = (maximum: number) => ({ anyOf: [{ type: 'integer', minimum: 0, maximum }, { type: 'null' }] });
+const gameUpdateProperties = {
+  score: numericGameField(300),
+  strikes: numericGameField(12),
+  spares: numericGameField(12),
+  splits: numericGameField(12),
+  ballId: { anyOf: [{ type: 'integer', minimum: 1 }, { type: 'null' }] },
+  frameData: { anyOf: [{ type: 'string', maxLength: 262_144 }, { type: 'null' }] },
+};
+
+fastify.put('/leagues/games/:gameId', {
+  schema: {
+    params: { type: 'object', required: ['gameId'], properties: { gameId: { type: 'integer', minimum: 1 } } },
+    body: { type: 'object', required: ['score'], additionalProperties: false, properties: gameUpdateProperties },
+  },
+}, async (request, reply) => {
   const { gameId } = request.params as any;
-  const parsedGameId = parseInt(gameId);
+  const parsedGameId = Number(gameId);
+  if (!Number.isInteger(parsedGameId) || parsedGameId < 1) return reply.status(400).send({ error: 'Invalid league game id' });
   const existing = sqlite.prepare('SELECT id FROM league_games WHERE id = ?').get(parsedGameId);
   if (!existing) return reply.status(404).send({ error: 'League game not found' });
   const { score, strikes, spares, splits, ballId, frameData } = request.body as any;
@@ -3445,9 +3483,23 @@ fastify.post('/tournaments/:id/games', async (request, reply) => {
   };
 });
 
-fastify.put('/tournaments/games/:gameId', async (request, reply) => {
+fastify.put('/tournaments/games/:gameId', {
+  schema: {
+    params: { type: 'object', required: ['gameId'], properties: { gameId: { type: 'integer', minimum: 1 } } },
+    body: {
+      type: 'object',
+      required: ['score'],
+      additionalProperties: false,
+      properties: {
+        ...gameUpdateProperties,
+        squad: { anyOf: [{ type: 'string', maxLength: 200 }, { type: 'null' }] },
+      },
+    },
+  },
+}, async (request, reply) => {
   const { gameId } = request.params as any;
-  const parsedGameId = parseInt(gameId);
+  const parsedGameId = Number(gameId);
+  if (!Number.isInteger(parsedGameId) || parsedGameId < 1) return reply.status(400).send({ error: 'Invalid tournament game id' });
   const existing = sqlite.prepare('SELECT id FROM tournament_games WHERE id = ?').get(parsedGameId);
   if (!existing) return reply.status(404).send({ error: 'Tournament game not found' });
   const { score, strikes, spares, splits, ballId, squad, frameData } = request.body as any;
@@ -4600,7 +4652,10 @@ fastify.post('/api/restore', async (request, reply) => {
   const restore = sqlite.transaction(() => {
     const backupDb = new Database(src, { readonly: true });
     // Copy all tables
-    const tables = ['sessions', 'games', 'balls', 'leagues', 'league_weeks', 'league_games'];
+    const tables = [
+      'sessions', 'games', 'balls', 'leagues', 'league_weeks', 'league_games',
+      'tournaments', 'tournament_games', 'arsenals', 'arsenal_balls',
+    ];
     for (const table of tables) {
       sqlite.exec(`DELETE FROM ${table}`);
       const rows = backupDb.prepare(`SELECT * FROM ${table}`).all();
@@ -5306,29 +5361,6 @@ fastify.get('/api/leagues/:id/share/og-image', async (request, reply) => {
 
 // Same-origin SPA aliases. Keep these as thin relays so development and the
 // production server exercise the exact same route contracts.
-fastify.post('/api/sessions', async (request, reply) => {
-  const response = await internalRequest({ method: 'POST', url: '/sessions', payload: request.body });
-  return relayInjectedResponse(reply, response);
-});
-
-fastify.get('/api/sessions/:id', async (request, reply) => {
-  const { id } = request.params as any;
-  const response = await internalRequest({ method: 'GET', url: `/sessions/${id}` });
-  return relayInjectedResponse(reply, response);
-});
-
-fastify.put('/api/sessions/:id', async (request, reply) => {
-  const { id } = request.params as any;
-  const response = await internalRequest({ method: 'PUT', url: `/sessions/${id}`, payload: request.body });
-  return relayInjectedResponse(reply, response);
-});
-
-fastify.delete('/api/sessions/:id', async (request, reply) => {
-  const { id } = request.params as any;
-  const response = await internalRequest({ method: 'DELETE', url: `/sessions/${id}` });
-  return relayInjectedResponse(reply, response);
-});
-
 fastify.post('/api/games', async (request, reply) => {
   const response = await internalRequest({ method: 'POST', url: '/games', payload: request.body });
   return relayInjectedResponse(reply, response);
@@ -5745,13 +5777,24 @@ export { fastify, sqlite };
 if (process.env.BOWLSENSE_DISABLE_LISTEN !== '1') {
   const listenHost = process.env.BOWLSENSE_HOST || '127.0.0.1';
   const exposesNetwork = listenHost !== '127.0.0.1' && listenHost !== '::1' && listenHost !== 'localhost';
-  if (exposesNetwork && !configuredAuthToken && !configuredProxySecret) {
+  const configuredEmailAllowlist = String(configuredAllowedEmails || '').split(',').some((email) => email.trim());
+  const configuredProxyAuth = Boolean(configuredProxySecret && configuredEmailAllowlist);
+  if (exposesNetwork && !configuredAuthToken && !configuredProxyAuth) {
+    if (configuredProxySecret && !configuredEmailAllowlist) {
+      throw new Error('Refusing network exposure: BOWLSENSE_ALLOWED_EMAILS is required with BOWLSENSE_TRUSTED_PROXY_SECRET.');
+    }
     throw new Error('Refusing network exposure without BowlSense authentication configuration.');
   }
 
   const listenPort = Number(process.env.BOWLSENSE_PORT || 3003);
-  fastify.listen({ port: listenPort, host: listenHost }, (err) => {
-    if (err) throw err;
-    console.log(`BowlSense API running on http://localhost:${listenPort}`);
-  });
+  if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65_535) {
+    throw new Error('BOWLSENSE_PORT must be an integer between 1 and 65535.');
+  }
+  try {
+    await fastify.listen({ port: listenPort, host: listenHost });
+    fastify.log.info(`BowlSense API running on http://${listenHost}:${listenPort}`);
+  } catch (error) {
+    fastify.log.error(error);
+    process.exitCode = 1;
+  }
 }

@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { emailIsExplicitlyAllowed } from '../../shared/email-allowlist.ts';
+import { emailIsExplicitlyAllowed } from '../../shared/email-allowlist.js';
 
 export function secretsMatch(candidate: string, expected: string) {
   const candidateBuffer = Buffer.from(candidate);

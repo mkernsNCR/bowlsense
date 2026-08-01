@@ -117,6 +117,7 @@ export default function ScoreCalculator() {
   }
 
   const copyLink = async () => {
+    setDownloadError(null)
     try {
       await copyText(window.location.href)
       setCopied(true)

@@ -32,16 +32,17 @@ export interface EmptyStateProps {
   icon?: IconName
   status?: 'empty' | 'loading' | 'error'
   className?: string
+  busy?: boolean
 }
 
-export function EmptyState({ title, description, action, icon, status = 'empty', className = '' }: EmptyStateProps) {
+export function EmptyState({ title, description, action, icon, status = 'empty', className = '', busy = false }: EmptyStateProps) {
   const resolvedIcon = icon ?? (status === 'error' ? 'error' : status === 'loading' ? 'bowling-ball' : 'empty')
   return (
     <section
       className={`bs-empty-state bs-empty-state--${status} ${className}`.trim()}
       role={status === 'error' ? 'alert' : 'status'}
       aria-live={status === 'loading' ? 'polite' : undefined}
-      aria-busy={status === 'loading' || undefined}
+      aria-busy={status === 'loading' || busy || undefined}
     >
       <span className="bs-empty-state__icon" aria-hidden="true"><Icon name={resolvedIcon} size={28} /></span>
       <h2>{title}</h2>

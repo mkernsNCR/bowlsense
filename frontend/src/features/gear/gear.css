@@ -6,6 +6,7 @@
   --gear-surface-2: var(--surface-2, #f2f0f5);
   --gear-line: var(--border, #ddd8e2);
   --gear-accent: var(--accent, #7356a4);
+
   color: var(--gear-ink);
 }
 .gear-workspace {
@@ -13,7 +14,7 @@
   margin: 0 auto;
   padding-bottom: 32px;
 }
-.gear-workspace .sr-only, .gear-sheet-theme .sr-only { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+.gear-workspace .sr-only, .gear-sheet-theme .sr-only { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 
 .gear-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin: 8px 0 18px; }
 .gear-header h1 { font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.035em; margin: 2px 0 6px; }
@@ -27,7 +28,7 @@
 
 .gear-toolbar { display: flex; gap: 10px; margin: 0 0 18px; }
 .gear-search { flex: 1 1 320px; position: relative; }
-.gear-search svg { fill: none; height: 18px; left: 14px; position: absolute; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; top: 50%; transform: translateY(-50%); width: 18px; }
+.gear-search svg { fill: none; height: 18px; left: 14px; position: absolute; stroke: currentcolor; stroke-linecap: round; stroke-width: 1.8; top: 50%; transform: translateY(-50%); width: 18px; }
 .gear-search input { padding-left: 42px; }
 .gear-filter { flex: 0 1 190px; }
 .gear-result-count { color: var(--gear-muted); font-size: .78rem; margin: -8px 0 12px; }
@@ -60,7 +61,7 @@
 .gear-sheet-panel .bs-sheet__header p { color: var(--gear-muted); }
 .gear-sheet-panel .bs-sheet__body { padding: 20px; }
 .gear-icon-button { align-items: center; background: transparent; border: 1px solid var(--gear-line); border-radius: 50%; color: inherit; cursor: pointer; display: inline-flex; height: 44px; justify-content: center; padding: 0; width: 44px; }
-.gear-icon-button svg { fill: none; height: 18px; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; width: 18px; }
+.gear-icon-button svg { fill: none; height: 18px; stroke: currentcolor; stroke-linecap: round; stroke-width: 1.8; width: 18px; }
 
 .gear-form { display: grid; gap: 13px; }
 .gear-form label { color: var(--gear-muted); display: grid; font-size: .75rem; font-weight: 700; gap: 5px; }

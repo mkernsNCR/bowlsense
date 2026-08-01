@@ -37,6 +37,13 @@ function renderScorer(initialFrameData: string) {
 }
 
 describe('BowlingScorer completion behavior', () => {
+  it('labels a full rack after a gutter as a spare opportunity', () => {
+    renderScorer(JSON.stringify({ pinSelections: [[]] }))
+
+    expect(screen.getByRole('button', { name: 'Spare' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Strike' })).toBeNull()
+  })
+
   it('labels a partial tenth-frame strike fill as clearing the rack, not a spare', () => {
     const gutterFrames = Array.from({ length: 18 }, () => [] as number[])
     const initialFrameData = JSON.stringify({
@@ -47,6 +54,18 @@ describe('BowlingScorer completion behavior', () => {
 
     expect(screen.getByRole('button', { name: 'Clear rack' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Spare' })).toBeNull()
+  })
+
+  it('labels a full rack after a tenth-frame strike gutter as clearing the rack', () => {
+    const gutterFrames = Array.from({ length: 18 }, () => [] as number[])
+    const initialFrameData = JSON.stringify({
+      pinSelections: [...gutterFrames, resetPins(), []],
+    })
+
+    renderScorer(initialFrameData)
+
+    expect(screen.getByRole('button', { name: 'Clear rack' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Strike' })).toBeNull()
   })
 
   it('starts retake confirmation over after undoing and completing the game again', () => {

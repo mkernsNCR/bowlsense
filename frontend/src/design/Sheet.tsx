@@ -37,6 +37,19 @@ const openSheets: OpenSheet[] = []
 let bodyLockCount = 0
 let bodyOverflowBeforeLock = ''
 
+function syncSheetAccessibility() {
+  const topmostPanel = openSheets.at(-1)?.panel
+  openSheets.forEach((sheet) => {
+    if (sheet.panel === topmostPanel) {
+      sheet.panel.removeAttribute('aria-hidden')
+      sheet.panel.removeAttribute('inert')
+      return
+    }
+    sheet.panel.setAttribute('aria-hidden', 'true')
+    sheet.panel.setAttribute('inert', '')
+  })
+}
+
 function lockBody() {
   if (bodyLockCount === 0) {
     bodyOverflowBeforeLock = document.body.style.overflow
@@ -58,6 +71,7 @@ function isTopSheet(panel: HTMLElement) {
 
 function registerSheet(panel: HTMLElement, returnFocus: HTMLElement | null) {
   openSheets.push({ panel, returnFocus })
+  syncSheetAccessibility()
   lockBody()
 }
 
@@ -67,6 +81,7 @@ function unregisterSheet(panel: HTMLElement) {
 
   const wasTopmost = index === openSheets.length - 1
   const [removed] = openSheets.splice(index, 1)
+  syncSheetAccessibility()
   const nextNestedSheet = openSheets[index]
 
   if (nextNestedSheet && removed.panel.contains(nextNestedSheet.returnFocus)) {

@@ -9,9 +9,9 @@ import '../features/scoring/scoring.css'
 interface Session {
   id: number
   date: string
-  location: string
-  lanes: string
-  notes: string
+  location: string | null
+  lanes: string | null
+  notes: string | null
   gameCount: number
   avgScore: number
   highScore: number
@@ -37,12 +37,12 @@ function monthLabel(value: string) {
   return sessionDate(value).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 }
 
-function getSessionCenterName(session: { location: string }) {
-  return session.location.trim() || 'Center not named'
+function getSessionCenterName(session: { location: string | null }) {
+  return session.location?.trim() || 'Center not named'
 }
 
 function getSessionGroups<T extends { date: string }>(sessions: readonly T[], sort: SessionSort): Array<[string, T[]]> {
-  if (sort === 'score') return [['Highest scores', [...sessions]]]
+  if (sort === 'score') return sessions.length > 0 ? [['Highest scores', [...sessions]]] : []
 
   const grouped = new Map<string, T[]>()
   sessions.forEach((session) => {

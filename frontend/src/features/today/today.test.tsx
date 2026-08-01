@@ -305,7 +305,8 @@ describe('Today behavior', () => {
     await screen.findByText('The game wasn’t saved. Check your connection and try again.')
     expect(sessionAttempts).toBe(1)
 
-    await user.click(screen.getByRole('button', { name: 'Close past-game log' }))
+    await user.click(screen.getByRole('button', { name: 'Close completed game' }))
+    await user.click(screen.getByRole('button', { name: 'Discard game' }))
     await user.click(screen.getAllByRole('button', { name: 'Log a past game' })[0]!)
     expect(screen.queryByText('The game wasn’t saved. Check your connection and try again.')).toBeNull()
     expect(screen.getByRole('button', { name: /Next|Record 0/ })).toBeTruthy()

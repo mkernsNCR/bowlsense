@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
 import type { Frame } from '../../utils/bowlingScore'
+import { FrameRibbon } from '../../design'
 import { toFrameRibbonFrames } from './frameRibbon'
+
+afterEach(cleanup)
 
 function frame(overrides: Partial<Frame> = {}): Frame {
   return {
@@ -32,31 +36,31 @@ describe('toFrameRibbonFrames', () => {
       rolls: [],
       score: null,
       state: 'pending',
-      ariaLabel: 'Frame 1, pending, Not bowled',
+      label: 'Frame 1, pending, Not bowled',
     })
     expect(ribbon[1]).toEqual({
       rolls: ['X'],
       score: 30,
       state: 'strike',
-      ariaLabel: 'Frame 2, strike, Rolls X, cumulative score 30',
+      label: 'Frame 2, strike, Rolls X, cumulative score 30',
     })
     expect(ribbon[2]).toEqual({
       rolls: ['7', '/'],
       score: 50,
       state: 'spare',
-      ariaLabel: 'Frame 3, spare, Rolls 7, /, cumulative score 50',
+      label: 'Frame 3, spare, Rolls 7, /, cumulative score 50',
     })
     expect(ribbon[3]).toEqual({
       rolls: ['8', '1'],
       score: 59,
       state: 'open',
-      ariaLabel: 'Frame 4, open, Rolls 8, 1, cumulative score 59',
+      label: 'Frame 4, open, Rolls 8, 1, cumulative score 59',
     })
     expect(ribbon[9]).toEqual({
       rolls: ['X', '7', '/'],
       score: 179,
       state: 'strike',
-      ariaLabel: 'Frame 10, strike, Rolls X, 7, /, cumulative score 179',
+      label: 'Frame 10, strike, Rolls X, 7, /, cumulative score 179',
     })
   })
 
@@ -65,5 +69,13 @@ describe('toFrameRibbonFrames', () => {
 
     expect(toFrameRibbonFrames(frames, 0).map(({ state }) => state)).toEqual(['current', 'open'])
     expect(toFrameRibbonFrames(frames, 1).map(({ state }) => state)).toEqual(['pending', 'current'])
+  })
+
+  it('exposes mapped state and roll marks in the rendered accessible label', () => {
+    const frames = toFrameRibbonFrames([frame({ ball1: 7 })], 0)
+
+    render(<FrameRibbon frames={frames} />)
+
+    expect(screen.getByLabelText('Frame 1, current, Rolls 7')).toBeTruthy()
   })
 })

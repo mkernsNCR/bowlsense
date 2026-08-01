@@ -8,6 +8,9 @@ describe('split detection', () => {
     expect(isSplitLeave([3, 10])).toBe(true)
     expect(isSplitLeave([4, 5])).toBe(true)
     expect(isSplitLeave([5, 6])).toBe(true)
+    expect(isSplitLeave([4, 10])).toBe(true)
+    expect(isSplitLeave([2, 10])).toBe(true)
+    expect(isSplitLeave([4, 5, 7, 8])).toBe(true)
   })
 
   it('rejects connected leaves and any leave with the head pin standing', () => {

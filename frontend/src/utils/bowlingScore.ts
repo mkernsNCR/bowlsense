@@ -124,7 +124,7 @@ export function knockPins(state: GameState, pinsKnocked: number[]): GameState {
   const nextFrame = frames[frameIndex]
   const rolls = [...state.rolls, pinsDown]
   let currentFrame = frameIndex
-  let currentBall = state.currentBall
+  let currentBall: number
   let pinsStanding = [...state.pinsStanding]
   let isComplete = false
 
@@ -245,7 +245,7 @@ export function gameFromFrameData(frameData?: string | null): GameState {
     if (!parsed || typeof parsed !== 'object') return initGame()
     const saved = parsed as { pinSelections?: unknown; rolls?: unknown }
     const selections = saved.pinSelections
-    if (!Array.isArray(selections)) {
+    if (!Array.isArray(selections) || selections.length === 0) {
       if (!Array.isArray(saved.rolls)) return initGame()
       const rolls = saved.rolls.filter((roll): roll is number => typeof roll === 'number' && Number.isFinite(roll))
       return replayRollCounts(rolls)

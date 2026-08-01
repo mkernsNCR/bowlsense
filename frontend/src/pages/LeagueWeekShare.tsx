@@ -91,7 +91,7 @@ export default function LeagueWeekShare() {
         {isError && (
           <div style={{ textAlign: 'center', padding: 80 }}>
             <div style={{ color: '#fc8181', marginBottom: 16 }}>Failed to load week data.</div>
-            <p style={{ color: 'rgba(255,255,255,0.6)' }}>No league weeks found. Log your first week to generate a share card! 🎳</p>
+            <p style={{ color: 'rgba(255,255,255,0.6)' }}>This shared league week is unavailable right now.</p>
             <Link to="/" className="btn btn-primary" style={{ marginTop: 20, display: 'inline-block' }}>
               BowlSense home
             </Link>

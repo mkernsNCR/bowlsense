@@ -72,6 +72,51 @@ export function CompetitionSheet({
   )
 }
 
+export function CompetitionArchiveSheet({
+  area,
+  id,
+  active,
+  onClose,
+  mutation,
+}: {
+  area: CompetitionArea
+  id: string
+  active: number
+  onClose: () => void
+  mutation: { isPending: boolean; isError: boolean; mutate: (restore: boolean) => void }
+}) {
+  const restoring = active === 0
+  const singular = area === 'leagues' ? 'league' : 'tournament'
+  const preserved = area === 'leagues' ? 'weeks and games' : 'games and results'
+
+  return (
+    <CompetitionSheet
+      title={`${restoring ? 'Restore' : 'Archive'} ${singular}?`}
+      closeTo={`/${area}/${id}`}
+      onClose={onClose}
+    >
+      <div className="card" style={{ display: 'grid', gap: 14 }}>
+        <p style={{ margin: 0 }}>
+          {restoring
+            ? `This ${singular} will return to your active ${area === 'leagues' ? 'leagues' : 'schedule'}. All ${preserved} are already preserved.`
+            : `This ${singular} will move out of your active ${area === 'leagues' ? 'list' : 'schedule'}. All ${preserved} will be preserved, and you can restore it later.`}
+        </p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className={restoring ? 'btn btn-primary' : 'btn btn-danger'}
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate(restoring)}
+          >
+            {mutation.isPending ? 'Saving…' : `${restoring ? 'Restore' : 'Archive'} ${singular}`}
+          </button>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        </div>
+        {mutation.isError && <div role="alert" style={{ color: 'var(--danger)' }}>Could not update this {singular}. Please try again.</div>}
+      </div>
+    </CompetitionSheet>
+  )
+}
+
 interface PublicFact {
   label: string
   value: ReactNode

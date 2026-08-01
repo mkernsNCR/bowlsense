@@ -11,6 +11,7 @@ vi.mock('../components/BowlingScorer', () => ({ default: () => <div>Scorer</div>
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  window.history.replaceState({}, '', '/')
 })
 
 function jsonResponse(body: unknown, status = 200) {
@@ -19,7 +20,6 @@ function jsonResponse(body: unknown, status = 200) {
 
 function renderPage(path: string, kind: 'leagues' | 'tournaments') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  window.history.replaceState({}, '', path)
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
@@ -53,6 +53,7 @@ describe('PR 15 competition archive and ordering', () => {
       { id: 2, name: 'Near Future Open', date: '2099-02-01', endDate: null, active: 1 },
       { id: 3, name: 'Recent Past Open', date: '2001-01-01', endDate: null, active: 1 },
       { id: 4, name: 'Archived Open', date: '2099-01-01', endDate: null, active: 0 },
+      { id: 5, name: 'Undated Open', date: null, endDate: null, active: 1 },
     ]))))
 
     renderPage('/tournaments', 'tournaments')
@@ -62,9 +63,25 @@ describe('PR 15 competition archive and ordering', () => {
       expect.stringContaining('Near Future Open'),
       expect.stringContaining('Far Future Open'),
     ])
-    expect(within(screen.getByRole('heading', { name: 'Past tournaments' }).closest('section')!).getByText('Recent Past Open')).toBeTruthy()
+    const past = within(screen.getByRole('heading', { name: 'Past tournaments' }).closest('section')!)
+    expect(past.getByText('Recent Past Open')).toBeTruthy()
+    expect(past.getByText('Undated Open')).toBeTruthy()
     expect(within(screen.getByRole('heading', { name: 'Archived tournaments' }).closest('section')!).getByText('Archived Open')).toBeTruthy()
     expect(fetch).toHaveBeenCalledWith('/api/tournaments?includeArchived=1', undefined)
+  })
+
+  it('renders a league-list error instead of an empty state for a failed response', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ error: 'Unavailable' }, 503))))
+    renderPage('/leagues', 'leagues')
+    expect((await screen.findByRole('alert')).textContent).toContain('Leagues could not be loaded.')
+    expect(screen.queryByText('No active leagues.')).toBeNull()
+  })
+
+  it('renders a tournament-list error instead of an empty state for a failed response', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ error: 'Unavailable' }, 503))))
+    renderPage('/tournaments', 'tournaments')
+    expect((await screen.findByRole('alert')).textContent).toContain('Tournaments could not be loaded.')
+    expect(screen.queryByText('No active tournaments.')).toBeNull()
   })
 
   it('archives a league without issuing a destructive request', async () => {

@@ -30,6 +30,7 @@ export default function PerfectGameShare() {
   const [data, setData] = useState<PerfectGamePayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showShareCard, setShowShareCard] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -39,16 +40,18 @@ export default function PerfectGameShare() {
     const run = async () => {
       setLoading(true)
       setNotFound(false)
+      setLoadError(false)
       try {
         const res = await fetch(`/api/games/perfect/${gameId}`)
         if (!res.ok) {
           if (res.status === 404 && mounted) setNotFound(true)
+          else if (mounted) setLoadError(true)
           return
         }
         const json = await res.json()
         if (mounted) setData(json)
       } catch {
-        if (mounted) setNotFound(true)
+        if (mounted) setLoadError(true)
       } finally {
         if (mounted) setLoading(false)
       }
@@ -74,9 +77,13 @@ export default function PerfectGameShare() {
   usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
   const handleCopyLink = async () => {
-    await copyText(window.location.href)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1400)
+    try {
+      await copyText(window.location.href)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    } catch {
+      setCopied(false)
+    }
   }
 
   const handleNativeShare = async () => {
@@ -110,7 +117,11 @@ export default function PerfectGameShare() {
     )
   }
 
-  if (!data) return null
+  if (loadError) {
+    return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><p role="alert">This shared result could not be loaded right now.</p><Link to="/">BowlSense home</Link></PublicShell>
+  }
+
+  if (!data) return <PublicShell eyebrow="Perfect game" title="Perfect game unavailable"><Link to="/">BowlSense home</Link></PublicShell>
 
   return (
     <PublicShell eyebrow="Perfect game" title="Perfect 300" detail={`${data.session.location || 'Unknown Alley'} · ${data.session.date}`}>
@@ -135,7 +146,7 @@ export default function PerfectGameShare() {
       </div>
 
       {/* Action buttons */}
-      <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      <div className="perfect-game-actions" style={{ maxWidth: 860, margin: '0 auto' }}>
         <button
           type="button"
           className="btn"

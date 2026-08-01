@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import BowlingScorer from '../components/BowlingScorer'
 import { Icon } from '../design'
-import { CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { useCompetitionArchive } from '../features/competition/archive'
 import { formatFrameMarks } from '../features/scoring/frameMarks'
 import {
   copyTournamentShareLink,
@@ -36,7 +37,7 @@ interface Tournament {
   id: number
   name: string
   location: string | null
-  date: string
+  date: string | null
   endDate: string | null
   format: string | null
   entryFee: number | null
@@ -100,13 +101,14 @@ async function requestJson<T = unknown>(input: RequestInfo | URL, init?: Request
 export default function TournamentsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
   if (id) {
-    const isEdit = window.location.pathname.endsWith('/edit')
+    const isEdit = location.pathname.endsWith('/edit')
     return <TournamentDetail id={id} isEditing={isEdit} onEdit={() => navigate(`/tournaments/${id}/edit`)} />
   }
 
-  if (window.location.pathname === '/tournaments/new') {
+  if (location.pathname === '/tournaments/new') {
     return (
       <>
         <CompetitionHeader area="tournaments" title="Tournaments" detail="Events, squads, series, and finish." />
@@ -128,14 +130,15 @@ function TournamentList() {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const activeTournaments = tournaments?.filter((tournament) => tournament.active !== 0) || []
+  const byDate = (value: string | null | undefined) => value || ''
   const upcomingTournaments = activeTournaments
-    .filter((tournament) => (tournament.endDate || tournament.date) >= today)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name))
+    .filter((tournament) => byDate(tournament.endDate || tournament.date) >= today)
+    .sort((a, b) => byDate(a.date).localeCompare(byDate(b.date)) || a.name.localeCompare(b.name))
   const pastTournaments = activeTournaments
-    .filter((tournament) => (tournament.endDate || tournament.date) < today)
-    .sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name))
+    .filter((tournament) => byDate(tournament.endDate || tournament.date) < today)
+    .sort((a, b) => byDate(b.date).localeCompare(byDate(a.date)) || a.name.localeCompare(b.name))
   const archivedTournaments = (tournaments?.filter((tournament) => tournament.active === 0) || [])
-    .sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name))
+    .sort((a, b) => byDate(b.date).localeCompare(byDate(a.date)) || a.name.localeCompare(b.name))
 
   return (
     <div>
@@ -147,7 +150,6 @@ function TournamentList() {
       />
 
       {isLoading && <div className="muted">Loading tournaments...</div>}
-
       {isError && (
         <div className="card" role="alert">
           <p>Tournaments could not be loaded. Check your connection or sign-in, then try again.</p>
@@ -274,15 +276,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
     },
   })
 
-  const setArchiveState = useMutation({
-    mutationFn: (restore: boolean) =>
-      requestJson(`/api/tournaments/${id}/${restore ? 'unarchive' : 'archive'}`, { method: 'POST' }),
-    onSuccess: () => {
-      setArchiveSheetOpen(false)
-      qc.invalidateQueries({ queryKey: ['tournament', id] })
-      qc.invalidateQueries({ queryKey: ['tournaments'] })
-    },
-  })
+  const setArchiveState = useCompetitionArchive({ area: 'tournaments', id, onSuccess: () => setArchiveSheetOpen(false) })
 
   const addGame = useMutation({
     mutationFn: (payload: object) => requestJson(`/api/tournaments/${id}/games`, {
@@ -400,6 +394,7 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
             className="btn btn-primary"
             onClick={() => setShareMenuOpen((v) => !v)}
             aria-expanded={shareMenuOpen}
+            aria-haspopup="true"
             style={{ minHeight: 44, padding: '6px 14px', fontWeight: 700 }}
           >
             <Icon className="competition-action-icon" name="share" /> {copiedLink ? 'Copied' : sharing ? 'Sharing…' : 'Share'}
@@ -466,30 +461,13 @@ function TournamentDetail({ id, isEditing, onEdit }: { id: string; isEditing: bo
       </div>
 
       {archiveSheetOpen && (
-        <CompetitionSheet
-          title={tournament.active === 0 ? 'Restore tournament?' : 'Archive tournament?'}
-          closeTo={`/tournaments/${id}`}
+        <CompetitionArchiveSheet
+          area="tournaments"
+          id={id}
+          active={tournament.active}
           onClose={() => setArchiveSheetOpen(false)}
-        >
-          <div className="card" style={{ display: 'grid', gap: 14 }}>
-            <p style={{ margin: 0 }}>
-              {tournament.active === 0
-                ? 'This tournament will return to your active schedule. All games and results are already preserved.'
-                : 'This tournament will move out of your active schedule. All games and results will be preserved, and you can restore it later.'}
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className={tournament.active === 0 ? 'btn btn-primary' : 'btn btn-danger'}
-                disabled={setArchiveState.isPending}
-                onClick={() => setArchiveState.mutate(tournament.active === 0)}
-              >
-                {setArchiveState.isPending ? 'Saving…' : tournament.active === 0 ? 'Restore tournament' : 'Archive tournament'}
-              </button>
-              <button className="btn btn-ghost" onClick={() => setArchiveSheetOpen(false)}>Cancel</button>
-            </div>
-            {setArchiveState.isError && <div role="alert" style={{ color: 'var(--danger)' }}>Could not update this tournament. Please try again.</div>}
-          </div>
-        </CompetitionSheet>
+          mutation={setArchiveState}
+        />
       )}
 
       <div style={{ width: '100%', overflowX: 'auto', marginBottom: 14 }}>

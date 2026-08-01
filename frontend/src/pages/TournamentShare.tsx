@@ -191,7 +191,13 @@ export default function TournamentShare() {
               { label: 'Average', value: data.stats.average || '—' },
               { label: 'High game', value: data.stats.highGame || '—' },
               ...(data.stats.placement != null ? [{ label: 'Placement', value: `#${data.stats.placement}` }] : []),
-              ...(data.stats.net != null ? [{ label: 'Net', value: data.stats.net >= 0 ? `+$${data.stats.net}` : `-$${Math.abs(data.stats.net)}` }] : []),
+              ...(data.stats.net != null ? [{
+                label: 'Net',
+                value: `${data.stats.net >= 0 ? '+' : '-'}${new Intl.NumberFormat(undefined, {
+                  style: 'currency',
+                  currency: 'USD',
+                }).format(Math.abs(data.stats.net))}`,
+              }] : []),
             ]}
           />
           <div className="public-share-actions">

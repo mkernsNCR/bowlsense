@@ -27,12 +27,14 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
 }
 
 function recapNarrative(data: RecapData): string {
+  if (data.stats.totalGames === 0) return ''
+  const plural = (count: number, singular: string, pluralForm = `${singular}s`) => `${count} ${count === 1 ? singular : pluralForm}`
   const opponent = data.week.opponent ? ` against ${data.week.opponent}` : ''
   const record = data.week.tied > 0
-    ? `${data.week.won} wins, ${data.week.lost} losses, and ${data.week.tied} tie${data.week.tied === 1 ? '' : 's'}`
-    : `${data.week.won} wins and ${data.week.lost} losses`
+    ? `${plural(data.week.won, 'win')}, ${plural(data.week.lost, 'loss', 'losses')}, and ${plural(data.week.tied, 'tie')}`
+    : `${plural(data.week.won, 'win')} and ${plural(data.week.lost, 'loss', 'losses')}`
   const highNote = data.stats.highGame === 300 ? ' A perfect game capped the set.' : ` The high game was ${data.stats.highGame}.`
-  return `Week ${data.week.weekNumber}${opponent} finished with ${record}. The set averaged ${data.stats.average} across ${data.stats.totalGames} games.${highNote}`
+  return `Week ${data.week.weekNumber}${opponent} finished with ${record}. The set averaged ${data.stats.average} across ${plural(data.stats.totalGames, 'game')}.${highNote}`
 }
 
 export default function LeagueRecap() {
@@ -40,17 +42,29 @@ export default function LeagueRecap() {
   const leagueId = Number(id)
   const invalidId = Number.isNaN(leagueId)
 
-  const [data, setData] = useState<RecapData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [request, setRequest] = useState<{ leagueId: number; data: RecapData | null; loading: boolean; error: string | null }>(() => ({
+    leagueId,
+    data: null,
+    loading: !invalidId,
+    error: null,
+  }))
+  const currentRequest = request.leagueId === leagueId
+    ? request
+    : { leagueId, data: null, loading: !invalidId, error: null }
+  const { data, loading, error } = currentRequest
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
 
   const downloadPng = async () => {
     if (!data) return
     setDownloading(true)
+    setDownloaded(false)
+    setDownloadError(false)
     try {
       const res = await fetch(`/api/leagues/${leagueId}/recap/og-image`)
+      if (!res.ok) throw new Error('Download failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -60,8 +74,14 @@ export default function LeagueRecap() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch { /* ignore */ }
-    setTimeout(() => setDownloading(false), 1200)
+      setDownloaded(true)
+      setTimeout(() => setDownloaded(false), 1800)
+    } catch {
+      setDownloadError(true)
+      setTimeout(() => setDownloadError(false), 1800)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   useEffect(() => {
@@ -69,8 +89,8 @@ export default function LeagueRecap() {
     let cancelled = false
     fetch(`/api/leagues/${leagueId}/recap`)
       .then(r => { if (!r.ok) throw new Error('Recap not found'); return r.json() })
-      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+      .then(d => { if (!cancelled) setRequest({ leagueId, data: d, loading: false, error: null }) })
+      .catch(e => { if (!cancelled) setRequest({ leagueId, data: null, loading: false, error: e.message }) })
     return () => { cancelled = true }
   }, [leagueId, invalidId])
 
@@ -147,9 +167,9 @@ export default function LeagueRecap() {
               <div style={{ color: 'color-mix(in srgb, var(--ink) 70%, transparent)', fontSize: 16 }}>
                 Week {data.week.weekNumber} · {data.week.date} · vs {data.week.opponent}
               </div>
-              <p style={{ maxWidth: 680, margin: '16px 0 0', color: 'color-mix(in srgb, var(--ink) 84%, transparent)', fontSize: 18, lineHeight: 1.6 }}>
+              {data.stats.totalGames > 0 && <p style={{ maxWidth: 680, margin: '16px 0 0', color: 'color-mix(in srgb, var(--ink) 84%, transparent)', fontSize: 18, lineHeight: 1.6 }}>
                 {recapNarrative(data)}
-              </p>
+              </p>}
             </div>
 
             {/* Game scores */}
@@ -201,9 +221,10 @@ export default function LeagueRecap() {
               <button
                 onClick={downloadPng}
                 className="btn btn-ghost"
-                style={{ borderColor: 'var(--separator)', color: downloading ? 'var(--spare-green)' : 'var(--ink)', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
+                disabled={downloading}
+                style={{ borderColor: 'var(--separator)', color: downloaded ? 'var(--spare-green)' : downloadError ? 'var(--danger)' : 'var(--ink)', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
               >
-                {downloading ? 'Downloaded' : 'Download image'}
+                {downloading ? 'Preparing…' : downloaded ? 'Downloaded' : downloadError ? 'Download failed' : 'Download image'}
               </button>
               <Link
                 to={`/leagues/${leagueId}/recap/share`}

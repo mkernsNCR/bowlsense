@@ -120,7 +120,7 @@ export default function PublicLeagueLeaderboard() {
         `}</style>
         <div className="public-share-actions"><a href={twitterIntent} target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Share on X</a></div>
 
-        {isLoading && <div className="card" style={{ background: '#121228' }}>Loading leaderboard...</div>}
+        {isLoading && <div className="card" style={{ background: '#121228', color: '#fff' }}>Loading leaderboard...</div>}
         {isError && <div className="card" style={{ background: '#121228', color: '#fc8181' }}>Could not load leaderboard right now.</div>}
 
         {!isLoading && !isError && data && (

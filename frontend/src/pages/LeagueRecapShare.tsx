@@ -19,6 +19,8 @@ export default function LeagueRecapShare() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [downloaded, setDownloaded] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
 
   useEffect(() => {
     if (invalidId) return
@@ -60,8 +62,11 @@ export default function LeagueRecapShare() {
   const downloadPng = async () => {
     if (!data) return
     setDownloading(true)
+    setDownloaded(false)
+    setDownloadError(false)
     try {
       const res = await fetch(`/api/leagues/${leagueId}/recap/og-image`)
+      if (!res.ok) throw new Error('Download failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -71,8 +76,14 @@ export default function LeagueRecapShare() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch { /* ignore */ }
-    setTimeout(() => setDownloading(false), 1200)
+      setDownloaded(true)
+      setTimeout(() => setDownloaded(false), 1800)
+    } catch {
+      setDownloadError(true)
+      setTimeout(() => setDownloadError(false), 1800)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   if (invalidId) {
@@ -109,16 +120,16 @@ export default function LeagueRecapShare() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button
             onClick={downloadPng}
-            disabled={loading || !!error}
+            disabled={loading || !!error || downloading}
             style={{
-              background: downloading ? '#34d399' : '#a78bfa',
+              background: downloaded ? '#34d399' : downloadError ? '#fc8181' : '#a78bfa',
               border: 'none', borderRadius: 14, padding: '16px 24px',
               color: '#0d0d1a', fontWeight: 800, fontSize: 16, cursor: downloading ? 'default' : 'pointer',
               transition: 'background 0.2s', width: '100%', minHeight: 56,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
-            {downloading ? 'Downloaded' : 'Download image'}
+            {downloading ? 'Preparing…' : downloaded ? 'Downloaded' : downloadError ? 'Download failed' : 'Download image'}
           </button>
 
           <a

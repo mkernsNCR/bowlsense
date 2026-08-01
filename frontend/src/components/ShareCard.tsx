@@ -207,6 +207,8 @@ export default function ShareCard({ game, session, ballName, onClose }: ShareCar
           ref={canvasRef}
           width={800}
           height={460}
+          role="img"
+          aria-label={`Share card for game ${game.gameNumber}: score ${game.score} at ${session.location || 'Unknown Alley'}`}
           style={{ width: 'min(400px, calc(100vw - 32px))', height: 'auto', maxWidth: '100%', borderRadius: 14, display: 'block', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
         />
 

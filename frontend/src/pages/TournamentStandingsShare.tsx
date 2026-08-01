@@ -101,7 +101,7 @@ export default function TournamentStandingsShare() {
       tournament?.location,
       tournament?.format,
       tournament?.date
-        ? new Date(tournament.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        ? new Date(tournament.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
         : null,
     ].filter(Boolean)
     return parts.join(' · ')
@@ -158,7 +158,7 @@ export default function TournamentStandingsShare() {
     <PublicShell eyebrow="Tournament standings" title={tournament?.name || 'Tournament'} detail={subtitle || 'Shared result'}>
       <div className="public-legacy-content" style={{ maxWidth: 960, margin: '0 auto' }}>
 
-        {standings && tournamentData && <PublicResult score={stats?.placement ? `#${stats.placement}` : overallAvg || '—'} label={stats?.placement ? 'Final placement' : 'Tournament average'} accessibleLabel={stats?.placement ? `Final placement ${stats.placement}` : `Tournament average ${overallAvg || 'not available'}`} facts={[
+        {standings && <PublicResult score={stats?.placement ? `#${stats.placement}` : overallAvg || '—'} label={stats?.placement ? 'Final placement' : 'Tournament average'} accessibleLabel={stats?.placement ? `Final placement ${stats.placement}` : `Tournament average ${overallAvg || 'not available'}`} facts={[
           { label: 'Average', value: stats?.average || overallAvg || '—' },
           { label: 'Games', value: stats?.totalGames || totalGames },
           { label: 'High game', value: stats?.high || highGame || '—' },
@@ -187,16 +187,6 @@ export default function TournamentStandingsShare() {
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-ghost"
-            style={{
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 12,
-              padding: '10px 20px',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: 14,
-              textDecoration: 'none',
-            }}
           >
             𝕏 Share on X
           </a>
@@ -242,7 +232,7 @@ export default function TournamentStandingsShare() {
         {standingsLoading && <div style={{ color: 'rgba(255,255,255,0.6)', padding: 20 }}>Loading...</div>}
         {standingsError && <div style={{ color: '#fc8181', padding: 20 }}>Could not load standings.</div>}
 
-        {standings && tournamentData && (
+        {standings && (
           <>
             {/* Standings table */}
             <div style={{

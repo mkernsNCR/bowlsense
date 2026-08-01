@@ -107,4 +107,4 @@ jobs:
         run: npm test
 
       - name: Verify Sites migration staging
-        run: test -f dist/.openai/drizzle/0000_bowlsense.sql && test -f dist/.openai/drizzle/0001_tournament_active.sql && test -f dist/.openai/drizzle/0002_ball_indexes.sql
+        run: test -f dist/.openai/drizzle/0000_bowlsense.sql && test -f dist/.openai/drizzle/0001_tournament_active.sql && test -f dist/.openai/drizzle/0002_ball_indexes.sql && test -f dist/.openai/drizzle/0003_league_retry_idempotency.sql

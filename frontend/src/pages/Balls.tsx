@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BallImage, GearHeader, GearNavigation, GearSheet, GearState } from '../features/gear/GearWorkspace'
 import { request, requestJson } from '../features/gear/api'
@@ -40,14 +40,16 @@ type CoverFilter = 'all' | 'solid' | 'pearl' | 'hybrid' | 'urethane' | 'other'
 
 const EMPTY_FORM: BallForm = { name: '', brand: '', color: '', notes: '' }
 
-async function clipboardImage(path: string): Promise<void> {
-  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('Image clipboard unavailable')
-  const response = await fetch(`/api/balls/image-proxy?path=${encodeURIComponent(path)}`)
-  if (!response.ok) throw new Error(`Image request failed (${response.status})`)
-  const source = await response.blob()
-  let image = source
-  if (source.type !== 'image/png') {
-    image = await new Promise<Blob>((resolve, reject) => {
+async function fetchClipboardPng(path: string): Promise<Blob> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10_000)
+  try {
+    const response = await fetch(`/api/balls/image-proxy?path=${encodeURIComponent(path)}`, { signal: controller.signal })
+    if (!response.ok) throw new Error(`Image request failed (${response.status})`)
+    const source = await response.blob()
+    if (source.type === 'image/png') return source
+
+    return await new Promise<Blob>((resolve, reject) => {
       const element = new Image()
       const objectUrl = URL.createObjectURL(source)
       element.onload = () => {
@@ -73,16 +75,23 @@ async function clipboardImage(path: string): Promise<void> {
       }
       element.src = objectUrl
     })
+  } finally {
+    window.clearTimeout(timeout)
   }
-  await navigator.clipboard.write([new ClipboardItem({ [image.type]: image })])
+}
+
+function clipboardImage(path: string): Promise<void> {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return Promise.reject(new Error('Image clipboard unavailable'))
+  const image = fetchClipboardPng(path)
+  return navigator.clipboard.write([new ClipboardItem({ 'image/png': image })])
 }
 
 function coverGroup(ball: GearBall): CoverFilter {
   const cover = `${ball.coverstockType || ''} ${ball.coverstockName || ''}`.toLowerCase()
+  if (cover.includes('urethane') && !cover.includes('reactive')) return 'urethane'
   if (cover.includes('solid')) return 'solid'
   if (cover.includes('pearl')) return 'pearl'
   if (cover.includes('hybrid')) return 'hybrid'
-  if (cover.includes('urethane')) return 'urethane'
   return 'other'
 }
 
@@ -96,15 +105,20 @@ export default function Balls() {
   const [catalogSearchTerm, setCatalogSearchTerm] = useState('')
   const [selectedCatalogBall, setSelectedCatalogBall] = useState<BowwwlBall | null>(null)
   const [manualForm, setManualForm] = useState<BallForm>(EMPTY_FORM)
-  const [selectedBall, setSelectedBall] = useState<GearBall | null>(null)
+  const [selectedBallId, setSelectedBallId] = useState<number | null>(null)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<BallForm>(EMPTY_FORM)
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
   const [imageCopyState, setImageCopyState] = useState<'idle' | 'done' | 'error'>('idle')
+  const copyResetTimer = useRef<number | null>(null)
   useEffect(() => {
     const timeout = window.setTimeout(() => setCatalogSearchTerm(catalogQuery.trim()), 300)
     return () => window.clearTimeout(timeout)
   }, [catalogQuery])
+
+  useEffect(() => () => {
+    if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current)
+  }, [])
 
   const ballsQuery = useQuery<GearBall[]>({
     queryKey: ['balls'],
@@ -144,9 +158,8 @@ export default function Balls() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['balls'] })
-      setSelectedBall((current) => current?.id === variables.id ? { ...current, ...variables.payload } : current)
       setEditing(false)
     },
   })
@@ -155,7 +168,7 @@ export default function Balls() {
     mutationFn: (id: number) => request(`/api/balls/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['balls'] })
-      setSelectedBall(null)
+      setSelectedBallId(null)
     },
   })
 
@@ -163,7 +176,7 @@ export default function Balls() {
     const normalized = libraryQuery.trim().toLowerCase()
     return [...(ballsQuery.data || [])]
       .filter((ball) => coverFilter === 'all' || coverGroup(ball) === coverFilter)
-      .filter((ball) => !normalized || `${ball.name} ${ball.brand} ${ball.color} ${ball.coverstockName || ''} ${ball.coverstockType || ''}`.toLowerCase().includes(normalized))
+      .filter((ball) => !normalized || `${ball.name} ${ball.brand || ''} ${ball.color || ''} ${ball.coverstockName || ''} ${ball.coverstockType || ''}`.toLowerCase().includes(normalized))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [ballsQuery.data, coverFilter, libraryQuery])
 
@@ -172,8 +185,13 @@ export default function Balls() {
     [performanceQuery.data],
   )
 
+  const selectedBall = useMemo(
+    () => ballsQuery.data?.find((ball) => ball.id === selectedBallId) ?? null,
+    [ballsQuery.data, selectedBallId],
+  )
+
   const openBall = (ball: GearBall) => {
-    setSelectedBall(ball)
+    setSelectedBallId(ball.id)
     setEditForm({ name: ball.name || '', brand: ball.brand || '', color: ball.color || '', notes: ball.notes || '' })
     setEditing(false)
     setImageCopyState('idle')
@@ -199,12 +217,35 @@ export default function Balls() {
 
   const copyLibrary = async () => {
     if (!ballsQuery.data?.length) return
+    if (copyResetTimer.current !== null) window.clearTimeout(copyResetTimer.current)
+    setCopyState('idle')
     try {
       await copyText(ballsQuery.data.map((ball) => `${ball.name}${ball.brand ? ` (${ball.brand})` : ''}`).join('\n'))
       setCopyState('done')
     } catch {
       setCopyState('error')
     }
+    copyResetTimer.current = window.setTimeout(() => {
+      setCopyState('idle')
+      copyResetTimer.current = null
+    }, 2_000)
+  }
+
+  const closeAddSheet = () => {
+    setAddOpen(false)
+    setManualMode(false)
+    setManualForm(EMPTY_FORM)
+    setCatalogQuery('')
+    setCatalogSearchTerm('')
+    setSelectedCatalogBall(null)
+    addBall.reset()
+  }
+
+  const closeDetailSheet = () => {
+    setSelectedBallId(null)
+    setEditing(false)
+    updateBall.reset()
+    deleteBall.reset()
   }
 
   const copySelectedImage = async () => {
@@ -262,6 +303,7 @@ export default function Balls() {
             <section className="gear-library" aria-label="Ball library results">
               {visibleBalls.map((ball) => {
                 const missing = missingBallSpecs(ball)
+                const usage = performanceByBall.get(ball.id)
                 return (
                   <button className="gear-ball-card" type="button" key={ball.id} onClick={() => openBall(ball)}>
                     <BallImage path={ball.thumbnailImage} name={ball.name} />
@@ -271,8 +313,10 @@ export default function Balls() {
                       <span className="gear-ball-card__usage">
                         {performanceQuery.isError
                           ? 'Usage unavailable'
-                          : performanceByBall.has(ball.id)
-                          ? `${performanceByBall.get(ball.id)?.gameCount} games · ${performanceByBall.get(ball.id)?.average} average`
+                          : performanceQuery.isLoading
+                          ? 'Loading usage…'
+                          : usage
+                          ? `${usage.gameCount} games · ${usage.average} average`
                           : 'Never used in a logged game'}
                       </span>
                       <span className="gear-ball-card__specs">
@@ -293,7 +337,7 @@ export default function Balls() {
         </>
       )}
 
-      <GearSheet open={addOpen} onClose={() => setAddOpen(false)} title="Add a ball" description="Search the Bowwwl catalog or record equipment manually.">
+      <GearSheet open={addOpen} onClose={closeAddSheet} title="Add a ball" description="Search the Bowwwl catalog or record equipment manually.">
         <div className="gear-segments" aria-label="Add ball method">
           <button type="button" aria-pressed={!manualMode} className={!manualMode ? 'gear-segment is-active' : 'gear-segment'} onClick={() => setManualMode(false)}>Search catalog</button>
           <button type="button" aria-pressed={manualMode} className={manualMode ? 'gear-segment is-active' : 'gear-segment'} onClick={() => setManualMode(true)}>Manual entry</button>
@@ -346,7 +390,7 @@ export default function Balls() {
         )}
       </GearSheet>
 
-      <GearSheet open={Boolean(selectedBall)} onClose={() => setSelectedBall(null)} title={editing ? 'Edit ball' : selectedBall?.name || 'Ball details'} description={editing ? 'Update the details you track for this equipment.' : selectedBall?.brand || 'Equipment profile'}>
+      <GearSheet open={Boolean(selectedBall)} onClose={closeDetailSheet} title={editing ? 'Edit ball' : selectedBall?.name || 'Ball details'} description={editing ? 'Update the details you track for this equipment.' : selectedBall?.brand || 'Equipment profile'}>
         {selectedBall && (editing ? (
           <div className="gear-form">
             <label>Name<input value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} /></label>

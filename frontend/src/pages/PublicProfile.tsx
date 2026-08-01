@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../design'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface PublicStats {
   average: number
@@ -18,7 +18,7 @@ export default function PublicProfile() {
   const [stats, setStats] = useState<PublicStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: copyShareLink } = useCopyLink()
 
   useEffect(() => {
     let mounted = true
@@ -48,16 +48,6 @@ export default function PublicProfile() {
     : null
 
   usePublicMetadata({ title: profileTitle, description: profileDescription, imageUrl: profileOgImageUrl })
-
-  const copyShareLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
-  }
 
   if (loading) return <PublicShell eyebrow="Public profile" title="Loading public profile"><p className="muted">Loading public profile…</p></PublicShell>
   if (error || !stats) return <PublicShell eyebrow="Public profile" title="Public profile unavailable"><p role="alert">{error || 'Public profile not found'}</p></PublicShell>

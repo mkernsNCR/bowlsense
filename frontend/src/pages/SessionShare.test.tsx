@@ -11,9 +11,12 @@ const shareMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../utils/sessionShare', () => ({
-  copySessionShareLink: shareMocks.copy,
   downloadSessionCard: shareMocks.download,
   nativeShareSession: shareMocks.native,
+}))
+
+vi.mock('../features/scoring/copyText', () => ({
+  copyText: shareMocks.copy,
 }))
 
 const payload = {
@@ -62,6 +65,6 @@ describe('SessionShare native sharing', () => {
 
     await user.click(await screen.findByRole('button', { name: /Share/ }))
 
-    await waitFor(() => expect(shareMocks.copy).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(shareMocks.copy).toHaveBeenCalledWith(window.location.href))
   })
 })

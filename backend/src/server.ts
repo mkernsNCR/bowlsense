@@ -1373,17 +1373,29 @@ fastify.delete('/games/:id', async (request, reply) => {
 // Leagues CRUD and related routes
 const wantsArchived = (query: any) => query?.includeArchived === '1' || query?.includeArchived === 'true';
 
-const selectLeagueRows = (includeArchived: boolean) => sqlite.prepare(`
+const leagueListStatement = sqlite.prepare(`
   SELECT l.*,
          COUNT(DISTINCT lw.id) as weekCount,
          COALESCE(SUM(lw.games_won), 0) as gamesWon,
          COALESCE(SUM(lw.games_lost), 0) as gamesLost
   FROM leagues l
   LEFT JOIN league_weeks lw ON lw.league_id = l.id
-  ${includeArchived ? '' : 'WHERE COALESCE(l.active, 1) = 1'}
   GROUP BY l.id
   ORDER BY l.created_at DESC, l.id DESC
-`).all() as any[];
+`);
+const activeLeagueListStatement = sqlite.prepare(`
+  SELECT l.*,
+         COUNT(DISTINCT lw.id) as weekCount,
+         COALESCE(SUM(lw.games_won), 0) as gamesWon,
+         COALESCE(SUM(lw.games_lost), 0) as gamesLost
+  FROM leagues l
+  LEFT JOIN league_weeks lw ON lw.league_id = l.id
+  WHERE COALESCE(l.active, 1) = 1
+  GROUP BY l.id
+  ORDER BY l.created_at DESC, l.id DESC
+`);
+const selectLeagueRows = (includeArchived: boolean) =>
+  (includeArchived ? leagueListStatement : activeLeagueListStatement).all() as any[];
 
 const serializeLeagueRow = (league: any) => ({
   id: league.id,
@@ -2431,14 +2443,16 @@ fastify.post('/api/leagues/:id/archive', (request, reply) => setLeagueArchived(r
 fastify.post('/leagues/:id/unarchive', (request, reply) => setLeagueArchived(request, reply, 1));
 fastify.post('/api/leagues/:id/unarchive', (request, reply) => setLeagueArchived(request, reply, 1));
 
-fastify.delete('/leagues/:id', async (request, reply) => {
+const deleteLeague = async (request: any, reply: any) => {
   const { id } = request.params as any;
   const leagueId = Number(id);
   if (!Number.isInteger(leagueId) || leagueId < 1) return reply.status(400).send({ error: 'Invalid league id' });
   const result = sqlite.prepare('UPDATE leagues SET active = 0 WHERE id = ?').run(leagueId);
   if (result.changes === 0) return reply.status(404).send({ error: 'League not found' });
   return reply.status(204).send();
-});
+};
+fastify.delete('/leagues/:id', deleteLeague);
+fastify.delete('/api/leagues/:id', deleteLeague);
 
 fastify.get('/leagues/:id/weeks', async (request) => {
   const { id } = request.params as any;
@@ -2617,17 +2631,29 @@ fastify.delete('/leagues/games/:gameId', async (request, reply) => {
 });
 
 // Tournaments
-const selectTournamentRows = (includeArchived: boolean) => sqlite.prepare(`
+const tournamentListStatement = sqlite.prepare(`
   SELECT t.*,
          COUNT(tg.id) as total_games,
          COALESCE(SUM(tg.score), 0) as series,
          COALESCE(MAX(tg.score), 0) as high_game
   FROM tournaments t
   LEFT JOIN tournament_games tg ON tg.tournament_id = t.id
-  ${includeArchived ? '' : 'WHERE COALESCE(t.active, 1) = 1'}
   GROUP BY t.id
   ORDER BY t.date DESC, t.created_at DESC, t.id DESC
-`).all() as any[];
+`);
+const activeTournamentListStatement = sqlite.prepare(`
+  SELECT t.*,
+         COUNT(tg.id) as total_games,
+         COALESCE(SUM(tg.score), 0) as series,
+         COALESCE(MAX(tg.score), 0) as high_game
+  FROM tournaments t
+  LEFT JOIN tournament_games tg ON tg.tournament_id = t.id
+  WHERE COALESCE(t.active, 1) = 1
+  GROUP BY t.id
+  ORDER BY t.date DESC, t.created_at DESC, t.id DESC
+`);
+const selectTournamentRows = (includeArchived: boolean) =>
+  (includeArchived ? tournamentListStatement : activeTournamentListStatement).all() as any[];
 
 const serializeTournamentRow = (tournament: any) => ({
   id: tournament.id,
@@ -3293,14 +3319,16 @@ fastify.post('/api/tournaments/:id/archive', (request, reply) => setTournamentAr
 fastify.post('/tournaments/:id/unarchive', (request, reply) => setTournamentArchived(request, reply, 1));
 fastify.post('/api/tournaments/:id/unarchive', (request, reply) => setTournamentArchived(request, reply, 1));
 
-fastify.delete('/tournaments/:id', async (request, reply) => {
+const deleteTournament = async (request: any, reply: any) => {
   const { id } = request.params as any;
   const tournamentId = Number(id);
   if (!Number.isInteger(tournamentId) || tournamentId < 1) return reply.status(400).send({ error: 'Invalid tournament id' });
   const result = sqlite.prepare('UPDATE tournaments SET active = 0 WHERE id = ?').run(tournamentId);
   if (result.changes === 0) return reply.status(404).send({ error: 'Tournament not found' });
   return reply.status(204).send();
-});
+};
+fastify.delete('/tournaments/:id', deleteTournament);
+fastify.delete('/api/tournaments/:id', deleteTournament);
 
 fastify.post('/tournaments/:id/games', async (request, reply) => {
   const { id } = request.params as any;
@@ -5247,6 +5275,8 @@ const MANAGED_PUBLIC_META = new Set([
   'twitter:image',
 ])
 
+// Safe only for HTML text nodes and double-quoted attribute values. Do not use
+// for unquoted attributes, URL attributes, or inline script/style contexts.
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -5309,7 +5339,9 @@ export function injectPublicMetadataHtml(html: string, metadata: PublicPageMetad
     <meta name="twitter:title" content="${escapeHtml(metadata.title)}" />
     <meta name="twitter:description" content="${escapeHtml(metadata.description)}" />
   `
-  return withoutManagedMeta.replace(/<\/head>/i, `${tags}</head>`)
+  return /<\/head>/i.test(withoutManagedMeta)
+    ? withoutManagedMeta.replace(/<\/head>/i, `${tags}</head>`)
+    : `${withoutManagedMeta}${tags}`
 }
 
 let publicProfileStatsCache: { expiresAt: number; value: { totalGames: number; average: number } } | null = null
@@ -5440,6 +5472,8 @@ function resolvePublicPageMetadata(pathname: string, requestUrl: string, origin:
 // ── Serve frontend build (SPA — all from one origin for OG images) ──
 const FRONTEND_DIST = process.env.BOWLSENSE_FRONTEND_DIST?.trim() || join(__dirname, '..', '..', 'frontend', 'dist');
 const INDEX_PATH = join(FRONTEND_DIST, 'index.html');
+// Deployment must finish the frontend build before starting (or restarting)
+// this process so the cached HTML and its asset hashes match the release.
 const CACHED_INDEX_HTML = existsSync(INDEX_PATH) ? readFileSync(INDEX_PATH, 'utf8') : null;
 if (existsSync(FRONTEND_DIST)) {
   // Serve the SPA from the frontend build.

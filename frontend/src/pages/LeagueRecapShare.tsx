@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface RecapLeague { id: number; name: string; location: string | null; season: string | null }
 interface RecapWeek { weekNumber: number; date: string; opponent: string; won: number; lost: number; tied: number }
@@ -17,10 +17,10 @@ export default function LeagueRecapShare() {
   const [data, setData] = useState<RecapData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
   const [downloadError, setDownloadError] = useState(false)
+  const { copied, copyLink } = useCopyLink()
 
   useEffect(() => {
     if (invalidId) return
@@ -51,14 +51,6 @@ export default function LeagueRecapShare() {
     imageUrl: ogImageUrl,
   })
 
-  const copyLink = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    } catch { /* ignore */ }
-  }
-
   const downloadPng = async () => {
     if (!data) return
     setDownloading(true)
@@ -88,7 +80,7 @@ export default function LeagueRecapShare() {
 
   if (invalidId) {
     return (
-      <PublicShell eyebrow="League recap" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="League recap" title="League not found"><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 

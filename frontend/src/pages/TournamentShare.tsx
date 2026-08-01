@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { downloadTournamentCard } from '../utils/tournamentShare'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface ShareGame {
   id: number
@@ -46,72 +46,31 @@ interface ShareResponse {
 
 function GameCard({ game }: { game: ShareGame }) {
   const scoreColor = game.score === 300
-    ? '#fbbf24'
+    ? '#8a5a00'
     : game.score != null && game.score >= 200
-      ? '#a78bfa'
+      ? 'var(--public-accent)'
       : game.score != null && game.score < 170
-        ? '#fc8181'
-        : '#fff'
+        ? '#9f1239'
+        : 'var(--public-ink)'
 
   return (
-    <div style={{
-      background: '#121228', borderRadius: 16,
-      border: '1px solid rgba(167,139,250,0.2)',
-      padding: '16px 18px',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-        <div>
-          <span style={{
-            background: 'rgba(167,139,250,0.2)', color: '#c4b5fd',
-            borderRadius: 8, padding: '2px 10px', fontSize: 12, fontWeight: 700,
-            marginRight: 8,
-          }}>
-            Game {game.gameNumber}
-          </span>
-          {game.squad && (
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginLeft: 6 }}>
-              {game.squad}
-            </span>
-          )}
-        </div>
-        <div style={{
-          fontSize: 32, fontWeight: 900,
-          color: scoreColor, lineHeight: 1,
-        }}>
-          {game.score != null ? game.score : '—'}
-        </div>
+    <article className="public-detail-row">
+      <div>
+        <strong>Game {game.gameNumber}</strong>
+        <strong style={{ color: scoreColor, fontSize: 28 }}>{game.score != null ? game.score : '—'}</strong>
       </div>
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: game.ballName ? 8 : 0 }}>
-        {game.strikes != null && game.strikes > 0 && (
-          <span style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>
-            {game.strikes} Strike{game.strikes !== 1 ? 's' : ''}
-          </span>
-        )}
-        {game.spares != null && game.spares > 0 && (
-          <span style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>
-            {game.spares} Spare{game.spares !== 1 ? 's' : ''}
-          </span>
-        )}
-        {game.splits != null && game.splits > 0 && (
-          <span style={{ background: 'rgba(239,68,68,0.12)', color: '#fc8181', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>
-            {game.splits} Split{game.splits !== 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-
-      {game.ballName && (
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
-          🎳 {game.ballName}
-        </div>
-      )}
-    </div>
+      {game.squad && <span>Squad · {game.squad}</span>}
+      <span>
+        {game.strikes ?? 0} strike{game.strikes === 1 ? '' : 's'} · {game.spares ?? 0} spare{game.spares === 1 ? '' : 's'} · {game.splits ?? 0} split{game.splits === 1 ? '' : 's'}
+      </span>
+      {game.ballName && <span>Ball · {game.ballName}</span>}
+    </article>
   )
 }
 
 export default function TournamentShare() {
   const { id } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink: handleCopy } = useCopyLink()
   const tournamentId = Number(id)
   const invalid = Number.isNaN(tournamentId)
 
@@ -136,20 +95,25 @@ export default function TournamentShare() {
     return parts.join(' · ')
   }, [data])
 
-  const handleCopy = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch { /* ignore */ }
-  }
-
   const [downloaded, setDownloaded] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
 
   const handleDownload = async () => {
-    await downloadTournamentCard(tournamentId, `bowlsense-tournament-${tournamentId}.png`)
-    setDownloaded(true)
-    setTimeout(() => setDownloaded(false), 1800)
+    if (downloading || invalid) return
+    setDownloading(true)
+    setDownloaded(false)
+    setDownloadError(false)
+    try {
+      await downloadTournamentCard(tournamentId, `bowlsense-tournament-${tournamentId}.png`)
+      setDownloaded(true)
+      setTimeout(() => setDownloaded(false), 1800)
+    } catch {
+      setDownloadError(true)
+      setTimeout(() => setDownloadError(false), 1800)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   const ogImageUrl = useMemo(() => {
@@ -168,7 +132,7 @@ export default function TournamentShare() {
 
   if (invalid) {
     return (
-      <PublicShell eyebrow="Tournament result" title="Tournament not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="Tournament result" title="Tournament not found"><Link to="/">Browse tournaments on BowlSense</Link></PublicShell>
     )
   }
 
@@ -201,7 +165,9 @@ export default function TournamentShare() {
             ]}
           />
           <div className="public-share-actions">
-            <button className="btn btn-ghost" onClick={handleDownload}>{downloaded ? 'Downloaded' : 'Download card'}</button>
+            <button className="btn btn-ghost" onClick={handleDownload} disabled={downloading} aria-live="polite">
+              {downloading ? 'Downloading…' : downloadError ? 'Download failed' : downloaded ? 'Downloaded' : 'Download card'}
+            </button>
             <a href={twitterUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost">Share on X</a>
           </div>
           {!data.games.length ? <p className="muted">No games logged yet.</p> : (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface RecapLeague { id: number; name: string; location: string | null; season: string | null }
 interface RecapWeek { weekNumber: number; date: string; opponent: string; won: number; lost: number; tied: number }
@@ -52,7 +53,7 @@ export default function LeagueRecap() {
     ? request
     : { leagueId, data: null, loading: !invalidId, error: null }
   const { data, loading, error } = currentRequest
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink } = useCopyLink()
   const [downloading, setDownloading] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
   const [downloadError, setDownloadError] = useState(false)
@@ -108,12 +109,6 @@ export default function LeagueRecap() {
     const url = encodeURIComponent(window.location.href)
     return `https://twitter.com/intent/tweet?text=${text}&url=${url}`
   }, [data, shareText])
-
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
-  }
 
   if (invalidId) {
     return (
@@ -213,6 +208,7 @@ export default function LeagueRecap() {
               </a>
               <button
                 onClick={copyLink}
+                aria-live="polite"
                 className="btn btn-ghost"
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}
               >
@@ -220,6 +216,7 @@ export default function LeagueRecap() {
               </button>
               <button
                 onClick={downloadPng}
+                aria-live="polite"
                 className="btn btn-ghost"
                 disabled={downloading}
                 style={{ borderColor: 'rgba(167,139,250,0.5)', color: downloaded ? '#34d399' : downloadError ? '#fc8181' : '#fff', fontWeight: 800, flex: 1, minHeight: 48, borderRadius: 12 }}

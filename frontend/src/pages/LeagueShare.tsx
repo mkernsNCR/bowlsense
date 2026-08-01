@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { PublicResult, PublicShell } from '../features/competition/CompetitionUI'
 import { usePublicMetadata } from '../features/competition/publicMetadata'
-import { copyText } from '../features/scoring/copyText'
+import { useCopyLink } from '../features/competition/useCopyLink'
 
 interface ShareGame { gameNumber: number; score: number | null; strikes: number | null; spares: number | null }
 interface ShareWeek {
@@ -46,7 +46,7 @@ function ResultBadge({ won, lost, tied }: { won: number; lost: number; tied?: nu
 
 export default function LeagueShare() {
   const { id } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { copied, copyLink } = useCopyLink()
   const leagueId = Number(id)
   const invalid = Number.isNaN(leagueId)
 
@@ -65,14 +65,6 @@ export default function LeagueShare() {
     return parts.length ? parts.join(' · ') : ''
   }, [data])
 
-  const handleCopy = async () => {
-    try {
-      await copyText(window.location.href)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch { /* ignore */ }
-  }
-
   const ogImageUrl = useMemo(() => {
     if (invalid || !leagueId) return ''
     return `/api/leagues/${leagueId}/share/og-image`
@@ -89,7 +81,7 @@ export default function LeagueShare() {
 
   if (invalid) {
     return (
-      <PublicShell eyebrow="League result" title="League not found"><Link to="/">BowlSense home</Link></PublicShell>
+      <PublicShell eyebrow="League result" title="League not found"><Link to="/">Browse leagues on BowlSense</Link></PublicShell>
     )
   }
 
@@ -98,7 +90,7 @@ export default function LeagueShare() {
       eyebrow="League result"
       title={data?.league?.name || 'League'}
       detail={subtitle}
-      action={<button className="btn btn-primary" onClick={handleCopy}>{copied ? 'Link copied' : 'Share league'}</button>}
+      action={<button className="btn btn-primary" onClick={copyLink}>{copied ? 'Link copied' : 'Share league'}</button>}
     >
       {isLoading && <p className="muted">Loading league result…</p>}
       {isError && <p role="alert">Could not load league data.</p>}

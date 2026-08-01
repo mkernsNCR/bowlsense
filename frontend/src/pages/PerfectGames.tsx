@@ -28,7 +28,8 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
   const [copied, setCopied] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const marks = game.frameData ? parseFrameMarks(game.frameData) : null
+  const parsedMarks = game.frameData ? parseFrameMarks(game.frameData) : null
+  const marks = parsedMarks?.length ? parsedMarks : null
   const year = game.date ? new Date(game.date + 'T00:00:00').getFullYear() : '—'
   const imageFileName = `bowlsense-300-${game.date || 'game'}-${game.id}.png`
 

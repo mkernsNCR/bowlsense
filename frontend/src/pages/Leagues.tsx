@@ -363,7 +363,7 @@ function LeagueDetail({ id }: { id: string }) {
             <label>End date<input type="date" value={leagueForm.endDate} onChange={e => setLeagueForm(f => ({ ...f, endDate: e.target.value }))} /></label>
             <label>Notes<textarea value={leagueForm.notes} onChange={e => setLeagueForm(f => ({ ...f, notes: e.target.value }))} /></label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" style={{ minHeight: 44, padding: '6px 16px' }} onClick={() => updateLeague.mutate({
+              <button className="btn btn-primary" disabled={!leagueForm.name.trim() || updateLeague.isPending} style={{ minHeight: 44, padding: '6px 16px' }} onClick={() => updateLeague.mutate({
                 name: leagueForm.name,
                 location: leagueForm.location,
                 season: leagueForm.season,
@@ -472,7 +472,7 @@ function LeagueDetail({ id }: { id: string }) {
                     </div>
                     <label>Notes<textarea value={weekForm.notes} onChange={(e) => setWeekForm((f) => ({ ...f, notes: e.target.value }))} /></label>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-primary" style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => updateWeek.mutate({ weekId: week.id, data: { date: weekForm.date, opponent: weekForm.opponent, gamesWon: Number(weekForm.gamesWon || 0), gamesLost: Number(weekForm.gamesLost || 0), notes: weekForm.notes } })}>Save</button>
+                      <button className="btn btn-primary" disabled={!weekForm.date || updateWeek.isPending} style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => updateWeek.mutate({ weekId: week.id, data: { date: weekForm.date, opponent: weekForm.opponent, gamesWon: Number(weekForm.gamesWon || 0), gamesLost: Number(weekForm.gamesLost || 0), notes: weekForm.notes } })}>{updateWeek.isPending ? 'Saving…' : 'Save'}</button>
                       <button className="btn btn-ghost" style={{ minHeight: 44, padding: '5px 10px' }} onClick={() => setEditingWeekId(null)}>Cancel</button>
                     </div>
                   </div>

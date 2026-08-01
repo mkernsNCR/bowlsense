@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 export async function buildTestApp(t, { legacyCompetitions = false } = {}) {
+  // This harness mutates process-global environment variables before importing a
+  // fresh server module. Keep buildTestApp calls sequential within each process.
   const root = await mkdtemp(join(tmpdir(), 'bowlsense-backend-test-'))
   const databasePath = join(root, 'bowling.db')
   const frontendPath = join(root, 'frontend')
@@ -36,31 +38,47 @@ export async function buildTestApp(t, { legacyCompetitions = false } = {}) {
     disableListen: process.env.BOWLSENSE_DISABLE_LISTEN,
     testMode: process.env.BOWLSENSE_TEST_MODE,
     publicOrigin: process.env.BOWLSENSE_PUBLIC_ORIGIN,
+    publicProfileName: process.env.BOWLSENSE_PUBLIC_PROFILE_NAME,
   }
   process.env.BOWLSENSE_DB_PATH = databasePath
   process.env.BOWLSENSE_FRONTEND_DIST = frontendPath
   process.env.BOWLSENSE_DISABLE_LISTEN = '1'
   process.env.BOWLSENSE_TEST_MODE = '1'
   process.env.BOWLSENSE_PUBLIC_ORIGIN = 'https://bowlsense.example'
+  process.env.BOWLSENSE_PUBLIC_PROFILE_NAME = ''
 
   const serverUrl = new URL(`./server.ts?test=${randomUUID()}`, import.meta.url)
-  const { fastify, sqlite } = await import(serverUrl.href)
+  const { fastify, sqlite, injectPublicMetadataHtml } = await import(serverUrl.href)
   await fastify.ready()
 
   t.after(async () => {
-    await fastify.close()
-    sqlite.close()
+    const cleanupErrors = []
+    const cleanup = async (label, action) => {
+      try {
+        await action()
+      } catch (error) {
+        cleanupErrors.push(new Error(`Failed to ${label}`, { cause: error }))
+      }
+    }
+
+    await cleanup('close Fastify', () => fastify.close())
+    await cleanup('close SQLite', () => sqlite.close())
     const restore = (key, value) => {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
-    restore('BOWLSENSE_DB_PATH', previous.databasePath)
-    restore('BOWLSENSE_FRONTEND_DIST', previous.frontendPath)
-    restore('BOWLSENSE_DISABLE_LISTEN', previous.disableListen)
-    restore('BOWLSENSE_TEST_MODE', previous.testMode)
-    restore('BOWLSENSE_PUBLIC_ORIGIN', previous.publicOrigin)
-    await rm(root, { recursive: true, force: true })
+    await cleanup('restore test environment', () => {
+      restore('BOWLSENSE_DB_PATH', previous.databasePath)
+      restore('BOWLSENSE_FRONTEND_DIST', previous.frontendPath)
+      restore('BOWLSENSE_DISABLE_LISTEN', previous.disableListen)
+      restore('BOWLSENSE_TEST_MODE', previous.testMode)
+      restore('BOWLSENSE_PUBLIC_ORIGIN', previous.publicOrigin)
+      restore('BOWLSENSE_PUBLIC_PROFILE_NAME', previous.publicProfileName)
+    })
+    await cleanup('remove the temporary test directory', () => rm(root, { recursive: true, force: true }))
+
+    if (cleanupErrors.length) throw new AggregateError(cleanupErrors, 'Backend test cleanup failed')
   })
 
-  return { fastify, sqlite }
+  return { fastify, sqlite, injectPublicMetadataHtml }
 }

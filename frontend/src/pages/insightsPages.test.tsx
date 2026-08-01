@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import PinLeaves from './PinLeaves'
@@ -9,6 +9,7 @@ import Stats from './Stats'
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  delete (document as unknown as { execCommand?: (command: string) => boolean }).execCommand
 })
 
 function jsonResponse(body: unknown) {
@@ -117,5 +118,89 @@ describe('Insights pages', () => {
     fireEvent.change(screen.getByLabelText('Target average'), { target: { value: '200' } })
 
     expect(screen.getByText(/Score at least/).textContent).toBe('Score at least 200 next to average 200.')
+  })
+
+  it('clears a stale copy failure when retrying the link succeeds', async () => {
+    const copy = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy })
+    renderPage(<ScoreCalculator />)
+
+    fireEvent.change(screen.getByLabelText('Game 1'), { target: { value: '200' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('could not be copied')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    await screen.findByRole('button', { name: 'Link copied' })
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(copy).toHaveBeenCalledTimes(2)
+  })
+
+  it('rounds every displayed average and keeps the takeaway internally consistent', async () => {
+    const stats = {
+      overall: { average: 170.4, high: 210, low: 140, totalGames: 20, totalStrikes: 40, totalSpares: 30, strikeRate: 25, spareRate: 20, perfectGames: 0 },
+      trend: { last5Avg: 172.6, last10Avg: 171.5, last20Avg: 168.2 },
+      breakdown: {
+        byMonth: [{ month: '2026-07', games: 4, average: 169.7 }],
+        byLocation: [{ location: 'Bowl Center', games: 6, average: 171.6 }],
+        scoreDistribution: { sub150: 1, '150to179': 8, '180to199': 7, '200to224': 4, '225to249': 0, '250plus': 0 },
+      },
+    }
+    const trend = { games: Array.from({ length: 20 }, (_, index) => ({ id: index + 1, score: 160 + index, date: '2026-07-01', location: 'Bowl Center', gameNumber: index + 1 })), rolling5: [], rolling10: [], rolling20: [] }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(String(input) === '/api/stats/trend' ? jsonResponse(trend) : jsonResponse(stats))))
+
+    renderPage(<Stats />)
+
+    expect(await screen.findByText('Your last five are 5 pins ahead of your 20-game pace.')).toBeTruthy()
+    expect(screen.getByText(/A 173 recent average.*168 baseline/)).toBeTruthy()
+    expect(screen.getByText('Last 5').closest('li')?.querySelector('b')?.textContent).toBe('173')
+    expect(screen.getByText('Last 10').closest('li')?.querySelector('b')?.textContent).toBe('172')
+    expect(screen.getByText('Last 20').closest('li')?.querySelector('b')?.textContent).toBe('168')
+    expect(screen.getByText('Bowl Center').closest('li')?.querySelector('b')?.textContent).toBe('172')
+    expect(screen.getByText('2026-07').closest('li')?.querySelector('b')?.textContent).toBe('170')
+  })
+
+  it('marks the stats retry busy and disables repeat submissions', async () => {
+    let resolveRetry!: (response: Response) => void
+    const pendingRetry = new Promise<Response>((resolve) => { resolveRetry = resolve })
+    let statsAttempts = 0
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === '/api/stats/trend') return Promise.resolve(jsonResponse({ games: [] }))
+      statsAttempts += 1
+      return statsAttempts === 1 ? Promise.resolve(new Response('failed', { status: 500 })) : pendingRetry
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderPage(<Stats />)
+    const retry = await screen.findByRole('button', { name: 'Try again' })
+    fireEvent.click(retry)
+
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(true))
+    expect(retry.closest('section')?.getAttribute('aria-busy')).toBe('true')
+    resolveRetry(jsonResponse({ overall: { totalGames: 0 } }))
+  })
+
+  it('marks the trend retry busy without blocking the scoring summary', async () => {
+    const stats = {
+      overall: { average: 170, high: 200, low: 140, totalGames: 5, totalStrikes: 10, totalSpares: 8, strikeRate: 20, spareRate: 16, perfectGames: 0 },
+      trend: { last5Avg: 170, last10Avg: 0, last20Avg: 0 },
+      breakdown: { byMonth: [], byLocation: [], scoreDistribution: { sub150: 1, '150to179': 2, '180to199': 1, '200to224': 1, '225to249': 0, '250plus': 0 } },
+    }
+    let resolveRetry!: (response: Response) => void
+    const pendingRetry = new Promise<Response>((resolve) => { resolveRetry = resolve })
+    let trendAttempts = 0
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === '/api/stats/full') return Promise.resolve(jsonResponse(stats))
+      trendAttempts += 1
+      return trendAttempts === 1 ? Promise.resolve(new Response('failed', { status: 500 })) : pendingRetry
+    }))
+
+    renderPage(<Stats />)
+    const retry = await screen.findByRole('button', { name: 'Retry' })
+    fireEvent.click(retry)
+
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(true))
+    expect(retry.closest('section')?.getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByRole('region', { name: 'Scoring summary' })).toBeTruthy()
+    resolveRetry(jsonResponse({ games: [] }))
   })
 })

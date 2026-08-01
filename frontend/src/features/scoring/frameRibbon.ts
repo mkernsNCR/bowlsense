@@ -5,11 +5,10 @@ export function toFrameRibbonFrames(
   frames: readonly Frame[],
   currentFrame?: number,
 ): FrameRibbonFrame[] {
-  return frames.map((frame, index) => ({
-    rolls: [getDisplayMark(frame, 0), getDisplayMark(frame, 1), ...(index === 9 ? [getDisplayMark(frame, 2)] : [])]
-      .filter(Boolean),
-    score: frame.cumulative,
-    state: index === currentFrame
+  return frames.map((frame, index) => {
+    const rolls = [getDisplayMark(frame, 0), getDisplayMark(frame, 1), ...(index === 9 ? [getDisplayMark(frame, 2)] : [])]
+      .filter(Boolean)
+    const state = index === currentFrame
       ? 'current'
       : frame.ball1 == null
         ? 'pending'
@@ -17,7 +16,15 @@ export function toFrameRibbonFrames(
           ? 'strike'
           : frame.isSpare
             ? 'spare'
-            : 'open',
-    label: `Frame ${index + 1}${frame.cumulative == null ? '' : `, cumulative score ${frame.cumulative}`}`,
-  }))
+            : 'open'
+    const rollDescription = rolls.length > 0 ? `Rolls ${rolls.join(', ')}` : 'Not bowled'
+    const scoreDescription = frame.cumulative == null ? '' : `, cumulative score ${frame.cumulative}`
+
+    return {
+      rolls,
+      score: frame.cumulative,
+      state,
+      ariaLabel: `Frame ${index + 1}, ${state}, ${rollDescription}${scoreDescription}`,
+    }
+  })
 }

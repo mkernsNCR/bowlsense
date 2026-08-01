@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Icon, Sheet } from '../../design'
+import { EmptyState, Icon, Sheet } from '../../design'
 import './gear.css'
 
 export function GearNavigation() {
@@ -69,12 +69,13 @@ export function GearState({ kind, title, detail, action }: {
   action?: ReactNode
 }) {
   return (
-    <section className={`gear-state gear-state--${kind}`} aria-live="polite">
-      <span className="gear-state__mark" aria-hidden="true">{kind === 'loading' ? '···' : kind === 'error' ? '!' : '○'}</span>
-      <h2>{title}</h2>
-      <p>{detail}</p>
-      {action}
-    </section>
+    <EmptyState
+      status={kind}
+      title={title}
+      description={detail}
+      action={action}
+      className={`gear-state gear-state--${kind}`}
+    />
   )
 }
 

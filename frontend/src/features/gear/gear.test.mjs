@@ -11,10 +11,18 @@ test('reports each missing lead specification independently', () => {
 
 test('uses the shared sheet and the required Gear navigation labels', async () => {
   const source = await readFile(new URL('./GearWorkspace.tsx', import.meta.url), 'utf8')
-  assert.match(source, /import \{ Icon, Sheet \} from '\.\.\/\.\.\/design'/)
+  assert.match(source, /import \{ EmptyState, Icon, Sheet \} from '\.\.\/\.\.\/design'/)
+  assert.match(source, /<EmptyState/)
+  assert.match(source, /status=\{kind\}/)
+  assert.match(source, /className=\{`gear-state gear-state--\$\{kind\}`\}/)
   assert.match(source, /<h1>Gear<\/h1>/)
   assert.match(source, />\s*Balls\s*<\/NavLink>/)
   assert.match(source, />\s*Arsenals\s*<\/NavLink>/)
+})
+
+test('delegates JSON requests to the shared API helper', async () => {
+  const source = await readFile(new URL('./api.ts', import.meta.url), 'utf8')
+  assert.match(source, /export \{ fetchJson as requestJson \} from '\.\.\/\.\.\/api\/bowling'/)
 })
 
 test('keeps the lane-board flourish scoped to the arsenal bag', async () => {

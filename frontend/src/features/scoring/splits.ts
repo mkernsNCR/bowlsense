@@ -1,18 +1,5 @@
 import { initGame, knockPins, type GameState } from '../../utils/bowlingScore'
 
-const pinCoordinates: Record<number, readonly [x: number, y: number]> = {
-  1: [0, 0],
-  2: [-1, 1],
-  3: [1, 1],
-  4: [-2, 2],
-  5: [0, 2],
-  6: [2, 2],
-  7: [-3, 3],
-  8: [-1, 3],
-  9: [1, 3],
-  10: [3, 3],
-}
-
 const pinsImmediatelyBehind: Record<number, readonly [number, number]> = {
   1: [2, 3],
   2: [4, 5],
@@ -22,35 +9,44 @@ const pinsImmediatelyBehind: Record<number, readonly [number, number]> = {
   6: [9, 10],
 }
 
-function liesBetween(pin: number, first: number, second: number) {
-  const [x, y] = pinCoordinates[pin]!
-  const [firstX, firstY] = pinCoordinates[first]!
-  const [secondX, secondY] = pinCoordinates[second]!
-  const isCollinear = (x - firstX) * (secondY - firstY) === (y - firstY) * (secondX - firstX)
-  if (!isCollinear) return false
+const connectedPins = Object.entries(pinsImmediatelyBehind).reduce<Record<number, number[]>>((connections, [frontPin, backPins]) => {
+  const front = Number(frontPin)
+  connections[front] ??= []
+  for (const back of backPins) {
+    connections[front].push(back)
+    connections[back] ??= []
+    connections[back].push(front)
+  }
+  return connections
+}, {})
 
-  return x >= Math.min(firstX, secondX)
-    && x <= Math.max(firstX, secondX)
-    && y >= Math.min(firstY, secondY)
-    && y <= Math.max(firstY, secondY)
+function hasSeparatedStandingGroups(standing: ReadonlySet<number>) {
+  const unvisited = new Set(standing)
+  const first = unvisited.values().next().value
+  if (first == null) return false
+
+  const pending = [first]
+  unvisited.delete(first)
+  while (pending.length > 0) {
+    const pin = pending.pop()
+    if (pin == null) continue
+    for (const neighbor of connectedPins[pin] ?? []) {
+      if (!unvisited.has(neighbor)) continue
+      unvisited.delete(neighbor)
+      pending.push(neighbor)
+    }
+  }
+
+  return unvisited.size > 0
 }
 
 export function isSplitLeave(standingPins: readonly number[]) {
   const standing = new Set(standingPins)
   if (standing.has(1) || standing.size < 2) return false
 
-  const standingList = [...standing]
-  const downPins = Object.keys(pinCoordinates).map(Number).filter((pin) => !standing.has(pin))
+  if (hasSeparatedStandingGroups(standing)) return true
 
-  for (let firstIndex = 0; firstIndex < standingList.length; firstIndex += 1) {
-    for (let secondIndex = firstIndex + 1; secondIndex < standingList.length; secondIndex += 1) {
-      const first = standingList[firstIndex]!
-      const second = standingList[secondIndex]!
-      if (downPins.some((pin) => liesBetween(pin, first, second))) return true
-    }
-  }
-
-  return downPins.some((pin) => {
+  return Object.keys(connectedPins).map(Number).filter((pin) => !standing.has(pin)).some((pin) => {
     const behind = pinsImmediatelyBehind[pin]
     return behind ? behind.every((candidate) => standing.has(candidate)) : false
   })

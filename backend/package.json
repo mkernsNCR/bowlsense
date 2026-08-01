@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.mjs\""
   },
   "dependencies": {
     "@fastify/multipart": "10.1.0",

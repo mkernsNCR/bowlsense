@@ -15,15 +15,15 @@ In progress. The final browser matrix completed 106 route/viewport checks with n
 | Frontend lint | Pass | `npm run lint` |
 | Scoring regressions | Pass | `npm test`: 10 Node tests plus six detailed physical-pin scenarios |
 | Production build | Pass | `npm run build`; only Vite's non-blocking 500 kB chunk advisory remains |
-| Backend type-check | Pass | `npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts` |
+| Backend type-check and auth | Pass | `npx tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; `npm test` verifies trusted-proxy authorization fails closed for missing, empty, and rejected email allowlists and accepts only an explicitly allowed normalized email. |
 | Service-worker syntax | Pass | `node --check public/sw.js` |
 | Patch integrity | Pass | `git diff --check` |
 | Backend runtime | Pass | `npm start` launches `tsx src/server.ts` on port 3003; `/health` returns `{ status: "ok", service: "bowlsense-api" }` |
 | Dependency audit | Pass with one scoped exception | Root and backend audits contain no high/critical findings. Frontend dependencies were upgraded to current patched releases. The only remaining npm finding is `GHSA-qwww-vcr4-c8h2`, which the upstream advisory limits to unstable React Server Components APIs; BowlSense is a client-only `BrowserRouter` SPA and uses none of those APIs. React Router's documented patched `8.3.0` release is not published on npm as of this review. `npm run audit:ci` accepts only that exact advisory and its `react-router-dom` propagation, rejects RSC usage, and fails on any other high/critical finding. GitHub Actions reruns the policy after `npm ci`. |
 | Sites build and D1 integration | Pass | Root `npm test` builds `dist/server/index.js`, initializes an in-memory D1-compatible schema, verifies fail-closed auth/public boundaries, atomically imports all ten tables, rejects destructive partial restores and invalid CSV/CRUD data, exercises private CRUD plus public share payloads, validates real PNG signatures and crawler metadata, and confirms missing resources return 404 |
-| Sites package contract | Pass | The Sites packaging helper accepts the built worker, client assets, D1 declaration, and migration archive |
+| Sites package contract | Pass | The D1 migration is stored under root `drizzle/`, staged into `dist/.openai/drizzle/` during the build, asserted by CI, and included by the Sites packaging helper as `dist/.openai/drizzle/0000_bowlsense.sql`. |
 
-The backend has no project `tsconfig.json` or test script, so the explicit single-entry TypeScript command above is the compile gate alongside the runtime and API checks recorded below.
+The backend has no project `tsconfig.json`, so the explicit single-entry TypeScript command above remains its compile gate; its Node test script covers the native trusted-proxy authorization policy.
 
 ## Responsive matrix
 

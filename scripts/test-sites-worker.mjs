@@ -4,6 +4,12 @@ import { DatabaseSync } from "node:sqlite";
 
 import worker from "../dist/server/index.js";
 
+const packagedMigration = await readFile(
+  new URL("../dist/.openai/drizzle/0000_bowlsense.sql", import.meta.url),
+  "utf8",
+);
+assert.match(packagedMigration, /CREATE TABLE IF NOT EXISTS games/);
+
 class D1Statement {
   constructor(database, sql, values = []) {
     this.database = database;

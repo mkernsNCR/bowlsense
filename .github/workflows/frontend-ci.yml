@@ -70,6 +70,9 @@ jobs:
       - name: Type-check native backend
         run: npx --no-install tsc --noEmit --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts
 
+      - name: Test native backend authorization
+        run: npm test
+
   sites-verify:
     runs-on: ubuntu-latest
     steps:
@@ -96,3 +99,6 @@ jobs:
 
       - name: Test Sites worker and D1 contracts
         run: npm test
+
+      - name: Verify Sites migration staging
+        run: test -f dist/.openai/drizzle/0000_bowlsense.sql

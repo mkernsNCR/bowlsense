@@ -6,11 +6,12 @@ import fastifyStatic from '@fastify/static';
 import { readFileSync, statSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { eq } from 'drizzle-orm';
 import { sessions, games, balls } from './schema.js';
+import { secretsMatch, trustedProxyEmailIsAllowed } from './auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,24 +24,13 @@ const fastify = Fastify({ logger: true });
 const internalRelayToken = randomBytes(32).toString('hex');
 const configuredAuthToken = process.env.BOWLSENSE_AUTH_TOKEN || '';
 const configuredProxySecret = process.env.BOWLSENSE_TRUSTED_PROXY_SECRET || '';
-const allowedEmails = new Set(
-  (process.env.BOWLSENSE_ALLOWED_EMAILS || '')
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean),
-);
+const configuredAllowedEmails = process.env.BOWLSENSE_ALLOWED_EMAILS;
 
 function internalRequest(options: any) {
   return fastify.inject({
     ...options,
     headers: { ...options.headers, 'x-bowlsense-internal': internalRelayToken },
   });
-}
-
-function secretsMatch(candidate: string, expected: string) {
-  const candidateBuffer = Buffer.from(candidate);
-  const expectedBuffer = Buffer.from(expected);
-  return candidateBuffer.length === expectedBuffer.length && timingSafeEqual(candidateBuffer, expectedBuffer);
 }
 
 function isPublicDataRequest(method: string, pathname: string) {
@@ -93,8 +83,12 @@ fastify.addHook('onRequest', async (request, reply) => {
 
   const authenticatedEmail = String(request.headers['oai-authenticated-user-email'] || '').trim().toLowerCase();
   const suppliedProxySecret = String(request.headers['x-bowlsense-proxy-secret'] || '');
-  const trustedProxy = configuredProxySecret && secretsMatch(suppliedProxySecret, configuredProxySecret);
-  if (trustedProxy && authenticatedEmail && (allowedEmails.size === 0 || allowedEmails.has(authenticatedEmail))) return;
+  if (trustedProxyEmailIsAllowed({
+    authenticatedEmail,
+    suppliedProxySecret,
+    configuredProxySecret,
+    configuredAllowedEmails,
+  })) return;
 
   const authorization = String(request.headers.authorization || '');
   const bearerToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';

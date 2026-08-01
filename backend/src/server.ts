@@ -736,6 +736,52 @@ if (!lwCols.map((c: any) => c.name).includes('games_tied')) {
   sqlite.exec('ALTER TABLE league_weeks ADD COLUMN games_tied INTEGER DEFAULT 0');
 }
 
+// Log Week is retried after ambiguous network failures. Reconcile legacy
+// duplicates once, then make its natural week/game identities enforceable.
+const leagueWeekIndexes = sqlite.prepare('PRAGMA index_list(league_weeks)').all() as any[];
+const leagueGameIndexes = sqlite.prepare('PRAGMA index_list(league_games)').all() as any[];
+if (!leagueWeekIndexes.some((index) => index.name === 'league_weeks_league_number_unique')
+  || !leagueGameIndexes.some((index) => index.name === 'league_games_week_number_unique')) {
+  sqlite.transaction(() => sqlite.exec(`
+    DELETE FROM league_games
+    WHERE week_id IN (
+      SELECT older.id FROM league_weeks older JOIN league_weeks newer
+        ON newer.league_id = older.league_id
+       AND newer.week_number = older.week_number
+       AND newer.id > older.id
+    )
+    AND EXISTS (
+      SELECT 1 FROM league_games kept_game
+      JOIN league_weeks kept_week ON kept_week.id = kept_game.week_id
+      JOIN league_weeks older_week ON older_week.id = league_games.week_id
+      WHERE kept_week.league_id = older_week.league_id
+        AND kept_week.week_number = older_week.week_number
+        AND kept_game.game_number = league_games.game_number
+        AND kept_week.id > older_week.id
+    );
+    UPDATE league_games SET week_id = (
+      SELECT MAX(canonical.id) FROM league_weeks canonical
+      JOIN league_weeks current ON current.id = league_games.week_id
+      WHERE canonical.league_id = current.league_id
+        AND canonical.week_number = current.week_number
+    )
+    WHERE week_id IN (
+      SELECT older.id FROM league_weeks older JOIN league_weeks newer
+        ON newer.league_id = older.league_id
+       AND newer.week_number = older.week_number
+       AND newer.id > older.id
+    );
+    DELETE FROM league_games
+    WHERE id NOT IN (SELECT MAX(id) FROM league_games GROUP BY week_id, game_number);
+    DELETE FROM league_weeks
+    WHERE id NOT IN (SELECT MAX(id) FROM league_weeks GROUP BY league_id, week_number);
+    CREATE UNIQUE INDEX IF NOT EXISTS league_weeks_league_number_unique
+      ON league_weeks(league_id, week_number);
+    CREATE UNIQUE INDEX IF NOT EXISTS league_games_week_number_unique
+      ON league_games(week_id, game_number);
+  `))();
+}
+
 // Routes
 
 // Create session
@@ -2607,10 +2653,17 @@ fastify.post('/leagues/:id/weeks', async (request, reply) => {
 
   if (!date) return reply.status(400).send({ error: 'Date is required' });
 
-  const result = sqlite.prepare(`
+  const row = sqlite.prepare(`
     INSERT INTO league_weeks (league_id, week_number, date, opponent, games_won, games_lost, notes, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    ON CONFLICT (league_id, week_number) DO UPDATE SET
+      date = excluded.date,
+      opponent = excluded.opponent,
+      games_won = excluded.games_won,
+      games_lost = excluded.games_lost,
+      notes = excluded.notes
+    RETURNING *
+  `).get(
     leagueId,
     Number(weekNumber || 1),
     date,
@@ -2619,9 +2672,7 @@ fastify.post('/leagues/:id/weeks', async (request, reply) => {
     Number(gamesLost || 0),
     notes || null,
     Date.now(),
-  );
-
-  const row = sqlite.prepare('SELECT * FROM league_weeks WHERE id = ?').get(result.lastInsertRowid) as any;
+  ) as any;
   return {
     id: row.id,
     leagueId: row.league_id,
@@ -2690,10 +2741,18 @@ fastify.post('/leagues/weeks/:weekId/games', async (request, reply) => {
   const week = sqlite.prepare('SELECT id FROM league_weeks WHERE id = ?').get(parseInt(weekId));
   if (!week) return reply.status(404).send({ error: 'Week not found' });
 
-  const result = sqlite.prepare(`
+  const game = sqlite.prepare(`
     INSERT INTO league_games (week_id, game_number, score, strikes, spares, splits, ball_id, frame_data, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    ON CONFLICT (week_id, game_number) DO UPDATE SET
+      score = excluded.score,
+      strikes = excluded.strikes,
+      spares = excluded.spares,
+      splits = excluded.splits,
+      ball_id = excluded.ball_id,
+      frame_data = excluded.frame_data
+    RETURNING *
+  `).get(
     parseInt(weekId),
     Number(gameNumber || 1),
     score ?? null,
@@ -2703,9 +2762,7 @@ fastify.post('/leagues/weeks/:weekId/games', async (request, reply) => {
     ballId || null,
     frameData || null,
     Date.now(),
-  );
-
-  const game = sqlite.prepare('SELECT * FROM league_games WHERE id = ?').get(result.lastInsertRowid) as any;
+  ) as any;
   return {
     id: game.id,
     weekId: game.week_id,

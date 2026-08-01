@@ -1,7 +1,7 @@
 // BowlSense PWA Service Worker
 // Cache-first for app shell, network-first for API
 
-const CACHE_VERSION = 'v5-sites';
+const CACHE_VERSION = 'v6-sites';
 const SHELL_CACHE = `bowlsense-shell-${CACHE_VERSION}`;
 
 // App shell assets to cache on install
@@ -15,6 +15,8 @@ const NAVIGATION_TIMEOUT_MS = 8000;
 
 function isPublicShareNavigation(pathname) {
   return /^\/bowl\/?$/.test(pathname) ||
+    /^\/score\/\d+\/?$/.test(pathname) ||
+    /^\/perfect-games\/\d+\/?$/.test(pathname) ||
     /^\/sessions\/\d+\/share\/?$/.test(pathname) ||
     /^\/leagues\/\d+\/(?:public|leaderboard|share|recap\/share|week\/\d+\/share)\/?$/.test(pathname) ||
     /^\/tournaments\/\d+\/(?:share|standings|standings\/share)\/?$/.test(pathname);

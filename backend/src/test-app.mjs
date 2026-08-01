@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-export async function buildTestApp(t, { legacyCompetitions = false } = {}) {
+export async function buildTestApp(t, { legacyCompetitions = false, legacyLeagueRetries = false } = {}) {
   // This harness mutates process-global environment variables before importing a
   // fresh server module. Keep buildTestApp calls sequential within each process.
   const root = await mkdtemp(join(tmpdir(), 'bowlsense-backend-test-'))
@@ -28,6 +28,39 @@ export async function buildTestApp(t, { legacyCompetitions = false } = {}) {
       );
       INSERT INTO leagues (id, name, created_at) VALUES (1, 'Legacy League', 1);
       INSERT INTO tournaments (id, name, date, created_at) VALUES (1, 'Legacy Tournament', '2026-01-01', 1);
+    `)
+    legacy.close()
+  }
+
+  if (legacyLeagueRetries) {
+    const legacy = new Database(databasePath)
+    legacy.exec(`
+      CREATE TABLE leagues (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, location TEXT,
+        season TEXT, day_of_week TEXT, games_per_week INTEGER DEFAULT 3,
+        start_date TEXT, end_date TEXT, notes TEXT, active INTEGER DEFAULT 1,
+        created_at INTEGER
+      );
+      CREATE TABLE league_weeks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, league_id INTEGER NOT NULL,
+        week_number INTEGER NOT NULL, date TEXT NOT NULL, opponent TEXT,
+        games_won INTEGER DEFAULT 0, games_lost INTEGER DEFAULT 0,
+        games_tied INTEGER DEFAULT 0, notes TEXT, created_at INTEGER
+      );
+      CREATE TABLE league_games (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, week_id INTEGER NOT NULL,
+        game_number INTEGER NOT NULL, score INTEGER, strikes INTEGER,
+        spares INTEGER, splits INTEGER, ball_id INTEGER, frame_data TEXT,
+        created_at INTEGER
+      );
+      INSERT INTO leagues (id, name) VALUES (1, 'Legacy Retry League');
+      INSERT INTO league_weeks (id, league_id, week_number, date) VALUES
+        (1, 1, 1, '2026-07-01'),
+        (2, 1, 1, '2026-07-02');
+      INSERT INTO league_games (id, week_id, game_number, score) VALUES
+        (1, 1, 1, 170),
+        (2, 2, 1, 180),
+        (3, 1, 2, 190);
     `)
     legacy.close()
   }

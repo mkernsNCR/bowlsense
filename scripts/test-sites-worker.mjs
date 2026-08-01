@@ -16,9 +16,18 @@ const packagedBallIndexesMigration = await readFile(
   new URL("../dist/.openai/drizzle/0002_ball_indexes.sql", import.meta.url),
   "utf8",
 );
+const packagedLeagueRetryMigration = await readFile(
+  new URL("../dist/.openai/drizzle/0003_league_retry_idempotency.sql", import.meta.url),
+  "utf8",
+);
 assert.match(packagedMigration, /CREATE TABLE IF NOT EXISTS games/);
-assert.match(packagedTournamentActiveMigration, /ALTER TABLE tournaments ADD COLUMN active/);
+assert.match(packagedMigration, /CREATE TABLE IF NOT EXISTS tournaments[\s\S]*active INTEGER DEFAULT 1/);
+assert.match(packagedTournamentActiveMigration, /Compatibility marker/);
+assert.doesNotMatch(packagedTournamentActiveMigration, /ALTER TABLE/);
 assert.match(packagedBallIndexesMigration, /CREATE INDEX IF NOT EXISTS games_ball_idx/);
+assert.match(packagedLeagueRetryMigration, /DELETE FROM league_games/);
+assert.match(packagedLeagueRetryMigration, /CREATE UNIQUE INDEX IF NOT EXISTS league_weeks_league_number_unique/);
+assert.match(packagedLeagueRetryMigration, /CREATE UNIQUE INDEX IF NOT EXISTS league_games_week_number_unique/);
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -73,7 +82,9 @@ class D1Mock {
 }
 
 const database = new DatabaseSync(":memory:");
-database.exec(`${packagedMigration}\n${packagedTournamentActiveMigration}\n${packagedBallIndexesMigration}`);
+database.exec(`${packagedMigration}\n${packagedTournamentActiveMigration}\n${packagedBallIndexesMigration}\n${packagedLeagueRetryMigration}`);
+assert.ok(database.prepare("PRAGMA index_list(league_weeks)").all().some((index) => index.name === "league_weeks_league_number_unique" && index.unique === 1));
+assert.ok(database.prepare("PRAGMA index_list(league_games)").all().some((index) => index.name === "league_games_week_number_unique" && index.unique === 1));
 const indexHtml = `<!doctype html><html><head><title>BowlSense</title><meta name="description" content="generic"><meta property="og:title" content="generic"><meta property="og:description" content="generic"><meta property="og:image" content="generic"><meta name="twitter:title" content="generic"><meta name="twitter:description" content="generic"><meta name="twitter:image" content="generic"></head><body><div id="root"></div></body></html>`;
 const assetRequests = [];
 const env = {
@@ -93,10 +104,64 @@ const env = {
         : new Response("not found", { status: 404 });
     },
   },
+  BOWLSENSE_AUTH_MODE: "sites-private",
   BOWLSENSE_ALLOWED_EMAILS: "mkerns5@student.umgc.edu",
   BOWLSENSE_PUBLIC_PROFILE_NAME: "Matt Kerns",
   BOWLSENSE_TIME_ZONE: "America/New_York",
 };
+
+const legacyMigrationDatabase = new DatabaseSync(":memory:");
+legacyMigrationDatabase.exec(packagedMigration);
+legacyMigrationDatabase.exec(`
+  INSERT INTO leagues (id, name) VALUES (1, 'Migration Retry League');
+  INSERT INTO league_weeks (id, league_id, week_number, date) VALUES
+    (1, 1, 1, '2026-07-01'),
+    (2, 1, 1, '2026-07-02');
+  INSERT INTO league_games (id, week_id, game_number, score) VALUES
+    (1, 1, 1, 170),
+    (2, 2, 1, 180),
+    (3, 1, 2, 190);
+`);
+legacyMigrationDatabase.exec(packagedLeagueRetryMigration);
+assert.equal(legacyMigrationDatabase.prepare("SELECT COUNT(*) AS count FROM league_weeks WHERE league_id = 1 AND week_number = 1").get().count, 1);
+assert.deepEqual(legacyMigrationDatabase.prepare("SELECT week_id, game_number, score FROM league_games ORDER BY game_number").all().map((row) => ({ ...row })), [
+  { week_id: 2, game_number: 1, score: 180 },
+  { week_id: 2, game_number: 2, score: 190 },
+]);
+assert.ok(legacyMigrationDatabase.prepare("PRAGMA index_list(league_weeks)").all().some((index) => index.name === "league_weeks_league_number_unique" && index.unique === 1));
+assert.ok(legacyMigrationDatabase.prepare("PRAGMA index_list(league_games)").all().some((index) => index.name === "league_games_week_number_unique" && index.unique === 1));
+
+const legacySchemaDatabase = new DatabaseSync(":memory:");
+const legacySchemaMigration = packagedMigration.replace(
+  /(CREATE TABLE IF NOT EXISTS tournaments \([\s\S]*?  notes TEXT,\n)  active INTEGER DEFAULT 1,\n/,
+  "$1",
+);
+assert.doesNotMatch(legacySchemaMigration, /CREATE TABLE IF NOT EXISTS tournaments \([\s\S]*?active INTEGER/);
+legacySchemaDatabase.exec(legacySchemaMigration);
+legacySchemaDatabase.exec(`
+  INSERT INTO leagues (id, name) VALUES (1, 'Legacy Retry League');
+  INSERT INTO league_weeks (id, league_id, week_number, date) VALUES
+    (1, 1, 1, '2026-07-01'),
+    (2, 1, 1, '2026-07-02');
+  INSERT INTO league_games (id, week_id, game_number, score) VALUES
+    (1, 1, 1, 170),
+    (2, 2, 1, 180),
+    (3, 1, 2, 190);
+`);
+assert.equal(legacySchemaDatabase.prepare("PRAGMA table_info(tournaments)").all().some((column) => column.name === "active"), false);
+const legacySchemaEnv = { ...env, DB: new D1Mock(legacySchemaDatabase) };
+const legacySchemaResponse = await worker.fetch(new Request("https://bowlsense.test/api/tournaments", {
+  headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" },
+}), legacySchemaEnv);
+assert.equal(legacySchemaResponse.status, 200);
+assert.ok(legacySchemaDatabase.prepare("PRAGMA table_info(tournaments)").all().some((column) => column.name === "active"));
+assert.equal(legacySchemaDatabase.prepare("SELECT COUNT(*) AS count FROM league_weeks WHERE league_id = 1 AND week_number = 1").get().count, 1);
+assert.deepEqual(legacySchemaDatabase.prepare("SELECT week_id, game_number, score FROM league_games ORDER BY game_number").all().map((row) => ({ ...row })), [
+  { week_id: 2, game_number: 1, score: 180 },
+  { week_id: 2, game_number: 2, score: 190 },
+]);
+assert.ok(legacySchemaDatabase.prepare("PRAGMA index_list(league_weeks)").all().some((index) => index.name === "league_weeks_league_number_unique" && index.unique === 1));
+assert.ok(legacySchemaDatabase.prepare("PRAGMA index_list(league_games)").all().some((index) => index.name === "league_games_week_number_unique" && index.unique === 1));
 
 async function request(path, init) {
   const headers = new Headers(init?.headers);
@@ -130,6 +195,9 @@ assert.equal(anonymous.status, 401);
 const failClosedEnv = { ...env, BOWLSENSE_ALLOWED_EMAILS: undefined };
 let failClosed = await worker.fetch(new Request("https://bowlsense.test/api/leagues", { headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" } }), failClosedEnv);
 assert.equal(failClosed.status, 401);
+const wrongAuthModeEnv = { ...env, BOWLSENSE_AUTH_MODE: "public" };
+failClosed = await worker.fetch(new Request("https://bowlsense.test/api/leagues", { headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" } }), wrongAuthModeEnv);
+assert.equal(failClosed.status, 401);
 
 let response = await request("/api/restore", {
   method: "POST",
@@ -153,6 +221,47 @@ assert.equal(counts.tournament_games, backup.tournamentGames.length);
 assert.equal(counts.arsenals, backup.arsenals.length);
 assert.equal(counts.arsenal_balls, backup.arsenalBalls.length);
 assert.equal(health.backupHealth.hasRecentBackup, false);
+
+response = await request("/api/leagues/1/weeks", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ weekNumber: 99, date: "2026-08-01", opponent: "First attempt" }),
+});
+assert.equal(response.status, 201);
+const firstRetryWeek = await response.json();
+response = await request("/api/leagues/1/weeks", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ weekNumber: 99, date: "2026-08-01", opponent: "Retry payload" }),
+});
+assert.equal(response.status, 201);
+const retriedWeek = await response.json();
+assert.equal(retriedWeek.id, firstRetryWeek.id);
+assert.deepEqual({ ...database.prepare("SELECT COUNT(*) AS count, MAX(opponent) AS opponent FROM league_weeks WHERE league_id = 1 AND week_number = 99").get() }, {
+  count: 1,
+  opponent: "Retry payload",
+});
+
+response = await request(`/api/leagues/weeks/${firstRetryWeek.id}/games`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameNumber: 1, score: 180, strikes: 4 }),
+});
+assert.equal(response.status, 201);
+const firstRetryGame = await response.json();
+response = await request(`/api/leagues/weeks/${firstRetryWeek.id}/games`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ gameNumber: 1, score: 181, strikes: 5 }),
+});
+assert.equal(response.status, 201);
+const retriedGame = await response.json();
+assert.equal(retriedGame.id, firstRetryGame.id);
+assert.deepEqual({ ...database.prepare("SELECT COUNT(*) AS count, MAX(score) AS score, MAX(strikes) AS strikes FROM league_games WHERE week_id = ? AND game_number = 1").get(firstRetryWeek.id) }, {
+  count: 1,
+  score: 181,
+  strikes: 5,
+});
 
 response = await request("/api/restore", {
   method: "POST",

@@ -20,6 +20,7 @@ interface D1Database {
 interface Env {
   DB: D1Database;
   ASSETS: { fetch(request: Request): Promise<Response> };
+  BOWLSENSE_AUTH_MODE?: string;
   BOWLSENSE_ALLOWED_EMAILS?: string;
   BOWLSENSE_PUBLIC_PROFILE_NAME?: string;
   BOWLSENSE_TIME_ZONE?: string;
@@ -35,6 +36,8 @@ const MAX_D1_JSON_BIND_BYTES = 1024 * 1024;
 const MAX_D1_STATEMENTS_PER_REQUEST = 100;
 const UPSTREAM_TIMEOUT_MS = 8000;
 const DEFAULT_TIME_ZONE = "America/New_York";
+
+const legacySchemaChecks = new WeakMap<D1Database, Promise<void>>();
 
 class HttpError extends Error {
   constructor(public status: number, message: string) {
@@ -68,6 +71,9 @@ function isPublicApiRequest(method: string, path: string): boolean {
 }
 
 function isAuthorizedRequest(request: Request, env: Env): boolean {
+  // This identity header is trusted only in a Sites deployment whose external
+  // access policy authenticates the owner before the worker is invoked.
+  if (env.BOWLSENSE_AUTH_MODE !== "sites-private") return false;
   return emailIsExplicitlyAllowed(
     request.headers.get("oai-authenticated-user-email") || "",
     env.BOWLSENSE_ALLOWED_EMAILS,
@@ -107,6 +113,66 @@ async function first(db: D1Database, sql: string, ...values: unknown[]): Promise
 
 async function run(db: D1Database, sql: string, ...values: unknown[]): Promise<D1Result> {
   return db.prepare(sql).bind(...values).run();
+}
+
+async function ensureLegacySchema(db: D1Database): Promise<void> {
+  const existing = legacySchemaChecks.get(db);
+  if (existing) return existing;
+  const pending = (async () => {
+    const columns = await all(db, "PRAGMA table_info(tournaments)");
+    if (columns.length && !columns.some((column) => column.name === "active")) {
+      await run(db, "ALTER TABLE tournaments ADD COLUMN active INTEGER DEFAULT 1");
+    }
+    const weekIndexes = await all(db, "PRAGMA index_list(league_weeks)");
+    const gameIndexes = await all(db, "PRAGMA index_list(league_games)");
+    const weekColumns = await all(db, "PRAGMA table_info(league_weeks)");
+    const gameColumns = await all(db, "PRAGMA table_info(league_games)");
+    const hasWeekIdentity = weekIndexes.some((index) => index.name === "league_weeks_league_number_unique");
+    const hasGameIdentity = gameIndexes.some((index) => index.name === "league_games_week_number_unique");
+    if (weekColumns.length && gameColumns.length && (!hasWeekIdentity || !hasGameIdentity)) {
+      await db.batch([
+        db.prepare(`DELETE FROM league_games
+          WHERE week_id IN (
+            SELECT older.id FROM league_weeks older JOIN league_weeks newer
+              ON newer.league_id = older.league_id
+             AND newer.week_number = older.week_number
+             AND newer.id > older.id
+          )
+          AND EXISTS (
+            SELECT 1 FROM league_games kept_game
+            JOIN league_weeks kept_week ON kept_week.id = kept_game.week_id
+            JOIN league_weeks older_week ON older_week.id = league_games.week_id
+            WHERE kept_week.league_id = older_week.league_id
+              AND kept_week.week_number = older_week.week_number
+              AND kept_game.game_number = league_games.game_number
+              AND kept_week.id > older_week.id
+          )`),
+        db.prepare(`UPDATE league_games SET week_id = (
+            SELECT MAX(canonical.id) FROM league_weeks canonical
+            JOIN league_weeks current ON current.id = league_games.week_id
+            WHERE canonical.league_id = current.league_id
+              AND canonical.week_number = current.week_number
+          )
+          WHERE week_id IN (
+            SELECT older.id FROM league_weeks older JOIN league_weeks newer
+              ON newer.league_id = older.league_id
+             AND newer.week_number = older.week_number
+             AND newer.id > older.id
+          )`),
+        db.prepare("DELETE FROM league_games WHERE id NOT IN (SELECT MAX(id) FROM league_games GROUP BY week_id, game_number)"),
+        db.prepare("DELETE FROM league_weeks WHERE id NOT IN (SELECT MAX(id) FROM league_weeks GROUP BY league_id, week_number)"),
+        db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS league_weeks_league_number_unique ON league_weeks(league_id, week_number)"),
+        db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS league_games_week_number_unique ON league_games(week_id, game_number)"),
+      ]);
+    }
+  })();
+  legacySchemaChecks.set(db, pending);
+  try {
+    await pending;
+  } catch (caught) {
+    legacySchemaChecks.delete(db);
+    throw caught;
+  }
 }
 
 async function body(request: Request): Promise<Row> {
@@ -286,6 +352,22 @@ async function updateRow(db: D1Database, table: string, id: number, input: Row):
 
 async function insertResponse(db: D1Database, table: string, input: Row): Promise<Response> {
   return json(camelize(await insertRow(db, table, input)), 201);
+}
+
+async function upsertResponse(db: D1Database, table: string, input: Row, identity: string[]): Promise<Response> {
+  const validated = validateRecord(table, input);
+  await validateForeignKeys(db, table, validated);
+  const prepared = valuesFor(table, validated);
+  if (!prepared.columns.length) throw new Error(`No values supplied for ${table}`);
+  const updates = prepared.columns.filter((column) => !identity.includes(column) && column !== "created_at");
+  const conflict = updates.length
+    ? `DO UPDATE SET ${updates.map((column) => `${column} = excluded.${column}`).join(", ")}`
+    : "DO NOTHING";
+  const row = await first(db, `INSERT INTO ${table} (${prepared.columns.join(", ")})
+    VALUES (${prepared.columns.map(() => "?").join(", ")})
+    ON CONFLICT (${identity.join(", ")}) ${conflict}
+    RETURNING *`, ...prepared.values);
+  return json(camelize(row), 201);
 }
 
 async function updateResponse(db: D1Database, table: string, id: number, input: Row, label: string): Promise<Response> {
@@ -1429,7 +1511,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   if (path === "/api/leagues" && method === "POST") return insertResponse(db, "leagues", await body(request));
   const leagueWeekCreateMatch = path.match(/^\/api\/leagues\/(\d+)\/weeks$/);
   if (leagueWeekCreateMatch && method === "POST") {
-    return insertResponse(db, "league_weeks", { ...(await body(request)), leagueId: Number(leagueWeekCreateMatch[1]) });
+    return upsertResponse(db, "league_weeks", { ...(await body(request)), leagueId: Number(leagueWeekCreateMatch[1]) }, ["league_id", "week_number"]);
   }
   const leagueWeekDetailMatch = path.match(/^\/api\/leagues\/(\d+)\/weeks\/(\d+)$/);
   if (leagueWeekDetailMatch && method === "GET") {
@@ -1449,7 +1531,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     });
   }
   const leagueGameCreateMatch = path.match(/^\/api\/leagues\/weeks\/(\d+)\/games$/);
-  if (leagueGameCreateMatch && method === "POST") return insertResponse(db, "league_games", { ...(await body(request)), weekId: Number(leagueGameCreateMatch[1]) });
+  if (leagueGameCreateMatch && method === "POST") return upsertResponse(db, "league_games", { ...(await body(request)), weekId: Number(leagueGameCreateMatch[1]) }, ["week_id", "game_number"]);
   const leagueWeekMatch = path.match(/^\/api\/leagues\/weeks\/(\d+)$/);
   if (leagueWeekMatch) {
     const id = Number(leagueWeekMatch[1]);
@@ -1651,9 +1733,11 @@ export default {
         if (!isPublicApiRequest(request.method.toUpperCase(), url.pathname) && !isAuthorizedRequest(request, env)) {
           return error("Authentication required", 401);
         }
+        await ensureLegacySchema(env.DB);
         return await handleApi(request, env, url);
       }
       if (isPublicSharePage(url.pathname)) {
+        await ensureLegacySchema(env.DB);
         return await spaResponse(request, env, url, true);
       }
       const asset = await env.ASSETS.fetch(request);

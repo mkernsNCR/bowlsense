@@ -1,6 +1,7 @@
 # BowlSense 2.0 integration QA
 
 Date: 2026-07-21
+Last updated: 2026-08-01
 Branch: `agent/integration-qa`
 Issue: #8
 
@@ -13,15 +14,15 @@ In progress. The final browser matrix completed 106 route/viewport checks with n
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Frontend lint | Pass | `npm run lint` |
-| Frontend regressions | Pass | `npm test`: 29 declared Node tests, six detailed physical-pin scenarios, and eight rendered Today behavior tests |
+| Frontend regressions | Pass | `npm test`: 40 Node tests and 90 Vitest checks, including detailed physical-pin, rendered Today, public-layout, and service-worker cache-isolation scenarios |
 | Production build | Pass | `npm run build`; only Vite's non-blocking 500 kB chunk advisory remains |
-| Backend type-check and auth | Pass | `npx tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; `npm test` verifies trusted-proxy authorization fails closed for missing, empty, and rejected email allowlists and accepts only an explicitly allowed normalized email. |
-| Service-worker syntax | Pass | `node --check public/sw.js` |
+| Backend type-check and auth | Pass | `npx tsc --noEmit --allowImportingTsExtensions --target ES2022 --module NodeNext --moduleResolution NodeNext --esModuleInterop --skipLibCheck src/server.ts`; 15 Node 20 tests verify trusted-proxy authorization, legacy schema convergence, retry idempotency, archives, restore, and public metadata. |
+| Service-worker syntax and cache isolation | Pass | `node --check public/sw.js`; Node tests prove every public share route, including `/score/:id` and `/perfect-games/:id`, cannot replace the generic cached app shell while private navigations can refresh it. |
 | Patch integrity | Pass | `git diff --check` |
 | Backend runtime | Pass | `npm start` launches `tsx src/server.ts` on port 3003; `/health` returns `{ status: "ok", service: "bowlsense-api" }` |
-| Dependency audit | Pass with one scoped exception | Root and backend audits contain no high/critical findings. Frontend dependencies were upgraded to current patched releases. The only remaining npm finding is `GHSA-qwww-vcr4-c8h2`, which the upstream advisory limits to unstable React Server Components APIs; BowlSense is a client-only `BrowserRouter` SPA and uses none of those APIs. React Router's documented patched `8.3.0` release is not published on npm as of this review. `npm run audit:ci` accepts only that exact advisory and its `react-router-dom` propagation, rejects RSC usage, and fails on any other high/critical finding. GitHub Actions reruns the policy after `npm ci`. |
+| Dependency audit | Pass with one scoped exception | Root and backend audits contain no high/critical findings. The only remaining frontend npm finding is `GHSA-qwww-vcr4-c8h2`, which the upstream advisory limits to unstable React Server Components APIs; BowlSense is a client-only `BrowserRouter` SPA and uses none of those APIs. The advisory and npm were rechecked on 2026-07-31: `8.3.0` is now published as the patched major release, while BowlSense remains on the 7.x line. `npm run audit:ci` accepts only that exact advisory and its `react-router-dom` propagation, rejects RSC usage, and fails on any other high/critical finding. GitHub Actions reruns the policy after `npm ci`. |
 | Sites build and D1 integration | Pass | Root `npm test` builds `dist/server/index.js`, initializes an in-memory D1-compatible schema, verifies fail-closed auth/public boundaries, atomically imports all ten tables, rejects destructive partial restores and invalid CSV/CRUD data, exercises private CRUD plus public share payloads, validates real PNG signatures and crawler metadata, and confirms missing resources return 404 |
-| Sites package contract | Pass | D1 migrations are the sole production schema source, stored under root `drizzle/`, staged into `dist/.openai/drizzle/` during the build, and asserted by CI. `0001_tournament_active.sql` preserves archive state for existing databases, while `0002_ball_indexes.sql` adds the three ball lookup indexes without rewriting deployed migration history. |
+| Sites package contract | Pass | Forward D1 migrations own the production schema, are stored under root `drizzle/`, staged into `dist/.openai/drizzle/`, and asserted by CI. Fresh databases receive `tournaments.active` in `0000`; `0001` is a compatibility marker, while one guarded worker preflight adds that column only when a pre-migration database already has `tournaments` without it. The integration test proves both fresh and legacy shapes converge without duplicate-column failure. `0002_ball_indexes.sql` adds the three ball lookup indexes. `0003_league_retry_idempotency.sql` reconciles legacy retry duplicates and enforces one week number per league and one game number per week. |
 
 The backend has no project `tsconfig.json`, so the explicit single-entry TypeScript command above remains its compile gate; its Node test script covers the native trusted-proxy authorization policy.
 

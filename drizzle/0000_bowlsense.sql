@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
   prize_fund REAL,
   placement INTEGER,
   notes TEXT,
+  active INTEGER DEFAULT 1,
   created_at INTEGER
 );
 

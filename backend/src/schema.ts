@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const sessions = sqliteTable('sessions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -64,7 +64,7 @@ export const leagueWeeks = sqliteTable('league_weeks', {
   gamesLost: integer('games_lost').default(0),
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-});
+}, (table) => [uniqueIndex('league_weeks_league_number_unique').on(table.leagueId, table.weekNumber)]);
 
 export const leagueGames = sqliteTable('league_games', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -76,7 +76,7 @@ export const leagueGames = sqliteTable('league_games', {
   splits: integer('splits'),
   ballId: integer('ball_id'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-});
+}, (table) => [uniqueIndex('league_games_week_number_unique').on(table.weekId, table.gameNumber)]);
 
 export const tournaments = sqliteTable('tournaments', {
   id: integer('id').primaryKey({ autoIncrement: true }),

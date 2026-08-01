@@ -1,10 +1,29 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { Frame } from '../../utils/bowlingScore'
 import { FrameRibbon } from '../../design'
 import { toFrameRibbonFrames } from './frameRibbon'
 
-afterEach(cleanup)
+const originalScrollIntoView = Element.prototype.scrollIntoView
+
+beforeEach(() => {
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  })
+})
+
+afterEach(() => {
+  cleanup()
+  if (originalScrollIntoView) {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: originalScrollIntoView,
+    })
+  } else {
+    delete (Element.prototype as { scrollIntoView?: Element['scrollIntoView'] }).scrollIntoView
+  }
+})
 
 function frame(overrides: Partial<Frame> = {}): Frame {
   return {

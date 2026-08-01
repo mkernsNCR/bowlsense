@@ -89,7 +89,7 @@ export default function TournamentStandings() {
     tournamentMeta?.location,
     tournamentMeta?.format,
     tournamentMeta?.date
-      ? new Date(tournamentMeta.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      ? new Date(tournamentMeta.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
       : null,
   ].filter(Boolean).join(' · ')
 
@@ -97,7 +97,7 @@ export default function TournamentStandings() {
   const description = subtitle || 'Tournament standings'
   const ogImageUrl = `/api/tournaments/${tournamentId}/standings/og-image`
 
-  usePublicMetadata({ title, description, imageUrl: ogImageUrl })
+  usePublicMetadata({ title, description, imageUrl: invalidId ? '' : ogImageUrl })
 
   const shareCopy = async () => {
     try {
@@ -174,7 +174,7 @@ export default function TournamentStandings() {
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none' }}
+              style={{ textDecoration: 'none' }}
             >
               Share on X
             </a>
@@ -182,13 +182,13 @@ export default function TournamentStandings() {
               onClick={handleDownloadPng}
               disabled={downloading}
               className="btn btn-ghost"
-              style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', textDecoration: 'none', minHeight: 44 }}
+              style={{ minHeight: 44 }}
             >
               {downloading ? 'Saving…' : 'Download image'}
             </button>
         </div>
 
-        {isLoading && <div className="card" style={{ background: '#121228' }}>Loading standings...</div>}
+        {isLoading && <div className="card" style={{ background: '#121228', color: '#fff' }}>Loading standings...</div>}
         {isError && <div className="card" style={{ background: '#121228', color: '#fc8181' }}>Could not load standings right now.</div>}
 
         {!isLoading && !isError && data && (

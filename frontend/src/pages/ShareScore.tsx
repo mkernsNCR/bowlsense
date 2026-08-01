@@ -76,9 +76,13 @@ export default function ShareScore() {
   usePublicMetadata({ title, description, imageUrl: ogImageUrl })
 
   const copyLink = async () => {
-    await copyText(window.location.href)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1400)
+    try {
+      await copyText(window.location.href)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    } catch {
+      setCopied(false)
+    }
   }
 
   const shareOnX = () => {

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import BowlingScorer from '../components/BowlingScorer'
 import { Icon } from '../design'
-import { CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
+import { competitionJson, useCompetitionArchive } from '../features/competition/archive'
 import { formatFrameMarks } from '../features/scoring/frameMarks'
 
 interface Ball { id: number; name: string }
@@ -72,10 +73,11 @@ const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 export default function LeaguesPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
   if (id) return <LeagueDetail id={id} />
 
-  const isCreate = window.location.pathname === '/leagues/new'
+  const isCreate = location.pathname === '/leagues/new'
   if (isCreate) {
     return (
       <>
@@ -90,9 +92,9 @@ export default function LeaguesPage() {
 }
 
 function LeagueList() {
-  const { data: leagues, isLoading } = useQuery<League[]>({
+  const { data: leagues, isLoading, isError } = useQuery<League[]>({
     queryKey: ['leagues'],
-    queryFn: () => fetch('/api/leagues?includeArchived=1').then((r) => r.json()),
+    queryFn: () => competitionJson<League[]>('/api/leagues?includeArchived=1'),
   })
   const activeLeagues = leagues?.filter((league) => league.active !== 0) || []
   const archivedLeagues = leagues?.filter((league) => league.active === 0) || []
@@ -107,8 +109,9 @@ function LeagueList() {
       />
 
       {isLoading && <div className="muted">Loading leagues...</div>}
+      {isError && <div role="alert">Could not load leagues right now.</div>}
 
-      {!isLoading && !activeLeagues.length && (
+      {!isLoading && !isError && !activeLeagues.length && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="muted">No active leagues.</div>
           <Link to="/leagues/new" style={{ color: 'var(--accent)' }}>Create a league</Link>
@@ -259,18 +262,7 @@ function LeagueDetail({ id }: { id: string }) {
     },
   })
 
-  const setArchiveState = useMutation({
-    mutationFn: async (restore: boolean) => {
-      const response = await fetch(`/api/leagues/${id}/${restore ? 'unarchive' : 'archive'}`, { method: 'POST' })
-      if (!response.ok) throw new Error(`Unable to ${restore ? 'restore' : 'archive'} league`)
-      return response.json()
-    },
-    onSuccess: () => {
-      setArchiveSheetOpen(false)
-      qc.invalidateQueries({ queryKey: ['league', id] })
-      qc.invalidateQueries({ queryKey: ['leagues'] })
-    },
-  })
+  const setArchiveState = useCompetitionArchive({ area: 'leagues', id, onSuccess: () => setArchiveSheetOpen(false) })
 
   const updateLeague = useMutation({
     mutationFn: (data: object) => fetch(`/api/leagues/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
@@ -342,30 +334,13 @@ function LeagueDetail({ id }: { id: string }) {
       </div>
 
       {archiveSheetOpen && (
-        <CompetitionSheet
-          title={league.active === 0 ? 'Restore league?' : 'Archive league?'}
-          closeTo={`/leagues/${id}`}
+        <CompetitionArchiveSheet
+          area="leagues"
+          id={id}
+          active={league.active}
           onClose={() => setArchiveSheetOpen(false)}
-        >
-          <div className="card" style={{ display: 'grid', gap: 14 }}>
-            <p style={{ margin: 0 }}>
-              {league.active === 0
-                ? 'This league will return to your active leagues. All weeks and games are already preserved.'
-                : 'This league will move out of your active list. All weeks and games will be preserved, and you can restore it later.'}
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className={league.active === 0 ? 'btn btn-primary' : 'btn btn-danger'}
-                disabled={setArchiveState.isPending}
-                onClick={() => setArchiveState.mutate(league.active === 0)}
-              >
-                {setArchiveState.isPending ? 'Saving…' : league.active === 0 ? 'Restore league' : 'Archive league'}
-              </button>
-              <button className="btn btn-ghost" onClick={() => setArchiveSheetOpen(false)}>Cancel</button>
-            </div>
-            {setArchiveState.isError && <div role="alert" style={{ color: 'var(--danger)' }}>Could not update this league. Please try again.</div>}
-          </div>
-        </CompetitionSheet>
+          mutation={setArchiveState}
+        />
       )}
 
       {editingLeague && (
@@ -441,6 +416,8 @@ function LeagueDetail({ id }: { id: string }) {
           return (
             <div key={week.id} className="card" style={{ padding: 12 }}>
               <button
+                aria-expanded={expanded}
+                aria-controls={`league-week-${week.id}`}
                 style={{ width: '100%', background: 'transparent', border: 'none', color: 'inherit', textAlign: 'left', cursor: 'pointer' }}
                 onClick={() => setExpandedWeeks((prev) => prev.includes(week.id) ? prev.filter((w) => w !== week.id) : [...prev, week.id])}
               >
@@ -452,7 +429,7 @@ function LeagueDetail({ id }: { id: string }) {
                       W/L: {week.gamesWon}-{week.gamesLost}
                     </div>
                   </div>
-                  <span style={{ color: 'var(--accent)' }} aria-hidden="true">{expanded ? 'Collapse' : 'Expand'}</span>
+                  <span style={{ color: 'var(--accent)' }}>{expanded ? 'Collapse' : 'Expand'}</span>
                 </div>
               </button>
 
@@ -504,7 +481,7 @@ function LeagueDetail({ id }: { id: string }) {
               )}
 
               {expanded && (
-                <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                <div id={`league-week-${week.id}`} style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
                   <div style={{ display: 'grid', gap: 8 }}>
                     {(week.games || []).map((g) => {
                       const ballName = balls?.find((b) => b.id === g.ballId)?.name

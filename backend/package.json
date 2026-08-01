@@ -2,10 +2,13 @@
   "name": "bowling-tracker-backend",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node --watch src/server.ts",
     "start": "node src/server.ts",
-    "test": "node --test \"src/**/*.test.mjs\""
+    "test": "node --import tsx --test src/*.test.mjs"
   },
   "dependencies": {
     "@fastify/multipart": "8.3.1",

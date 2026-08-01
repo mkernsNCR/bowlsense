@@ -64,6 +64,8 @@ function restoreMeta(snapshot: MetaSnapshot) {
 
 export function usePublicMetadata({ title, description, imageUrl }: { title: string; description: string; imageUrl?: string }) {
   useEffect(() => {
+    // Recapture on every input change so cleanup restores the metadata state
+    // that existed immediately before this render.
     const previousTitle = document.title
     const absoluteImageUrl = absoluteUrl(imageUrl)
     const descriptors: MetaDescriptor[] = [

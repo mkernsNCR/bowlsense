@@ -76,4 +76,17 @@ describe('usePublicMetadata lifecycle', () => {
     expect(meta('property', 'og:description')).toBeNull()
     expect(meta('name', 'twitter:title')).toBeNull()
   })
+
+  it('recaptures metadata before applying rerendered values', () => {
+    const originalTitle = addMeta('property', 'og:title', 'Server title')
+    const view = render(<Harness title="First title" description="First description" />)
+
+    view.rerender(<Harness title="Second title" description="Second description" />)
+    expect(originalTitle.content).toBe('Second title')
+    expect(meta('property', 'og:description')?.content).toBe('Second description')
+
+    view.unmount()
+    expect(originalTitle.content).toBe('Server title')
+    expect(meta('property', 'og:description')).toBeNull()
+  })
 })

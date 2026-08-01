@@ -28,14 +28,18 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
   const [copied, setCopied] = useState(false)
   const [downloaded, setDownloaded] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const marks = parseFrameMarks(game.frameData)
+  const marks = game.frameData ? parseFrameMarks(game.frameData) : null
   const year = game.date ? new Date(game.date + 'T00:00:00').getFullYear() : '—'
   const imageFileName = `bowlsense-300-${game.date || 'game'}-${game.id}.png`
 
   const handleCopyLink = async () => {
-    await copyGameShareLink(game.id)
-    setCopied(true)
-    window.setTimeout(() => setCopied(false), 1400)
+    try {
+      await copyGameShareLink(game.id)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1400)
+    } catch {
+      setCopied(false)
+    }
   }
 
   const handleDownload = async () => {
@@ -120,7 +124,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
       </div>
 
       {/* Frame scoreboard */}
-      <div style={{
+      {marks ? <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(10, 1fr)',
         gap: 3,
@@ -154,9 +158,9 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
             </div>
           )
         })}
-      </div>
+      </div> : <div className="muted" style={{ marginBottom: 14, padding: 12, textAlign: 'center' }}>Frame details were not recorded for this game.</div>}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+      <div className="perfect-game-actions" style={{ marginBottom: 8 }}>
         <Link
           to={`/sessions/${game.sessionId}`}
           className="btn btn-ghost"
@@ -200,7 +204,7 @@ function PerfectGameCard({ game }: { game: PerfectGame }) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="perfect-game-actions">
         <button
           type="button"
           className="btn"

@@ -15,12 +15,28 @@ interface EntryForm {
 const USE_CASES: ArsenalUseCase[] = ['League', 'Tournament', 'Practice', 'Sport Shot', 'Custom']
 const ROLES = ['Strike', 'Spare', 'Heavy Oil', 'Dry Lane', 'Benchmark', 'Wet-Dry', 'Backup Ball', 'Custom']
 const EMPTY_ENTRY: EntryForm = { ballId: '', role: 'Benchmark', slotOrder: '', notes: '' }
+const MIN_CAPACITY = 1
+const MAX_CAPACITY = 12
+
+function requestedCapacity(value: string): number | null {
+  const capacity = Number(value)
+  return Number.isInteger(capacity) && capacity >= MIN_CAPACITY && capacity <= MAX_CAPACITY
+    ? capacity
+    : null
+}
+
+function normalizeCapacity(value: unknown): number {
+  const capacity = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(capacity)) return MIN_CAPACITY
+  return Math.min(MAX_CAPACITY, Math.max(MIN_CAPACITY, Math.trunc(capacity)))
+}
 
 function ArsenalList({ createMode }: { createMode: boolean }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [createOpen, setCreateOpen] = useState(createMode)
   const [form, setForm] = useState({ name: '', description: '', useCase: 'League' as ArsenalUseCase, maxSize: '6', notes: '' })
+  const createCapacity = requestedCapacity(form.maxSize)
   const arsenalsQuery = useQuery<Arsenal[]>({ queryKey: ['arsenals'], queryFn: () => arsenalJson<Arsenal[]>() })
   const createArsenal = useMutation({
     mutationFn: (payload: object) => arsenalJson<Arsenal>('', {
@@ -46,7 +62,8 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
         <section className="gear-arsenal-list" aria-label="Saved arsenals">
           {arsenalsQuery.data?.map((arsenal) => {
             const count = arsenal.ballCount ?? 0
-            const percent = Math.min(100, Math.round((count / Math.max(1, arsenal.maxSize)) * 100))
+            const capacity = normalizeCapacity(arsenal.maxSize)
+            const percent = Math.min(100, Math.round((count / capacity) * 100))
             return (
               <Link className="gear-arsenal-card" to={`/arsenals/${arsenal.id}`} key={arsenal.id}>
                 <div className="gear-arsenal-card__head">
@@ -55,7 +72,7 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
                 </div>
                 <div className="gear-capacity">
                   <div className="gear-capacity__rail" aria-hidden="true"><span style={{ width: `${percent}%` }} /></div>
-                  <span>{count} / {arsenal.maxSize}</span>
+                  <span>{count} / {capacity}</span>
                 </div>
               </Link>
             )
@@ -68,12 +85,12 @@ function ArsenalList({ createMode }: { createMode: boolean }) {
           <label>Arsenal name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="League night" /></label>
           <div className="gear-form__row">
             <label>Use case<select value={form.useCase} onChange={(event) => setForm({ ...form, useCase: event.target.value as ArsenalUseCase })}>{USE_CASES.map((useCase) => <option value={useCase} key={useCase}>{useCase}</option>)}</select></label>
-            <label>Bag size<input type="number" min="1" max="12" value={form.maxSize} onChange={(event) => setForm({ ...form, maxSize: event.target.value })} /></label>
+            <label>Bag size<input type="number" min="1" max="12" step="1" value={form.maxSize} onChange={(event) => setForm({ ...form, maxSize: event.target.value })} /></label>
           </div>
           <label>Description<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Fresh house shot with a late transition" /></label>
           <label>Notes<textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
           {createArsenal.isError && <p className="gear-form__error">The arsenal could not be created. Check the connection and try again.</p>}
-          <div className="gear-form__actions"><button className="btn btn-primary" type="button" disabled={!form.name.trim() || Number(form.maxSize) < 1 || Number(form.maxSize) > 12 || createArsenal.isPending} onClick={() => createArsenal.mutate({ name: form.name.trim(), description: form.description || null, useCase: form.useCase, maxSize: Number(form.maxSize), notes: form.notes || null })}>{createArsenal.isPending ? 'Building…' : 'Build arsenal'}</button></div>
+          <div className="gear-form__actions"><button className="btn btn-primary" type="button" disabled={!form.name.trim() || createCapacity === null || createArsenal.isPending} onClick={() => { if (createCapacity !== null) createArsenal.mutate({ name: form.name.trim(), description: form.description || null, useCase: form.useCase, maxSize: createCapacity, notes: form.notes || null }) }}>{createArsenal.isPending ? 'Building…' : 'Build arsenal'}</button></div>
         </div>
       </GearSheet>
     </div>
@@ -88,6 +105,7 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
   const [editEntry, setEditEntry] = useState<EntryForm>(EMPTY_ENTRY)
   const [notes, setNotes] = useState(arsenal.notes || '')
   const [performanceSort, setPerformanceSort] = useState<'average' | 'games' | 'high'>('average')
+  const capacity = normalizeCapacity(arsenal.maxSize)
 
   const ballsQuery = useQuery<GearBall[]>({ queryKey: ['balls'], queryFn: () => requestJson<GearBall[]>('/api/balls') })
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['arsenal', arsenal.id] })
@@ -129,15 +147,16 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
     mutationFn: () => arsenalRequest(`/${arsenal.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: arsenal.name, description: arsenal.description, useCase: arsenal.useCase, maxSize: arsenal.maxSize, notes: notes || null }),
+      body: JSON.stringify({ name: arsenal.name, description: arsenal.description, useCase: arsenal.useCase, maxSize: capacity, notes: notes || null }),
     }),
     onSuccess: invalidate,
   })
 
-  const slots = useMemo(() => {
-    const placed = new Array<ArsenalBall | null>(arsenal.maxSize).fill(null)
+  const allocation = useMemo(() => {
+    const placed = new Array<ArsenalBall | null>(capacity).fill(null)
     const unplaced: ArsenalBall[] = []
-    arsenal.balls.forEach((entry) => {
+    const ordered = [...arsenal.balls].sort((left, right) => left.slotOrder - right.slotOrder || left.id - right.id)
+    ordered.forEach((entry) => {
       const index = entry.slotOrder - 1
       if (index >= 0 && index < placed.length && !placed[index]) placed[index] = entry
       else unplaced.push(entry)
@@ -145,8 +164,9 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
     placed.forEach((entry, index) => {
       if (!entry && unplaced.length) placed[index] = unplaced.shift() || null
     })
-    return placed
-  }, [arsenal.balls, arsenal.maxSize])
+    return { slots: placed, overflow: unplaced }
+  }, [arsenal.balls, capacity])
+  const { slots, overflow } = allocation
 
   const availableBalls = useMemo(() => {
     const used = new Set(arsenal.balls.map((entry) => entry.ballId))
@@ -185,7 +205,7 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
       <GearHeader title={arsenal.name} description={arsenal.description || 'A purpose-built equipment plan.'} />
       <GearNavigation />
 
-      <div className="gear-section__head"><div><h2>Bag composition</h2><p>{arsenal.balls.length} of {arsenal.maxSize} slots filled</p></div>{arsenal.useCase && <span className="gear-chip">{arsenal.useCase}</span>}</div>
+      <div className="gear-section__head"><div><h2>Bag composition</h2><p>{arsenal.balls.length} of {capacity} slots filled</p></div>{arsenal.useCase && <span className="gear-chip">{arsenal.useCase}</span>}</div>
       <section className="gear-bag" aria-label={`${arsenal.name} ball slots`}>
         {slots.map((entry, index) => entry ? (
           <button className="gear-slot" type="button" key={entry.id} onClick={() => openEntry(entry, index + 1)} aria-label={`Edit slot ${index + 1}, ${entry.ball.name}`}>
@@ -197,6 +217,28 @@ function ArsenalDetailContent({ arsenal }: { arsenal: ArsenalDetail }) {
           <button className="gear-slot gear-slot--empty" type="button" key={`empty-${index}`} onClick={() => openAdd(index + 1)}><span className="gear-slot__number">{index + 1}</span><span>Add ball</span></button>
         ))}
       </section>
+
+      {overflow.length > 0 && (
+        <section className="gear-overflow" aria-labelledby="arsenal-overflow-heading">
+          <div className="gear-section__head">
+            <div><h2 id="arsenal-overflow-heading">Over capacity</h2><p>Remove balls until this bag fits its {capacity}-slot capacity.</p></div>
+            <span className="gear-chip">{overflow.length} extra</span>
+          </div>
+          <ol className="gear-overflow__list" aria-label="Over-capacity balls">
+            {overflow.map((entry, index) => (
+              <li key={entry.id}>
+                <span className="gear-overflow__order">Overflow {index + 1}</span>
+                <BallImage path={entry.ball.thumbnailImage} name={entry.ball.name} size="small" />
+                <span className="gear-overflow__copy"><strong>{entry.ball.name}</strong><span>{entry.ball.brand || 'Brand not recorded'} · {entry.role || 'No role'}</span></span>
+                <button className="btn btn-danger" type="button" disabled={removeEntry.isPending} onClick={() => removeEntry.mutate(entry.id)} aria-label={`Remove ${entry.ball.name} from bag`}>
+                  {removeEntry.isPending && removeEntry.variables === entry.id ? 'Removing…' : 'Remove'}
+                </button>
+              </li>
+            ))}
+          </ol>
+          {removeEntry.isError && <p className="gear-form__error">The extra ball could not be removed. Check the connection and try again.</p>}
+        </section>
+      )}
 
       <section className="gear-section" aria-labelledby="coverage-heading">
         <div className="gear-section__head"><h2 id="coverage-heading">Coverage check</h2><p>Roles represented in this bag</p></div>

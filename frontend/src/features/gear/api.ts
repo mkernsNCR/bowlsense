@@ -1,12 +1,9 @@
+export { fetchJson as requestJson } from '../../api/bowling'
+
 async function checkedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, init)
   if (!response.ok) throw new Error(`Request failed (${response.status})`)
   return response
-}
-
-export async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await checkedFetch(input, init)
-  return response.json() as Promise<T>
 }
 
 export async function request(input: RequestInfo | URL, init?: RequestInit): Promise<void> {

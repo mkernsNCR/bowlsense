@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
+import { createSessionRequest } from '../api/bowling'
 import { useSettings } from '../hooks/useSettings'
 import { Icon } from '../design'
 import { localDateValue } from '../features/scoring/date'
@@ -11,10 +12,6 @@ interface SessionDraft {
   location: string
   lanes: string
   notes: string
-}
-
-interface CreatedSession {
-  id: number
 }
 
 export default function NewSession() {
@@ -31,15 +28,7 @@ export default function NewSession() {
   })
 
   const createSession = useMutation({
-    mutationFn: async (draft: SessionDraft) => {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      if (!response.ok) throw new Error('The session could not be created.')
-      return response.json() as Promise<CreatedSession>
-    },
+    mutationFn: createSessionRequest,
     onSuccess: (session) => {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
       navigate(`/sessions/${session.id}?start=1`)
@@ -48,6 +37,15 @@ export default function NewSession() {
 
   const updateField = (field: keyof SessionDraft, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const submitSession = () => {
+    createSession.mutate({
+      ...form,
+      location: form.location.trim(),
+      lanes: form.lanes.trim(),
+      notes: form.notes.trim(),
+    })
   }
 
   return (
@@ -63,61 +61,65 @@ export default function NewSession() {
         </Link>
       </div>
 
-      <section className="scoring-group" aria-label="Session setup">
-        <div className="scoring-field">
-          <label htmlFor="session-date">Date</label>
-          <input id="session-date" type="date" value={form.date} onChange={(event) => updateField('date', event.target.value)} />
-        </div>
-        <div className="scoring-field">
-          <label htmlFor="session-location">Center</label>
-          <input
-            id="session-location"
-            type="text"
-            autoComplete="organization"
-            placeholder="Home Lanes"
-            value={form.location}
-            onChange={(event) => updateField('location', event.target.value)}
-          />
-        </div>
-        <div className="scoring-field">
-          <label htmlFor="session-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
-          <input id="session-lanes" type="text" placeholder="5–6" value={form.lanes} onChange={(event) => updateField('lanes', event.target.value)} />
-        </div>
-      </section>
-
-      <div className="scoring-disclosure">
-        <button type="button" className="scoring-button quiet" aria-expanded={showDetails} aria-controls={detailsId} onClick={() => setShowDetails((visible) => !visible)}>
-          {showDetails ? 'Hide details' : 'Add details'}
-          <Icon name="chevron-right" size={16} />
-        </button>
-      </div>
-
-      {showDetails && (
-        <section id={detailsId} className="scoring-group" aria-label="Optional session details">
+      <form onSubmit={(event) => {
+        event.preventDefault()
+        submitSession()
+      }}>
+        <section className="scoring-group" aria-label="Session setup">
           <div className="scoring-field">
-            <label htmlFor="session-notes">Notes or conditions</label>
-            <textarea
-              id="session-notes"
-              placeholder="Oil pattern, transition, or what you are working on"
-              value={form.notes}
-              onChange={(event) => updateField('notes', event.target.value)}
+            <label htmlFor="session-date">Date</label>
+            <input id="session-date" type="date" value={form.date} onChange={(event) => updateField('date', event.target.value)} />
+          </div>
+          <div className="scoring-field">
+            <label htmlFor="session-location">Center</label>
+            <input
+              id="session-location"
+              type="text"
+              autoComplete="organization"
+              placeholder="Home Lanes"
+              value={form.location}
+              onChange={(event) => updateField('location', event.target.value)}
             />
           </div>
+          <div className="scoring-field">
+            <label htmlFor="session-lanes">Lanes <span aria-hidden="true">·</span> optional</label>
+            <input id="session-lanes" type="text" placeholder="5–6" value={form.lanes} onChange={(event) => updateField('lanes', event.target.value)} />
+          </div>
         </section>
-      )}
 
-      {createSession.isError && (
-        <p className="scoring-error" role="alert">The session was not created. Check your connection and try again.</p>
-      )}
+        <div className="scoring-disclosure">
+          <button type="button" className="scoring-button quiet" aria-expanded={showDetails} aria-controls={detailsId} onClick={() => setShowDetails((visible) => !visible)}>
+            {showDetails ? 'Hide details' : 'Add details'}
+            <Icon name="chevron-right" size={16} />
+          </button>
+        </div>
 
-      <button
-        type="button"
-        className="scoring-button primary wide"
-        disabled={!form.date || !form.location.trim() || createSession.isPending}
-        onClick={() => createSession.mutate({ ...form, location: form.location.trim() })}
-      >
-        {createSession.isPending ? 'Starting…' : 'Start bowling'}
-      </button>
+        {showDetails && (
+          <section id={detailsId} className="scoring-group" aria-label="Optional session details">
+            <div className="scoring-field">
+              <label htmlFor="session-notes">Notes or conditions</label>
+              <textarea
+                id="session-notes"
+                placeholder="Oil pattern, transition, or what you are working on"
+                value={form.notes}
+                onChange={(event) => updateField('notes', event.target.value)}
+              />
+            </div>
+          </section>
+        )}
+
+        {createSession.isError && (
+          <p className="scoring-error" role="alert">The session was not created. Check your connection and try again.</p>
+        )}
+
+        <button
+          type="submit"
+          className="scoring-button primary wide"
+          disabled={!form.date || !form.location.trim() || createSession.isPending}
+        >
+          {createSession.isPending ? 'Starting…' : 'Start bowling'}
+        </button>
+      </form>
     </div>
   )
 }

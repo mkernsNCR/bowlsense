@@ -97,14 +97,14 @@ export default function SessionShare() {
   const shareNative = async () => {
     if (!Number.isFinite(sessionId)) return
     setBusy('share')
-    const ok = await nativeShareSession({
+    const outcome = await nativeShareSession({
       sessionId,
       filename: `bowlsense-session-${sessionId}.png`,
       title: 'BowlSense Session',
       text: description,
     })
     setBusy(null)
-    if (!ok) copyLink()
+    if (outcome === 'unsupported') await copyLink()
   }
 
   const download = async () => {

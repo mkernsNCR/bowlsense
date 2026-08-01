@@ -2,36 +2,22 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import QuickAddGame from '../components/QuickAddGame'
+import { fetchRecentSessions, type Session } from '../api/bowling'
 import { Icon } from '../design'
+import { readableDate } from '../features/scoring/date'
 import '../features/scoring/scoring.css'
 
-interface SessionSummary {
+interface SavedQuickGame {
   id: number
-  date: string
-  location: string
-  gameCount: number
-  avgScore: number | null
-  highScore?: number | null
-}
-
-interface SessionPayload {
-  sessions?: SessionSummary[]
-}
-
-function readableDate(value: string) {
-  return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  startAnother: () => void
 }
 
 export default function QuickStart() {
-  const [lastGameId, setLastGameId] = useState<number | null>(null)
-  const sessionsQuery = useQuery<SessionSummary[]>({
-    queryKey: ['quick-start-sessions'],
-    queryFn: async () => {
-      const response = await fetch('/api/sessions?limit=5&sort=date&order=desc')
-      if (!response.ok) throw new Error('Recent sessions could not be loaded.')
-      const payload: SessionSummary[] | SessionPayload = await response.json()
-      return Array.isArray(payload) ? payload : (payload.sessions ?? [])
-    },
+  const [savedGame, setSavedGame] = useState<SavedQuickGame | null>(null)
+  const sessionsQuery = useQuery<Session[]>({
+    queryKey: ['sessions', 'quick-start'],
+    queryFn: fetchRecentSessions,
+    select: (sessions) => sessions.slice(0, 5),
   })
 
   return (
@@ -44,12 +30,30 @@ export default function QuickStart() {
         </div>
       </div>
 
-      <QuickAddGame onDone={setLastGameId} />
+      <div hidden={savedGame !== null}>
+        <QuickAddGame onDone={(id, startAnother) => setSavedGame({ id, startAnother })} />
+      </div>
 
-      {lastGameId && (
-        <p className="scoring-subtitle" role="status">
-          Game saved. <Link to={`/score/${lastGameId}`}>Open score</Link>
-        </p>
+      {savedGame && (
+        <div className="scoring-status" role="status">
+          <div className="scoring-save-check"><Icon name="check" size={34} /></div>
+          <h2>Game saved</h2>
+          <p className="scoring-subtitle">The score is ready in your session history.</p>
+          <div className="scoring-toolbar" style={{ justifyContent: 'center', marginTop: 20 }}>
+            <button
+              type="button"
+              className="scoring-button primary"
+              onClick={() => {
+                savedGame.startAnother()
+                setSavedGame(null)
+              }}
+            >
+              <Icon name="plus" /> Add another
+            </button>
+            <Link to={`/score/${savedGame.id}`} className="scoring-button secondary">Open score</Link>
+            <Link to="/sessions" className="scoring-button quiet">View sessions</Link>
+          </div>
+        </div>
       )}
 
       <h2 className="scoring-section-title">Recent sessions</h2>
@@ -63,21 +67,24 @@ export default function QuickStart() {
       )}
       {sessionsQuery.data && sessionsQuery.data.length > 0 && (
         <div className="scoring-group">
-          {sessionsQuery.data.map((session) => (
-            <div className="scoring-row" key={session.id}>
-              <Link to={`/sessions/${session.id}`} className="scoring-row-main">
-                <div className="scoring-row-copy">
-                  <p className="scoring-row-title">{session.location || 'Center not named'}</p>
-                  <p className="scoring-row-meta">
-                    {readableDate(session.date)} · {session.gameCount} {session.gameCount === 1 ? 'game' : 'games'}
-                    {session.avgScore != null ? ` · ${session.avgScore} average` : ''}
-                  </p>
-                </div>
-                {session.highScore != null && <span className="scoring-row-value">{session.highScore}</span>}
-                <Icon name="chevron-right" size={18} />
-              </Link>
-            </div>
-          ))}
+          {sessionsQuery.data.map((session) => {
+            const gameCount = session.gameCount ?? 0
+            return (
+              <div className="scoring-row" key={session.id}>
+                <Link to={`/sessions/${session.id}`} className="scoring-row-main">
+                  <div className="scoring-row-copy">
+                    <p className="scoring-row-title">{session.location || 'Center not named'}</p>
+                    <p className="scoring-row-meta">
+                      {readableDate(session.date)} · {gameCount} {gameCount === 1 ? 'game' : 'games'}
+                      {session.avgScore != null ? ` · ${session.avgScore} average` : ''}
+                    </p>
+                  </div>
+                  {session.highScore != null && <span className="scoring-row-value">{session.highScore}</span>}
+                  <Icon name="chevron-right" size={18} />
+                </Link>
+              </div>
+            )
+          })}
         </div>
       )}
 

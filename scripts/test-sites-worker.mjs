@@ -3,12 +3,39 @@ import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 
 import worker from "../dist/server/index.js";
+import { schemaStatements } from "../db/schema.ts";
 
 const packagedMigration = await readFile(
   new URL("../dist/.openai/drizzle/0000_bowlsense.sql", import.meta.url),
   "utf8",
 );
+const packagedTournamentActiveMigration = await readFile(
+  new URL("../dist/.openai/drizzle/0001_tournament_active.sql", import.meta.url),
+  "utf8",
+);
 assert.match(packagedMigration, /CREATE TABLE IF NOT EXISTS games/);
+assert.match(packagedTournamentActiveMigration, /ALTER TABLE tournaments ADD COLUMN active/);
+
+function schemaSnapshot(database) {
+  const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all();
+  return tables.map(({ name }) => ({
+    name,
+    columns: database.prepare(`PRAGMA table_info("${name}")`).all()
+      .map(({ cid: _cid, ...column }) => column)
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    foreignKeys: database.prepare(`PRAGMA foreign_key_list("${name}")`).all(),
+  }));
+}
+
+const migrationDatabase = new DatabaseSync(":memory:");
+migrationDatabase.exec(`${packagedMigration}\n${packagedTournamentActiveMigration}`);
+const runtimeSchemaDatabase = new DatabaseSync(":memory:");
+runtimeSchemaDatabase.exec(schemaStatements.join(";\n"));
+assert.deepEqual(
+  schemaSnapshot(migrationDatabase),
+  schemaSnapshot(runtimeSchemaDatabase),
+  "The packaged D1 migrations must produce the same schema as worker runtime initialization",
+);
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -177,6 +204,30 @@ response = await request("/api/leagues");
 assert.equal(response.status, 200);
 assert.equal((await response.json()).length, backup.leagues.length);
 
+if (backup.leagues.length > 0) {
+  const leagueId = backup.leagues[0].id;
+  response = await request(`/api/leagues/${leagueId}/archive`, { method: "POST" });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).active, 0);
+  response = await request(`/api/leagues/${leagueId}/unarchive`, { method: "POST" });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).active, 1);
+}
+response = await request("/api/leagues/999999/archive", { method: "POST" });
+assert.equal(response.status, 404);
+
+if (backup.tournaments.length > 0) {
+  const tournamentId = backup.tournaments[0].id;
+  response = await request(`/api/tournaments/${tournamentId}/archive`, { method: "POST" });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).active, 0);
+  response = await request(`/api/tournaments/${tournamentId}/unarchive`, { method: "POST" });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).active, 1);
+}
+response = await request("/api/tournaments/999999/unarchive", { method: "POST" });
+assert.equal(response.status, 404);
+
 if (backup.sessions.length > 0) {
   response = await publicRequest(`/api/sessions/${backup.sessions[0].id}/public`);
   assert.equal(response.status, 200);
@@ -307,6 +358,11 @@ assert.equal(response.status, 404);
 response = await publicRequest(`/leagues/${emptyLeague.id}/recap/share`);
 assert.equal(response.status, 404);
 assert.match(await response.text(), /<meta name="robots" content="noindex, nofollow"\s*\/?>/i);
+response = await request(`/api/leagues/${emptyLeague.id}`, { method: "DELETE" });
+assert.equal(response.status, 204);
+response = await request(`/api/leagues/${emptyLeague.id}`);
+assert.equal(response.status, 200);
+assert.equal((await response.json()).active, 0);
 
 response = await request("/api/tournaments", {
   method: "POST",
@@ -320,6 +376,12 @@ response = await request("/api/tournaments", {
   body: JSON.stringify({ name: "Dated Open", date: "2026-08-01" }),
 });
 assert.equal(response.status, 201);
+const datedTournament = await response.json();
+response = await request(`/api/tournaments/${datedTournament.id}`, { method: "DELETE" });
+assert.equal(response.status, 204);
+response = await request(`/api/tournaments/${datedTournament.id}`);
+assert.equal(response.status, 200);
+assert.equal((await response.json()).active, 0);
 
 response = await request("/api/arsenals");
 assert.equal(response.status, 200);

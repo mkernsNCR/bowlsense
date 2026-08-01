@@ -36,21 +36,13 @@ describe('Balls performance', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const path = String(input)
       if (path === '/api/balls') return Promise.resolve(jsonResponse(balls))
-      if (path === '/stats/by-ball') {
+      if (path === '/api/stats/by-ball') {
         return Promise.resolve(jsonResponse([{
           ballId: 1,
           ballName: 'Used Ball',
           brand: 'Track',
           gameCount: 4,
           average: 188,
-        }]))
-      }
-      if (path === '/api/stats/by-ball') {
-        return Promise.resolve(jsonResponse([{
-          name: 'Used Ball',
-          game_count: 4,
-          avg_score: 188,
-          high_game: 211,
         }]))
       }
       return Promise.resolve(jsonResponse([]))

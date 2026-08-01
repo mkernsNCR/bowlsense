@@ -113,7 +113,7 @@ export default function Balls() {
 
   const performanceQuery = useQuery<BallPerformance[]>({
     queryKey: ['ball-performance'],
-    queryFn: () => requestJson<BallPerformance[]>('/stats/by-ball'),
+    queryFn: () => requestJson<BallPerformance[]>('/api/stats/by-ball'),
   })
 
   const catalogSearch = useQuery<BowwwlBall[]>({

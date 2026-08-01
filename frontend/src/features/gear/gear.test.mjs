@@ -25,6 +25,11 @@ test('delegates JSON requests to the shared API helper', async () => {
   assert.match(source, /export \{ fetchJson as requestJson \} from '\.\.\/\.\.\/api\/bowling'/)
 })
 
+test('requests ball performance through the Sites-compatible API namespace', async () => {
+  const source = await readFile(new URL('../../pages/Balls.tsx', import.meta.url), 'utf8')
+  assert.match(source, /requestJson<BallPerformance\[]>\('\/api\/stats\/by-ball'\)/)
+})
+
 test('keeps the lane-board flourish scoped to the arsenal bag', async () => {
   const css = await readFile(new URL('./gear.css', import.meta.url), 'utf8')
   assert.match(css, /\.gear-bag\s*\{[^}]*repeating-linear-gradient/s)

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings } from '../hooks/useSettings'
 import type { Settings } from '../hooks/useSettings'
+import { fetchJson } from '../api/bowling'
 
 interface Ball {
   id: number
@@ -57,12 +58,6 @@ function formatTimestamp(ts: string) {
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
-  return response.json() as Promise<T>
 }
 
 export default function SettingsPage() {

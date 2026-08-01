@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "npm --prefix frontend run build && node scripts/build-sites.mjs",
-    "test": "npm run build && node scripts/test-sites-worker.mjs"
+    "typecheck": "npm --prefix frontend exec -- tsc -p tsconfig.sites.json --noEmit",
+    "test": "npm run typecheck && npm run build && node scripts/test-sites-worker.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

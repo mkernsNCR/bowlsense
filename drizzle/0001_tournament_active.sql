@@ -1,0 +1,1 @@
+ALTER TABLE tournaments ADD COLUMN active INTEGER DEFAULT 1;

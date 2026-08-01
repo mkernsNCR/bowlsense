@@ -101,4 +101,4 @@ jobs:
         run: npm test
 
       - name: Verify Sites migration staging
-        run: test -f dist/.openai/drizzle/0000_bowlsense.sql
+        run: test -f dist/.openai/drizzle/0000_bowlsense.sql && test -f dist/.openai/drizzle/0001_tournament_active.sql

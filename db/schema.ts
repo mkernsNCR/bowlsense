@@ -84,6 +84,7 @@ export const schemaStatements = [
     prize_fund REAL,
     placement INTEGER,
     notes TEXT,
+    active INTEGER DEFAULT 1,
     created_at INTEGER
   )`,
   `CREATE TABLE IF NOT EXISTS tournament_games (

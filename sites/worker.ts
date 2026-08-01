@@ -170,7 +170,7 @@ const tableColumns: Record<string, string[]> = {
   leagues: ["name", "location", "season", "day_of_week", "games_per_week", "start_date", "end_date", "notes", "active", "created_at"],
   league_weeks: ["league_id", "week_number", "date", "opponent", "games_won", "games_lost", "games_tied", "notes", "created_at"],
   league_games: ["week_id", "game_number", "score", "strikes", "spares", "splits", "ball_id", "frame_data", "created_at"],
-  tournaments: ["name", "location", "date", "end_date", "format", "entry_fee", "prize_fund", "placement", "notes", "created_at"],
+  tournaments: ["name", "location", "date", "end_date", "format", "entry_fee", "prize_fund", "placement", "notes", "active", "created_at"],
   tournament_games: ["tournament_id", "game_number", "score", "strikes", "spares", "splits", "ball_id", "squad", "frame_data", "created_at"],
   arsenals: ["name", "description", "use_case", "max_size", "notes", "created_at"],
   arsenal_balls: ["arsenal_id", "ball_id", "role", "slot_order", "notes", "created_at"],
@@ -711,7 +711,7 @@ function tournamentStandingsPayload(detail: Row): Row {
   for (const game of detail.games || []) {
     const ballId = game.ballId == null ? null : Number(game.ballId);
     const key = ballId == null ? "unknown" : String(ballId);
-    const current = byBall.get(key) || { ballId, ballName: game.ballName || "Unknown ball", scores: [] };
+    const current = byBall.get(key) || { ballId, ballName: game.ballName || "Unknown ball", scores: [] as number[] };
     if (game.score != null) current.scores.push(Number(game.score));
     byBall.set(key, current);
   }
@@ -1442,16 +1442,18 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     return json(leagueSharePayload(detail));
   }
+  const leagueArchiveMatch = path.match(/^\/api\/leagues\/(\d+)\/(archive|unarchive)$/);
+  if (leagueArchiveMatch && method === "POST") {
+    return updateResponse(db, "leagues", Number(leagueArchiveMatch[1]), { active: leagueArchiveMatch[2] === "archive" ? 0 : 1 }, "League");
+  }
   const leagueMatch = path.match(/^\/api\/leagues\/(\d+)$/);
   if (leagueMatch) {
     const id = Number(leagueMatch[1]);
     if (method === "GET") { const detail = await leagueDetail(db, id); return detail ? json(detail) : error("League not found", 404); }
     if (method === "PUT") return updateResponse(db, "leagues", id, await body(request), "League");
     if (method === "DELETE") {
-      const weeks = await all(db, "SELECT id FROM league_weeks WHERE league_id = ?", id);
-      const statements = weeks.map((week) => db.prepare("DELETE FROM league_games WHERE week_id = ?").bind(week.id));
-      statements.push(db.prepare("DELETE FROM league_weeks WHERE league_id = ?").bind(id), db.prepare("DELETE FROM leagues WHERE id = ?").bind(id));
-      await db.batch(statements); return new Response(null, { status: 204 });
+      const archived = await updateRow(db, "leagues", id, { active: 0 });
+      return archived ? new Response(null, { status: 204 }) : error("League not found", 404);
     }
   }
 
@@ -1475,12 +1477,19 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (kind === "standings") return json({ standings });
     return json(tournamentSharePayload(detail));
   }
+  const tournamentArchiveMatch = path.match(/^\/api\/tournaments\/(\d+)\/(archive|unarchive)$/);
+  if (tournamentArchiveMatch && method === "POST") {
+    return updateResponse(db, "tournaments", Number(tournamentArchiveMatch[1]), { active: tournamentArchiveMatch[2] === "archive" ? 0 : 1 }, "Tournament");
+  }
   const tournamentMatch = path.match(/^\/api\/tournaments\/(\d+)$/);
   if (tournamentMatch) {
     const id = Number(tournamentMatch[1]);
     if (method === "GET") { const detail = await tournamentDetail(db, id); return detail ? json(detail) : error("Tournament not found", 404); }
     if (method === "PUT") return updateResponse(db, "tournaments", id, await body(request), "Tournament");
-    if (method === "DELETE") { await db.batch([db.prepare("DELETE FROM tournament_games WHERE tournament_id = ?").bind(id), db.prepare("DELETE FROM tournaments WHERE id = ?").bind(id)]); return new Response(null, { status: 204 }); }
+    if (method === "DELETE") {
+      const archived = await updateRow(db, "tournaments", id, { active: 0 });
+      return archived ? new Response(null, { status: 204 }) : error("Tournament not found", 404);
+    }
   }
 
   if (path === "/api/arsenals" && method === "GET") return json(await arsenalList(db));

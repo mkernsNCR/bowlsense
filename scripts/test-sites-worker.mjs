@@ -4,6 +4,8 @@ import { DatabaseSync } from "node:sqlite";
 
 import worker from "../dist/server/index.js";
 
+const ALLOWED_EMAIL = "owner@example.com";
+
 const packagedMigration = await readFile(
   new URL("../dist/.openai/drizzle/0000_bowlsense.sql", import.meta.url),
   "utf8",
@@ -30,14 +32,16 @@ assert.match(packagedLeagueRetryMigration, /CREATE UNIQUE INDEX IF NOT EXISTS le
 assert.match(packagedLeagueRetryMigration, /CREATE UNIQUE INDEX IF NOT EXISTS league_games_week_number_unique/);
 
 class D1Statement {
-  constructor(database, sql, values = []) {
+  constructor(database, sql, values = [], onBind = undefined) {
     this.database = database;
     this.sql = sql;
     this.values = values;
+    this.onBind = onBind;
   }
 
   bind(...values) {
-    return new D1Statement(this.database, this.sql, values);
+    this.onBind?.(this.sql, values);
+    return new D1Statement(this.database, this.sql, values, this.onBind);
   }
 
   async all() {
@@ -62,8 +66,13 @@ class D1Mock {
     this.database = database;
     this.batchSizes = [];
     this.batchSql = [];
+    this.boundStatements = [];
   }
-  prepare(sql) { return new D1Statement(this.database, sql); }
+  prepare(sql) {
+    return new D1Statement(this.database, sql, [], (boundSql, values) => {
+      this.boundStatements.push({ sql: boundSql, values });
+    });
+  }
   async batch(statements) {
     this.batchSizes.push(statements.length);
     this.batchSql.push(statements.map((statement) => statement.sql));
@@ -106,7 +115,7 @@ const env = {
     },
   },
   BOWLSENSE_AUTH_MODE: "sites-private",
-  BOWLSENSE_ALLOWED_EMAILS: "mkerns5@student.umgc.edu",
+  BOWLSENSE_ALLOWED_EMAILS: ALLOWED_EMAIL,
   BOWLSENSE_PUBLIC_PROFILE_NAME: "Matt Kerns",
   BOWLSENSE_TIME_ZONE: "America/New_York",
 };
@@ -152,7 +161,7 @@ legacySchemaDatabase.exec(`
 assert.equal(legacySchemaDatabase.prepare("PRAGMA table_info(tournaments)").all().some((column) => column.name === "active"), false);
 const legacySchemaEnv = { ...env, DB: new D1Mock(legacySchemaDatabase) };
 const legacySchemaResponse = await worker.fetch(new Request("https://bowlsense.test/api/tournaments", {
-  headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" },
+  headers: { "oai-authenticated-user-email": ALLOWED_EMAIL },
 }), legacySchemaEnv);
 assert.equal(legacySchemaResponse.status, 200);
 assert.ok(legacySchemaDatabase.prepare("PRAGMA table_info(tournaments)").all().some((column) => column.name === "active"));
@@ -166,7 +175,7 @@ assert.ok(legacySchemaDatabase.prepare("PRAGMA index_list(league_games)").all().
 
 async function request(path, init) {
   const headers = new Headers(init?.headers);
-  headers.set("oai-authenticated-user-email", "mkerns5@student.umgc.edu");
+  headers.set("oai-authenticated-user-email", ALLOWED_EMAIL);
   return worker.fetch(new Request(`https://bowlsense.test${path}`, { ...init, headers }), env);
 }
 
@@ -194,10 +203,10 @@ let anonymous = await publicRequest("/api/leagues");
 assert.equal(anonymous.status, 401);
 
 const failClosedEnv = { ...env, BOWLSENSE_ALLOWED_EMAILS: undefined };
-let failClosed = await worker.fetch(new Request("https://bowlsense.test/api/leagues", { headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" } }), failClosedEnv);
+let failClosed = await worker.fetch(new Request("https://bowlsense.test/api/leagues", { headers: { "oai-authenticated-user-email": ALLOWED_EMAIL } }), failClosedEnv);
 assert.equal(failClosed.status, 401);
 const wrongAuthModeEnv = { ...env, BOWLSENSE_AUTH_MODE: "public" };
-failClosed = await worker.fetch(new Request("https://bowlsense.test/api/leagues", { headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" } }), wrongAuthModeEnv);
+failClosed = await worker.fetch(new Request("https://bowlsense.test/api/leagues", { headers: { "oai-authenticated-user-email": ALLOWED_EMAIL } }), wrongAuthModeEnv);
 assert.equal(failClosed.status, 401);
 
 let response = await request("/api/restore", {
@@ -622,9 +631,13 @@ assert.equal((await response.json()).tableCounts.find((entry) => entry.table ===
 
 const invalidTimeZoneEnv = { ...env, BOWLSENSE_TIME_ZONE: "Not/A_Real_Time_Zone" };
 response = await worker.fetch(new Request("https://bowlsense.test/api/stats/weekly", {
-  headers: { "oai-authenticated-user-email": "mkerns5@student.umgc.edu" },
+  headers: { "oai-authenticated-user-email": ALLOWED_EMAIL },
 }), invalidTimeZoneEnv);
 assert.equal(response.status, 200);
+const weeklyQuery = env.DB.boundStatements.findLast((statement) => statement.sql.includes("FROM games g JOIN sessions"));
+assert.match(weeklyQuery.sql, /WHERE s\.date >= \?/);
+assert.equal(weeklyQuery.values.length, 1);
+assert.match(String(weeklyQuery.values[0]), /^\d{4}-\d{2}-\d{2}$/);
 
 response = await request("/api/export");
 const beforeLegacyRestore = await response.json();

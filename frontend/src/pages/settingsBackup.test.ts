@@ -7,4 +7,7 @@ test('Settings only presents native backup controls for the SQLite backend', asy
   assert.match(source, /backupBackend: 'sqlite' \| 'sites-managed'/)
   assert.match(source, /backups\?\.backupBackend === 'sqlite' && <div/)
   assert.match(source, /Run backup now/)
+  assert.match(source, /role="alertdialog"/)
+  assert.match(source, /title="Replace all BowlSense data\?"/)
+  assert.match(source, /onClick=\{\(\) => void confirmImport\(\)\}/)
 })

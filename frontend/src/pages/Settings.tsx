@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings } from '../hooks/useSettings'
 import type { Settings } from '../hooks/useSettings'
 import { fetchJson } from '../api/bowling'
+import { Sheet } from '../design/Sheet'
 
 interface Ball {
   id: number
@@ -69,7 +70,10 @@ export default function SettingsPage() {
   const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [profileCopied, setProfileCopied] = useState(false)
+  const [pendingImport, setPendingImport] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const cancelImportRef = useRef<HTMLButtonElement>(null)
   const csvRef = useRef<HTMLInputElement>(null)
   const [csvMsg, setCsvMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -165,12 +169,19 @@ export default function SettingsPage() {
     fileRef.current?.click()
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+    setImportMsg(null)
+    setPendingImport(file)
+  }
+
+  async function confirmImport() {
+    if (!pendingImport) return
+    setImporting(true)
     try {
-      const text = await file.text()
+      const text = await pendingImport.text()
       const data = JSON.parse(text)
       const res = await fetch('/api/import', {
         method: 'POST',
@@ -184,6 +195,9 @@ export default function SettingsPage() {
       setImportMsg({ ok: true, text: `Imported ${sessions} sessions, ${games} games, ${balls} balls.` })
     } catch {
       setImportMsg({ ok: false, text: 'Import failed. Check file format.' })
+    } finally {
+      setImporting(false)
+      setPendingImport(null)
     }
   }
 
@@ -438,6 +452,22 @@ export default function SettingsPage() {
           </div>
         )}
       </div>}
+
+      <Sheet
+        open={pendingImport != null}
+        onClose={() => setPendingImport(null)}
+        closeDisabled={importing}
+        closeLabel="Close import confirmation"
+        initialFocusRef={cancelImportRef}
+        role="alertdialog"
+        title="Replace all BowlSense data?"
+        description="Importing this backup replaces the current BowlSense data. This action cannot be undone from the app."
+      >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+          <button ref={cancelImportRef} type="button" className="btn btn-ghost" disabled={importing} onClick={() => setPendingImport(null)}>Cancel import</button>
+          <button type="button" className="btn btn-danger" disabled={importing} onClick={() => void confirmImport()}>{importing ? 'Replacing…' : 'Replace all data'}</button>
+        </div>
+      </Sheet>
 
       <div style={{ textAlign: 'center', paddingBottom: 8 }}>
         <Link className="public-link-target" to="/help" style={{ color: 'var(--muted)', textDecoration: 'none', fontSize: 14 }}>

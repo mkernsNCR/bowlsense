@@ -22,7 +22,7 @@ const SHARE_OG_SVG_PATH = join(__dirname, 'assets', 'share-og.svg');
 // this process so the cached HTML and its asset hashes match the release.
 const CACHED_INDEX_HTML = existsSync(INDEX_PATH) ? readFileSync(INDEX_PATH, 'utf8') : null;
 const CACHED_SHARE_OG_SVG = existsSync(SHARE_OG_SVG_PATH) ? readFileSync(SHARE_OG_SVG_PATH, 'utf8') : null;
-const LEAGUE_RETRY_MIGRATION = readFileSync(resolve(__dirname, '..', '..', 'drizzle', '0003_league_retry_idempotency.sql'), 'utf8');
+const LEAGUE_RETRY_MIGRATION_PATH = resolve(__dirname, '..', '..', 'drizzle', '0003_league_retry_idempotency.sql');
 
 const sqlite = new Database(process.env.BOWLSENSE_DB_PATH?.trim() || 'bowling.db');
 const db = drizzle(sqlite);
@@ -752,7 +752,8 @@ const leagueWeekIndexes = sqlite.prepare('PRAGMA index_list(league_weeks)').all(
 const leagueGameIndexes = sqlite.prepare('PRAGMA index_list(league_games)').all() as any[];
 if (!leagueWeekIndexes.some((index) => index.name === 'league_weeks_league_number_unique')
   || !leagueGameIndexes.some((index) => index.name === 'league_games_week_number_unique')) {
-  sqlite.transaction(() => sqlite.exec(LEAGUE_RETRY_MIGRATION))();
+  const leagueRetryMigration = readFileSync(LEAGUE_RETRY_MIGRATION_PATH, 'utf8');
+  sqlite.transaction(() => sqlite.exec(leagueRetryMigration))();
 }
 
 // Routes
@@ -2650,7 +2651,8 @@ fastify.get('/leagues/:id/weeks', async (request) => {
 fastify.post('/leagues/:id/weeks', async (request, reply) => {
   const { id } = request.params as any;
   const leagueId = parseInt(id);
-  const { weekNumber, date, opponent, gamesWon, gamesLost, gamesTied, notes } = request.body as any;
+  const body = request.body as Record<string, any>;
+  const { weekNumber, date, opponent, gamesWon, gamesLost, gamesTied, notes } = body;
 
   if (!date) return reply.status(400).send({ error: 'Date is required' });
 
@@ -2659,22 +2661,27 @@ fastify.post('/leagues/:id/weeks', async (request, reply) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (league_id, week_number) DO UPDATE SET
       date = excluded.date,
-      opponent = excluded.opponent,
-      games_won = excluded.games_won,
-      games_lost = excluded.games_lost,
-      games_tied = excluded.games_tied,
-      notes = excluded.notes
+      opponent = CASE WHEN ? = 1 THEN excluded.opponent ELSE league_weeks.opponent END,
+      games_won = CASE WHEN ? = 1 THEN excluded.games_won ELSE league_weeks.games_won END,
+      games_lost = CASE WHEN ? = 1 THEN excluded.games_lost ELSE league_weeks.games_lost END,
+      games_tied = CASE WHEN ? = 1 THEN excluded.games_tied ELSE league_weeks.games_tied END,
+      notes = CASE WHEN ? = 1 THEN excluded.notes ELSE league_weeks.notes END
     RETURNING *
   `).get(
     leagueId,
     Number(weekNumber || 1),
     date,
-    opponent || null,
-    Number(gamesWon || 0),
-    Number(gamesLost || 0),
-    Number(gamesTied || 0),
-    notes || null,
+    opponent ?? null,
+    gamesWon == null ? 0 : Number(gamesWon),
+    gamesLost == null ? 0 : Number(gamesLost),
+    gamesTied == null ? 0 : Number(gamesTied),
+    notes ?? null,
     Date.now(),
+    Number(Object.hasOwn(body, 'opponent')),
+    Number(Object.hasOwn(body, 'gamesWon')),
+    Number(Object.hasOwn(body, 'gamesLost')),
+    Number(Object.hasOwn(body, 'gamesTied')),
+    Number(Object.hasOwn(body, 'notes')),
   ) as any;
   return {
     id: row.id,

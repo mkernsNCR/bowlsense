@@ -42,6 +42,44 @@ test('log-week retries upsert one week and one game after ambiguous responses', 
     gamesTied: 2,
   })
 
+  const recordedRetry = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-02', opponent: 'Recorded opponent', gamesWon: 4, gamesLost: 2, gamesTied: 3, notes: 'Recorded notes' },
+  })
+  assert.equal(recordedRetry.statusCode, 200, recordedRetry.body)
+  const sparseRetry = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-03' },
+  })
+  assert.equal(sparseRetry.statusCode, 200, sparseRetry.body)
+  assert.deepEqual(sqlite.prepare('SELECT date, opponent, games_won AS gamesWon, games_lost AS gamesLost, games_tied AS gamesTied, notes FROM league_weeks WHERE id = ?').get(firstWeek.json().id), {
+    date: '2026-08-03',
+    opponent: 'Recorded opponent',
+    gamesWon: 4,
+    gamesLost: 2,
+    gamesTied: 3,
+    notes: 'Recorded notes',
+  })
+  assert.equal(sparseRetry.json().id, firstWeek.json().id)
+
+  const clearingRetry = await fastify.inject({
+    method: 'POST',
+    url: `/api/leagues/${leagueId}/weeks`,
+    payload: { weekNumber: 4, date: '2026-08-04', opponent: null, gamesWon: 0, gamesLost: 0, gamesTied: 0, notes: null },
+  })
+  assert.equal(clearingRetry.statusCode, 200, clearingRetry.body)
+  assert.equal(clearingRetry.json().id, firstWeek.json().id)
+  assert.deepEqual(sqlite.prepare('SELECT COUNT(*) AS count, MAX(opponent) AS opponent, MAX(games_won) AS gamesWon, MAX(games_lost) AS gamesLost, MAX(games_tied) AS gamesTied, MAX(notes) AS notes FROM league_weeks WHERE league_id = ? AND week_number = ?').get(leagueId, 4), {
+    count: 1,
+    opponent: null,
+    gamesWon: 0,
+    gamesLost: 0,
+    gamesTied: 0,
+    notes: null,
+  })
+
   const updatedWeek = await fastify.inject({ method: 'PUT', url: `/api/leagues/weeks/${firstWeek.json().id}`, payload: { date: '2026-08-02', opponent: 'Edited', gamesWon: 1, gamesLost: 1, gamesTied: 3 } })
   assert.equal(updatedWeek.statusCode, 200, updatedWeek.body)
   assert.equal(sqlite.prepare('SELECT games_tied AS gamesTied FROM league_weeks WHERE id = ?').get(firstWeek.json().id).gamesTied, 3)

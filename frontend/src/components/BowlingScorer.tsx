@@ -481,7 +481,7 @@ export default function BowlingScorer({
           role="alertdialog"
           title={`Edit from frame ${editCandidate + 1}?`}
           description={`This temporarily removes frame ${editCandidate + 1} and every later roll so bonuses stay correct. You can restore the original game at any time.`}
-          closeLabel="Keep score"
+          closeLabel="Close edit confirmation"
           className="scoring-sheet-theme"
           initialFocusRef={keepScoreRef}
         >

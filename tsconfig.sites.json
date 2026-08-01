@@ -9,5 +9,5 @@
     "strict": true,
     "target": "ES2022"
   },
-  "include": ["sites/**/*.ts", "db/**/*.ts", "shared/**/*.ts"]
+  "include": ["sites/**/*.ts", "shared/**/*.ts"]
 }

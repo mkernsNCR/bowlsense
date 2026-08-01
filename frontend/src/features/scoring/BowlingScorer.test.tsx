@@ -153,7 +153,10 @@ describe('BowlingScorer completion behavior', () => {
     renderScorer(initialFrameData)
 
     expect(screen.getByRole('button', { name: 'Score details' }).getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByRole('button', { name: 'Edit from frame 1' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit from frame 1' }))
+    const closeControl = screen.getByRole('button', { name: 'Close edit confirmation' })
+    const keepControl = screen.getByRole('button', { name: 'Keep score' })
+    expect(closeControl).not.toBe(keepControl)
   })
 
   it('announces successful saves with text in the status region', async () => {

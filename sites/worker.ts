@@ -499,10 +499,16 @@ function offsetIsoDate(iso: string, days: number): string {
 }
 
 async function weeklyStats(db: D1Database, timeZone: string): Promise<Row> {
-  const rows = camelizeAll(await all(db, `SELECT g.score, g.strikes, g.spares, s.date FROM games g JOIN sessions s ON s.id = g.session_id`));
   const calendar = zonedCalendar(new Date(), timeZone);
   const monday = offsetIsoDate(calendar.iso, calendar.weekdayIndex === 0 ? -6 : 1 - calendar.weekdayIndex);
   const lastMonday = offsetIsoDate(monday, -7);
+  const rows = camelizeAll(await all(
+    db,
+    `SELECT g.score, g.strikes, g.spares, s.date
+     FROM games g JOIN sessions s ON s.id = g.session_id
+     WHERE s.date >= ?`,
+    lastMonday,
+  ));
   const summarize = (filtered: Row[]) => {
     const scores = filtered.map((row) => Number(row.score ?? 0));
     const totalStrikes = filtered.reduce((sum, row) => sum + Number(row.strikes ?? 0), 0);

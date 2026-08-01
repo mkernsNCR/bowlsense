@@ -3,8 +3,10 @@ import test from 'node:test';
 
 import { trustedProxyEmailIsAllowed } from './auth.ts';
 
+const ALLOWED_EMAIL = 'owner@example.com';
+
 const proxyRequest = {
-  authenticatedEmail: 'mkerns5@student.umgc.edu',
+  authenticatedEmail: ALLOWED_EMAIL,
   suppliedProxySecret: 'shared-secret',
   configuredProxySecret: 'shared-secret',
 };
@@ -21,15 +23,15 @@ test('trusted proxy authorization rejects an email outside the allowlist', () =>
   assert.equal(trustedProxyEmailIsAllowed({
     ...proxyRequest,
     authenticatedEmail: 'intruder@example.com',
-    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+    configuredAllowedEmails: ALLOWED_EMAIL,
   }), false);
 });
 
 test('trusted proxy authorization accepts a normalized email in the allowlist', () => {
   assert.equal(trustedProxyEmailIsAllowed({
     ...proxyRequest,
-    authenticatedEmail: ' MKERNS5@STUDENT.UMGC.EDU ',
-    configuredAllowedEmails: 'other@example.com, mkerns5@student.umgc.edu',
+    authenticatedEmail: ' OWNER@EXAMPLE.COM ',
+    configuredAllowedEmails: `other@example.com, ${ALLOWED_EMAIL}`,
   }), true);
 });
 
@@ -37,7 +39,7 @@ test('trusted proxy authorization fails closed when the configured secret is emp
   assert.equal(trustedProxyEmailIsAllowed({
     ...proxyRequest,
     configuredProxySecret: '',
-    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+    configuredAllowedEmails: ALLOWED_EMAIL,
   }), false);
 });
 
@@ -45,7 +47,7 @@ test('trusted proxy authorization rejects an equal-length mismatched secret', ()
   assert.equal(trustedProxyEmailIsAllowed({
     ...proxyRequest,
     suppliedProxySecret: 'wrong-secret!',
-    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+    configuredAllowedEmails: ALLOWED_EMAIL,
   }), false);
 });
 
@@ -53,11 +55,11 @@ test('trusted proxy authorization rejects a different-length secret without thro
   assert.doesNotThrow(() => trustedProxyEmailIsAllowed({
     ...proxyRequest,
     suppliedProxySecret: 'short',
-    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+    configuredAllowedEmails: ALLOWED_EMAIL,
   }));
   assert.equal(trustedProxyEmailIsAllowed({
     ...proxyRequest,
     suppliedProxySecret: 'short',
-    configuredAllowedEmails: 'mkerns5@student.umgc.edu',
+    configuredAllowedEmails: ALLOWED_EMAIL,
   }), false);
 });

@@ -323,8 +323,7 @@ export default function PublicLeague() {
         })}
       </div>
 
-      {activeTab === 'overview' && (
-        <div role="tabpanel" id="league-overview-panel" aria-labelledby="league-overview-tab">
+      <div role="tabpanel" id="league-overview-panel" aria-labelledby="league-overview-tab" hidden={activeTab !== 'overview'}>
           {statsError && <div className="card" role="alert"><p>League statistics could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStats()}>Try again</button></div>}
           {/* Weekly trend */}
           {trendData.filter(d => d.average > 0).length >= 2 && (
@@ -425,11 +424,9 @@ export default function PublicLeague() {
               )
             })}
           </div>
-        </div>
-      )}
+      </div>
 
-      {activeTab === 'standings' && (
-        <div role="tabpanel" id="league-standings-panel" aria-labelledby="league-standings-tab">
+      <div role="tabpanel" id="league-standings-panel" aria-labelledby="league-standings-tab" hidden={activeTab !== 'standings'}>
           {standingsLoading && <div className="card" role="status">Loading league standings...</div>}
           {standingsError && <div className="card" role="alert"><p>League standings could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchStandings()}>Try again</button></div>}
           {!standingsLoading && !standingsError && <>
@@ -501,11 +498,9 @@ export default function PublicLeague() {
             )}
           </div>
           </>}
-        </div>
-      )}
+      </div>
 
-      {activeTab === 'leaderboard' && (
-        <div role="tabpanel" id="league-leaderboard-panel" aria-labelledby="league-leaderboard-tab">
+      <div role="tabpanel" id="league-leaderboard-panel" aria-labelledby="league-leaderboard-tab" hidden={activeTab !== 'leaderboard'}>
           {leaderboardLoading && <div className="card muted">Loading leaderboard…</div>}
           {leaderboardError && <div className="card" role="alert"><p>The leaderboard could not be loaded.</p><button className="btn btn-primary" type="button" onClick={() => void refetchLeaderboard()}>Try again</button></div>}
           {leaderboard && (
@@ -546,8 +541,7 @@ export default function PublicLeague() {
             )}
           </div>
           )}
-        </div>
-      )}
+      </div>
 
       </div>
     </PublicShell>

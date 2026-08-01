@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import BowlingScorer from '../../components/BowlingScorer'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import BowlingScorer, { type SavedBowlingGame } from '../../components/BowlingScorer'
 import { resetPins } from '../../utils/bowlingScore'
 
 const originalScrollIntoView = Element.prototype.scrollIntoView
@@ -24,14 +24,24 @@ afterEach(() => {
   }
 })
 
-function renderScorer(initialFrameData: string) {
+function renderScorer(
+  initialFrameData?: string,
+  callbacks: {
+    onSave?: (game: SavedBowlingGame) => void | Promise<void>
+    onCancel?: () => void
+    initialSplits?: number
+  } = {},
+) {
+  const onSave = callbacks.onSave ?? vi.fn()
+  const onCancel = callbacks.onCancel ?? vi.fn()
   return render(
     <BowlingScorer
       gameNumber={1}
       balls={[]}
       initialFrameData={initialFrameData}
-      onSave={vi.fn()}
-      onCancel={vi.fn()}
+      initialSplits={callbacks.initialSplits}
+      onSave={onSave}
+      onCancel={onCancel}
     />,
   )
 }
@@ -83,5 +93,54 @@ describe('BowlingScorer completion behavior', () => {
 
     expect(screen.getByRole('button', { name: 'Retake' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Confirm retake' })).toBeNull()
+  })
+
+  it('preserves the saved split count after editing a completed game', async () => {
+    const onSave = vi.fn()
+    const initialFrameData = JSON.stringify({
+      pinSelections: Array.from({ length: 19 }, () => [] as number[]),
+    })
+
+    renderScorer(initialFrameData, { onSave, initialSplits: 3 })
+    fireEvent.click(screen.getByRole('button', { name: 'Score details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit from frame 10' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit from here' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save game' }))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    expect(onSave.mock.calls[0]?.[0]).toMatchObject({ splits: 3 })
+  })
+
+  it('shows a retryable error when saving fails', async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error('offline'))
+    const initialFrameData = JSON.stringify({
+      pinSelections: Array.from({ length: 19 }, () => [] as number[]),
+    })
+
+    renderScorer(initialFrameData, { onSave })
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save game' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('The game was not saved. Check your connection and try again.')
+    expect(screen.getByRole('button', { name: 'Save game' })).toBeTruthy()
+  })
+
+  it('confirms before discarding a game with recorded rolls', () => {
+    const onCancel = vi.fn()
+
+    renderScorer(undefined, { onCancel })
+    fireEvent.click(screen.getByRole('button', { name: 'Record 0' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close scorer' }))
+
+    expect(screen.getByText('Discard this game?')).toBeTruthy()
+    expect(onCancel).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('Keep scoring', { selector: 'button.scoring-button' }))
+    expect(screen.queryByText('Discard this game?')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close scorer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard game' }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

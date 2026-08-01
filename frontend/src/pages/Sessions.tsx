@@ -206,7 +206,7 @@ export default function Sessions() {
                       {(session.lanes || session.notes) && <p className="scoring-row-meta">{session.lanes ? `Lanes ${session.lanes}` : session.notes}</p>}
                     </div>
                   </Link>
-                  {session.perfectGames > 0 && <span className="scoring-row-value" aria-label={`${session.perfectGames} perfect games`}>300</span>}
+                  {session.perfectGames > 0 && <span className="scoring-row-value" aria-label={`${session.perfectGames} perfect ${session.perfectGames === 1 ? 'game' : 'games'}`}>300</span>}
                   <button type="button" className="scoring-row-action" onClick={() => { setActionSession(session); setConfirmDelete(false); setShareError(false) }} aria-label={`Actions for ${centerName}`}>
                     <Icon name="more" />
                   </button>

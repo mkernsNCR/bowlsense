@@ -378,6 +378,7 @@ export default function SessionDetail() {
             balls={balls}
             defaultBallId={editingGame.ballId ? String(editingGame.ballId) : settings.defaultBallId}
             initialFrameData={editingGame.frameData}
+            initialSplits={editingGame.splits}
             onSave={async (game) => {
               await updateGame.mutateAsync({ gameId: editingGame.id, game })
               setSavedNotice(`Game ${game.gameNumber} updated`)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSettings } from '../hooks/useSettings'
@@ -22,6 +22,7 @@ export default function NewSession() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { settings } = useSettings()
+  const detailsId = useId()
   const [showDetails, setShowDetails] = useState(false)
   const [form, setForm] = useState<SessionDraft>({
     date: localDateValue(),
@@ -92,14 +93,14 @@ export default function NewSession() {
         </section>
 
         <div className="scoring-disclosure">
-          <button type="button" className="scoring-button quiet" aria-expanded={showDetails} onClick={() => setShowDetails((visible) => !visible)}>
+          <button type="button" className="scoring-button quiet" aria-expanded={showDetails} aria-controls={detailsId} onClick={() => setShowDetails((visible) => !visible)}>
             {showDetails ? 'Hide details' : 'Add details'}
             <Icon name="chevron-right" size={16} />
           </button>
         </div>
 
         {showDetails && (
-          <section className="scoring-group" aria-label="Optional session details">
+          <section id={detailsId} className="scoring-group" aria-label="Optional session details">
             <div className="scoring-field">
               <label htmlFor="session-notes">Notes or conditions</label>
               <textarea

@@ -43,16 +43,18 @@ export function InsightsWorkspace({ children, description }: InsightsWorkspacePr
 
 interface InsightStateProps {
   action?: ReactNode
+  busy?: boolean
   children: ReactNode
   status?: 'empty' | 'loading' | 'error'
   title: string
   tone?: 'default' | 'error'
 }
 
-export function InsightState({ action, children, status, title, tone = 'default' }: InsightStateProps) {
+export function InsightState({ action, busy, children, status, title, tone = 'default' }: InsightStateProps) {
   return (
     <EmptyState
       action={action}
+      busy={busy}
       className="insights-state"
       description={children}
       status={status ?? (tone === 'error' ? 'error' : 'empty')}

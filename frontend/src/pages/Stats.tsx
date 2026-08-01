@@ -37,9 +37,13 @@ interface FullStats {
   }
 }
 
+function formatAverage(value: number) {
+  return Math.round(value)
+}
+
 function getTakeaway(stats: FullStats) {
-  const recent = stats.trend?.last5Avg ?? 0
-  const baseline = stats.trend?.last20Avg ?? 0
+  const recent = formatAverage(stats.trend?.last5Avg ?? 0)
+  const baseline = formatAverage(stats.trend?.last20Avg ?? 0)
   const difference = Math.round(recent - baseline)
 
   if (stats.overall.totalGames >= 20 && recent > 0 && baseline > 0 && Math.abs(difference) >= 2) {
@@ -81,6 +85,8 @@ function histogramBuckets(stats: FullStats): HistogramBucket[] {
 
 export default function Stats() {
   const [trendWindow, setTrendWindow] = useState<TrendWindow>(10)
+  const [statsRetrying, setStatsRetrying] = useState(false)
+  const [trendRetrying, setTrendRetrying] = useState(false)
   const statsQuery = useQuery<FullStats>({
     queryKey: ['stats/full'],
     queryFn: () => fetchJson<FullStats>('/api/stats/full'),
@@ -90,25 +96,44 @@ export default function Stats() {
     queryFn: () => fetchJson<TrendData>('/api/stats/trend'),
   })
 
-  if (statsQuery.isLoading) {
+  const retryStats = async () => {
+    setStatsRetrying(true)
+    try {
+      await statsQuery.refetch()
+    } finally {
+      setStatsRetrying(false)
+    }
+  }
+
+  const retryTrend = async () => {
+    setTrendRetrying(true)
+    try {
+      await trendQuery.refetch()
+    } finally {
+      setTrendRetrying(false)
+    }
+  }
+
+  if (statsQuery.isError || statsRetrying) {
     return (
       <InsightsWorkspace description="Turn scores and leaves into one useful next move.">
-        <InsightState title="Reading your scorebook" status="loading">
-          Pulling together your scoring pace, ranges, and recent trend.
+        <InsightState
+          busy={statsQuery.isFetching}
+          title="Insights could not load"
+          tone="error"
+          action={<button className="insights-button" type="button" disabled={statsQuery.isFetching} onClick={() => void retryStats()}>Try again</button>}
+        >
+          Check your connection, then retry. Your logged games have not been changed.
         </InsightState>
       </InsightsWorkspace>
     )
   }
 
-  if (statsQuery.isError) {
+  if (statsQuery.isLoading) {
     return (
       <InsightsWorkspace description="Turn scores and leaves into one useful next move.">
-        <InsightState
-          title="Insights could not load"
-          tone="error"
-          action={<button className="insights-button" type="button" onClick={() => void statsQuery.refetch()}>Try again</button>}
-        >
-          Check your connection, then retry. Your logged games have not been changed.
+        <InsightState title="Reading your scorebook" status="loading">
+          Pulling together your scoring pace, ranges, and recent trend.
         </InsightState>
       </InsightsWorkspace>
     )
@@ -149,7 +174,17 @@ export default function Stats() {
         <InsightMetric label="Spare rate" value={`${stats.overall.spareRate}%`} note={`${stats.overall.totalSpares} spares`} />
       </section>
 
-      {trendQuery.isLoading ? (
+      {trendQuery.isError || trendRetrying ? (
+        <section className="insights-panel" aria-busy={trendQuery.isFetching} aria-live="polite">
+          <div className="insights-panel-header">
+            <div>
+              <h2>Scoring trend unavailable</h2>
+              <p>Your summary is still current. Retry just the game-by-game trend.</p>
+            </div>
+            <button className="insights-button is-secondary" type="button" disabled={trendQuery.isFetching} onClick={() => void retryTrend()}>Retry</button>
+          </div>
+        </section>
+      ) : trendQuery.isLoading ? (
         <section className="insights-panel" aria-busy="true" aria-live="polite">
           <div className="insights-panel-header">
             <div>
@@ -174,16 +209,6 @@ export default function Stats() {
           </div>
           <ScoreTrendChart data={trendQuery.data} windowSize={activeTrendWindow} />
         </section>
-      ) : trendQuery.isError ? (
-        <section className="insights-panel" aria-live="polite">
-          <div className="insights-panel-header">
-            <div>
-              <h2>Scoring trend unavailable</h2>
-              <p>Your summary is still current. Retry just the game-by-game trend.</p>
-            </div>
-            <button className="insights-button is-secondary" type="button" onClick={() => void trendQuery.refetch()}>Retry</button>
-          </div>
-        </section>
       ) : (
         <section className="insights-panel">
           <div className="insights-panel-header">
@@ -207,15 +232,15 @@ export default function Stats() {
           <ol className="insights-ranked-list">
             <li>
               <div><strong>Last 5</strong><span>{stats.overall.totalGames >= 5 ? 'Most responsive to a recent change' : `Needs ${5 - stats.overall.totalGames} more games`}</span></div>
-              <b>{stats.overall.totalGames >= 5 ? trend.last5Avg : '—'}</b>
+              <b>{stats.overall.totalGames >= 5 ? formatAverage(trend.last5Avg) : '—'}</b>
             </li>
             <li>
               <div><strong>Last 10</strong><span>{stats.overall.totalGames >= 10 ? 'Smooths a short hot or cold streak' : `Needs ${10 - stats.overall.totalGames} more games`}</span></div>
-              <b>{stats.overall.totalGames >= 10 ? trend.last10Avg : '—'}</b>
+              <b>{stats.overall.totalGames >= 10 ? formatAverage(trend.last10Avg) : '—'}</b>
             </li>
             <li>
               <div><strong>Last 20</strong><span>{stats.overall.totalGames >= 20 ? 'Your established scoring pace' : `Needs ${20 - stats.overall.totalGames} more games`}</span></div>
-              <b>{stats.overall.totalGames >= 20 ? trend.last20Avg : '—'}</b>
+              <b>{stats.overall.totalGames >= 20 ? formatAverage(trend.last20Avg) : '—'}</b>
             </li>
           </ol>
         </section>
@@ -232,7 +257,7 @@ export default function Stats() {
                 {locations.map((location) => (
                   <li key={location.location}>
                     <div><strong>{location.location || 'Unknown center'}</strong><span>{location.games} game{location.games === 1 ? '' : 's'}</span></div>
-                    <b>{location.average}</b>
+                    <b>{formatAverage(location.average)}</b>
                   </li>
                 ))}
               </ol>
@@ -247,7 +272,7 @@ export default function Stats() {
                 {months.slice().reverse().slice(0, 6).map((month) => (
                   <li key={month.month}>
                     <div><strong>{month.month}</strong><span>{month.games} game{month.games === 1 ? '' : 's'}</span></div>
-                    <b>{month.average}</b>
+                    <b>{formatAverage(month.average)}</b>
                   </li>
                 ))}
               </ol>

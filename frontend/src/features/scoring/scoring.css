@@ -119,7 +119,7 @@
 .live-frame-ribbon { margin-top: 6px; }
 
 .scoring-mode { margin: 12px auto; max-width: 360px; }
-.pin-deck { background: linear-gradient(180deg, #2b2a31, #111318 74%); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; box-shadow: inset 0 1px rgba(255,255,255,.1); margin: 12px auto; max-width: 390px; padding: 20px 18px 16px; position: relative; }
+.pin-deck { background: linear-gradient(180deg, #2b2a31, #111318 74%); border: 1px solid rgba(255,255,255,.12); border-radius: 24px; box-shadow: inset 0 1px rgba(255,255,255,.1); margin: 12px auto; max-width: 390px; padding: 20px 18px 16px; position: relative; touch-action: none; user-select: none; }
 .pin-deck::before { background: repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,255,255,.025) 18px 19px); border-radius: inherit; content: ""; inset: 0; pointer-events: none; position: absolute; }
 .pin-row { display: flex; gap: clamp(10px, 5vw, 22px); justify-content: center; margin-bottom: 10px; position: relative; }
 .pin-row:last-child { margin-bottom: 0; }

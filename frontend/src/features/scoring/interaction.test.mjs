@@ -21,4 +21,6 @@ test('keeps lane-side context sticky and touch targets at least 44px', async () 
   const controlRule = css.match(/\.pin-control\s*\{[^}]*\}/s)?.[0] ?? ''
   assert.match(controlRule, /min-height:\s*44px/)
   assert.match(controlRule, /min-width:\s*44px/)
+  const deckRule = css.match(/\.pin-deck\s*\{[^}]*\}/s)?.[0] ?? ''
+  assert.match(deckRule, /touch-action:\s*none/)
 })

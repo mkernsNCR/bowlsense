@@ -28,6 +28,7 @@ function frameDescription(frame: FrameRibbonFrame, index: number) {
   return frame.ariaLabel ?? frame.label ?? `Frame ${index + 1}, ${state}, ${rolls}${score}${projection}`
 }
 
+/** Renders a ten-frame score ribbon with settled totals and an optional final-score projection. */
 export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false, className = '' }: FrameRibbonProps) {
   const ribbonRef = useRef<HTMLDivElement>(null)
   const normalized = Array.from({ length: 10 }, (_, index) => frames[index] ?? { state: 'pending' as const })

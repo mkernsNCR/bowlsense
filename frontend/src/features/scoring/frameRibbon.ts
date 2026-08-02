@@ -1,6 +1,7 @@
 import type { FrameRibbonFrame } from '../../design'
 import { getDisplayMark, type Frame } from '../../utils/bowlingScore'
 
+/** Maps scoring-engine frames into the display and accessibility model used by FrameRibbon. */
 export function toFrameRibbonFrames(
   frames: readonly Frame[],
   currentFrame?: number,

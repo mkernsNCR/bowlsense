@@ -174,6 +174,7 @@ function CompletionSheetBody({
   )
 }
 
+/** Provides interactive pin entry, scoring progress, frame editing, and game completion. */
 export default function BowlingScorer({
   gameNumber,
   balls,

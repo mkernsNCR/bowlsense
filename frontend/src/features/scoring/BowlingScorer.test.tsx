@@ -148,10 +148,11 @@ describe('BowlingScorer completion behavior', () => {
     fireEvent.pointerCancel(deck, { pointerId: 1 })
     hoveredPin = pin3
     fireEvent.pointerMove(deck, { pointerId: 1, clientX: 50, clientY: 10 })
+    fireEvent.click(pin3, { detail: 1 })
 
     expect(pin1.getAttribute('aria-pressed')).toBe('true')
     expect(pin2.getAttribute('aria-pressed')).toBe('true')
-    expect(pin3.getAttribute('aria-pressed')).toBe('false')
+    expect(pin3.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('offers a managed score-card share flow after twelve strikes', () => {

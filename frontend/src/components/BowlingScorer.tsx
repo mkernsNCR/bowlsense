@@ -311,7 +311,9 @@ export default function BowlingScorer({
     const gesture = pinSwipeRef.current
     if (!gesture || gesture.pointerId !== event.pointerId) return
 
-    if (gesture.swiping) suppressPointerClickUntilRef.current = Date.now() + 500
+    if (gesture.swiping && event.type === 'pointerup') {
+      suppressPointerClickUntilRef.current = Date.now() + 500
+    }
     pinSwipeRef.current = null
     if (gesture.captureTarget.hasPointerCapture?.(event.pointerId)) {
       gesture.captureTarget.releasePointerCapture(event.pointerId)

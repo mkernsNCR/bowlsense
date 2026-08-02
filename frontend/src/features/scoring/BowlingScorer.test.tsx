@@ -4,11 +4,28 @@ import BowlingScorer, { type SavedBowlingGame } from '../../components/BowlingSc
 import { resetPins } from '../../utils/bowlingScore'
 
 const originalScrollIntoView = Element.prototype.scrollIntoView
+const originalElementFromPoint = Object.getOwnPropertyDescriptor(document, 'elementFromPoint')
+const originalPointerEvent = Object.getOwnPropertyDescriptor(window, 'PointerEvent')
+
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number
+  readonly isPrimary: boolean
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init)
+    this.pointerId = init.pointerId ?? 0
+    this.isPrimary = init.isPrimary ?? true
+  }
+}
 
 beforeEach(() => {
   Object.defineProperty(Element.prototype, 'scrollIntoView', {
     configurable: true,
     value: vi.fn(),
+  })
+  Object.defineProperty(window, 'PointerEvent', {
+    configurable: true,
+    value: TestPointerEvent,
   })
 })
 
@@ -21,6 +38,16 @@ afterEach(() => {
     })
   } else {
     delete (Element.prototype as { scrollIntoView?: Element['scrollIntoView'] }).scrollIntoView
+  }
+  if (originalElementFromPoint) {
+    Object.defineProperty(document, 'elementFromPoint', originalElementFromPoint)
+  } else {
+    delete (document as { elementFromPoint?: Document['elementFromPoint'] }).elementFromPoint
+  }
+  if (originalPointerEvent) {
+    Object.defineProperty(window, 'PointerEvent', originalPointerEvent)
+  } else {
+    delete (window as { PointerEvent?: typeof PointerEvent }).PointerEvent
   }
   vi.restoreAllMocks()
 })
@@ -54,6 +81,80 @@ function finishPerfectGame() {
 }
 
 describe('BowlingScorer completion behavior', () => {
+  it('keeps click selection and deselection for individual pins', () => {
+    renderScorer()
+    const pin = screen.getByRole('button', { name: 'Pin 1' })
+
+    fireEvent.click(pin)
+    expect(pin.getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(pin)
+    expect(pin.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('swipes across pins to select and deselect them without flipping revisited pins', () => {
+    renderScorer()
+    const pin1 = screen.getByRole('button', { name: 'Pin 1' })
+    const pin2 = screen.getByRole('button', { name: 'Pin 2' })
+    const pin3 = screen.getByRole('button', { name: 'Pin 3' })
+    const deck = screen.getByRole('group', { name: 'Select pins knocked down' })
+    let hoveredPin: Element = pin2
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => hoveredPin),
+    })
+
+    fireEvent.pointerDown(pin1, { pointerId: 1, button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(deck, { pointerId: 1, clientX: 30, clientY: 10 })
+    hoveredPin = pin3
+    fireEvent.pointerMove(deck, { pointerId: 1, clientX: 50, clientY: 10 })
+    hoveredPin = pin2
+    fireEvent.pointerMove(deck, { pointerId: 1, clientX: 70, clientY: 10 })
+    fireEvent.pointerUp(deck, { pointerId: 1, button: 0, clientX: 70, clientY: 10 })
+    fireEvent.click(pin1, { detail: 1 })
+
+    expect(pin1.getAttribute('aria-pressed')).toBe('true')
+    expect(pin2.getAttribute('aria-pressed')).toBe('true')
+    expect(pin3.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Record 3' })).toBeTruthy()
+
+    hoveredPin = pin2
+    fireEvent.pointerDown(pin1, { pointerId: 2, button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(deck, { pointerId: 2, clientX: 30, clientY: 10 })
+    hoveredPin = pin3
+    fireEvent.pointerMove(deck, { pointerId: 2, clientX: 50, clientY: 10 })
+    fireEvent.pointerUp(deck, { pointerId: 2, button: 0, clientX: 50, clientY: 10 })
+
+    expect(pin1.getAttribute('aria-pressed')).toBe('false')
+    expect(pin2.getAttribute('aria-pressed')).toBe('false')
+    expect(pin3.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByRole('button', { name: 'Record 0' })).toBeTruthy()
+  })
+
+  it('stops applying swipe changes after the pointer is cancelled', () => {
+    renderScorer()
+    const pin1 = screen.getByRole('button', { name: 'Pin 1' })
+    const pin2 = screen.getByRole('button', { name: 'Pin 2' })
+    const pin3 = screen.getByRole('button', { name: 'Pin 3' })
+    const deck = screen.getByRole('group', { name: 'Select pins knocked down' })
+    let hoveredPin: Element = pin2
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => hoveredPin),
+    })
+
+    fireEvent.pointerDown(pin1, { pointerId: 1, button: 0, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(deck, { pointerId: 1, clientX: 30, clientY: 10 })
+    fireEvent.pointerCancel(deck, { pointerId: 1 })
+    hoveredPin = pin3
+    fireEvent.pointerMove(deck, { pointerId: 1, clientX: 50, clientY: 10 })
+    fireEvent.click(pin3, { detail: 1 })
+
+    expect(pin1.getAttribute('aria-pressed')).toBe('true')
+    expect(pin2.getAttribute('aria-pressed')).toBe('true')
+    expect(pin3.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('offers a managed score-card share flow after twelve strikes', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
     renderScorer()

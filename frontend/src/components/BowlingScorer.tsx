@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
   gameFromFrameData,
   type GameState,
@@ -84,6 +84,25 @@ function hasSavedPinSelections(frameData?: string | null) {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+interface PinSwipeGesture {
+  captureTarget: HTMLButtonElement
+  pointerId: number
+  startPin: number
+  startX: number
+  startY: number
+  selecting: boolean
+  swiping: boolean
+  visitedPins: Set<number>
+}
+
+const swipeThreshold = 6
+
+function pinButtonFromTarget(target: EventTarget | null, deck: HTMLDivElement) {
+  if (!(target instanceof Element)) return null
+  const button = target.closest<HTMLButtonElement>('[data-pin-number]')
+  return button && deck.contains(button) && !button.disabled ? button : null
+}
 
 interface CompletionSheetBodyProps {
   saveStatus: SaveStatus
@@ -175,6 +194,8 @@ export default function BowlingScorer({
   const [selectedBallId, setSelectedBallId] = useState(defaultBallId ?? '')
   const keepScoreRef = useRef<HTMLButtonElement>(null)
   const keepScoringRef = useRef<HTMLButtonElement>(null)
+  const pinSwipeRef = useRef<PinSwipeGesture | null>(null)
+  const suppressPointerClickUntilRef = useRef(0)
   const [editCandidate, setEditCandidate] = useState<number | null>(null)
   const [editSnapshot, setEditSnapshot] = useState<GameState | null>(null)
   const [editingFromFrame, setEditingFromFrame] = useState<number | null>(null)
@@ -235,6 +256,68 @@ export default function BowlingScorer({
     setSelectedKnocked([])
     setConfirmRetake(false)
     setSaveStatus('idle')
+  }
+
+  const setPinSelected = (pin: number, selected: boolean) => {
+    setSelectedKnocked((current) => {
+      const alreadySelected = current.includes(pin)
+      if (selected === alreadySelected) return current
+      return selected ? [...current, pin] : current.filter((item) => item !== pin)
+    })
+  }
+
+  const beginPinSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.isPrimary === false || event.button !== 0) return
+    const pinButton = pinButtonFromTarget(event.target, event.currentTarget)
+    if (!pinButton) return
+
+    const startPin = Number(pinButton.dataset.pinNumber)
+    pinSwipeRef.current = {
+      captureTarget: pinButton,
+      pointerId: event.pointerId,
+      startPin,
+      startX: event.clientX,
+      startY: event.clientY,
+      selecting: !selectedKnocked.includes(startPin),
+      swiping: false,
+      visitedPins: new Set(),
+    }
+    pinButton.setPointerCapture?.(event.pointerId)
+  }
+
+  const continuePinSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = pinSwipeRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+
+    if (!gesture.swiping) {
+      const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY)
+      if (distance < swipeThreshold) return
+      gesture.swiping = true
+      gesture.visitedPins.add(gesture.startPin)
+      setPinSelected(gesture.startPin, gesture.selecting)
+    }
+
+    const target = document.elementFromPoint?.(event.clientX, event.clientY) ?? event.target
+    const pinButton = pinButtonFromTarget(target, event.currentTarget)
+    if (!pinButton) return
+
+    const pin = Number(pinButton.dataset.pinNumber)
+    if (gesture.visitedPins.has(pin)) return
+    gesture.visitedPins.add(pin)
+    setPinSelected(pin, gesture.selecting)
+  }
+
+  const endPinSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = pinSwipeRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+
+    if (gesture.swiping && event.type === 'pointerup') {
+      suppressPointerClickUntilRef.current = Date.now() + 500
+    }
+    pinSwipeRef.current = null
+    if (gesture.captureTarget.hasPointerCapture?.(event.pointerId)) {
+      gesture.captureTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   const restoreBeforeEdit = () => {
@@ -373,7 +456,15 @@ export default function BowlingScorer({
 
       {activeView === 'pins' && !state.isComplete && (
         <>
-          <div className="pin-deck" role="group" aria-label="Select pins knocked down">
+          <div
+            className="pin-deck"
+            role="group"
+            aria-label="Select pins knocked down"
+            onPointerDown={beginPinSwipe}
+            onPointerMove={continuePinSwipe}
+            onPointerUp={endPinSwipe}
+            onPointerCancel={endPinSwipe}
+          >
             {pinRows.map((row) => (
               <div className="pin-row" key={row.join('-')}>
                 {row.map((pin) => {
@@ -385,11 +476,13 @@ export default function BowlingScorer({
                       key={pin}
                       className="pin-control"
                       disabled={!isStanding}
+                      data-pin-number={pin}
                       aria-pressed={isSelected}
                       aria-label={`Pin ${pin}${isSelected ? ', selected as knocked down' : ''}`}
-                      onClick={() => setSelectedKnocked((current) => (
-                        current.includes(pin) ? current.filter((item) => item !== pin) : [...current, pin]
-                      ))}
+                      onClick={(event) => {
+                        if (event.detail !== 0 && Date.now() < suppressPointerClickUntilRef.current) return
+                        setPinSelected(pin, !isSelected)
+                      }}
                     >
                       <span className="pin-number">{pin}</span>
                     </button>
@@ -421,7 +514,7 @@ export default function BowlingScorer({
             </button>
           </div>
           <p className="live-help">
-            Tap every pin that fell, then record. Undo is available after every roll.
+            Tap pins or swipe across them to mark what fell, then record. Undo is available after every roll.
           </p>
         </>
       )}

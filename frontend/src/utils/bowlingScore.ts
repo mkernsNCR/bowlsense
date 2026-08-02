@@ -95,6 +95,17 @@ export function calculateScores(rolls: number[]): number[] {
   return cumulative
 }
 
+/** Returns the highest final score still reachable from the current game state. */
+export function calculateMaximumPossibleScore(state: GameState): number {
+  let projected = state
+
+  for (let remainingRolls = 21; remainingRolls > 0 && !projected.isComplete; remainingRolls -= 1) {
+    projected = knockPins(projected, projected.pinsStanding)
+  }
+
+  return projected.totalScore
+}
+
 function applyScores(frames: Frame[], rolls: number[]): Frame[] {
   const cumulative = calculateScores(rolls)
   let previous = 0

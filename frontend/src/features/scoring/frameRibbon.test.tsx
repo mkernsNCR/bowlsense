@@ -97,4 +97,15 @@ describe('toFrameRibbonFrames', () => {
 
     expect(screen.getByLabelText('Frame 1, current, Rolls 7')).toBeTruthy()
   })
+
+  it('shows a parenthesized maximum possible score in the tenth frame', () => {
+    const gameFrames = Array.from({ length: 10 }, () => frame())
+    gameFrames[9] = frame({ ball1: 10, isStrike: true })
+    const frames = toFrameRibbonFrames(gameFrames, 9, 234)
+
+    render(<FrameRibbon frames={frames} />)
+
+    expect(screen.getByText('(234)')).toBeTruthy()
+    expect(screen.getByLabelText('Frame 10, current, Rolls X, maximum possible final score 234')).toBeTruthy()
+  })
 })

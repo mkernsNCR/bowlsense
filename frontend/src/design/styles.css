@@ -699,6 +699,11 @@ a.bs-list-row:hover {
   font-weight: 680;
 }
 
+.bs-frame-ribbon__score.is-projected {
+  color: color-mix(in srgb, var(--ink) 56%, transparent);
+  font-weight: 580;
+}
+
 .bs-frame-ribbon__frame.is-current {
   outline: 2px solid var(--oil-violet);
   outline-offset: -2px;

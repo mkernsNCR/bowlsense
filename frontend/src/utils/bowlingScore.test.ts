@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  calculateMaximumPossibleScore,
   calculateScores,
   getDisplayMark,
   initGame,
@@ -36,6 +37,24 @@ test('keeps unresolved strike bonuses out of cumulative scores', () => {
   assert.deepEqual(calculateScores([10]), [])
   assert.deepEqual(calculateScores([10, 7]), [])
   assert.deepEqual(calculateScores([10, 7, 2]), [19, 28])
+})
+
+test('calculates the maximum possible finish for an incomplete game', () => {
+  const game = [10, 8, 0, 7, 3, 10, 10, 10, 10, 8, 2, 10, 10]
+    .reduce((state, pins) => roll(state, pins), initGame())
+
+  assert.equal(game.totalScore, 174)
+  assert.equal(game.currentFrame, 9)
+  assert.equal(game.currentBall, 1)
+  assert.equal(calculateMaximumPossibleScore(game), 234)
+})
+
+test('keeps the exact final score once a game is complete', () => {
+  const game = Array.from({ length: 20 }, () => 0)
+    .reduce((state, pins) => roll(state, pins), initGame())
+
+  assert.equal(game.isComplete, true)
+  assert.equal(calculateMaximumPossibleScore(game), 0)
 })
 
 test('completes a perfect game through the pin-selection state machine', () => {

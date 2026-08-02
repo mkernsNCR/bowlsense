@@ -5,6 +5,7 @@ export type FrameState = 'pending' | 'partial' | 'current' | 'complete' | 'strik
 export interface FrameRibbonFrame {
   rolls?: readonly string[]
   score?: number | null
+  projectedScore?: number | null
   state?: FrameState
   label?: string
   ariaLabel?: string
@@ -21,7 +22,10 @@ function frameDescription(frame: FrameRibbonFrame, index: number) {
   const state = frame.state ?? 'pending'
   const rolls = frame.rolls?.length ? `Rolls ${frame.rolls.join(', ')}` : 'Not bowled'
   const score = frame.score == null ? '' : `, cumulative score ${frame.score}`
-  return frame.ariaLabel ?? frame.label ?? `Frame ${index + 1}, ${state}, ${rolls}${score}`
+  const projection = frame.score == null && frame.projectedScore != null
+    ? `, maximum possible final score ${frame.projectedScore}`
+    : ''
+  return frame.ariaLabel ?? frame.label ?? `Frame ${index + 1}, ${state}, ${rolls}${score}${projection}`
 }
 
 export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false, className = '' }: FrameRibbonProps) {
@@ -44,6 +48,7 @@ export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false,
           {normalized.map((frame, index) => {
             const state = frame.state ?? 'pending'
             const description = frameDescription(frame, index)
+            const showingProjection = frame.score == null && frame.projectedScore != null
             return (
               <li
                 key={index}
@@ -56,7 +61,9 @@ export function FrameRibbon({ frames, label = 'Ten-frame game', compact = false,
                 <span className="bs-frame-ribbon__rolls" aria-hidden="true">
                   {frame.rolls?.length ? frame.rolls.join(' ') : '·'}
                 </span>
-                <span className="bs-frame-ribbon__score" aria-hidden="true">{frame.score ?? '—'}</span>
+                <span className={`bs-frame-ribbon__score${showingProjection ? ' is-projected' : ''}`} aria-hidden="true">
+                  {frame.score ?? (showingProjection ? `(${frame.projectedScore})` : '—')}
+                </span>
                 {state === 'current' ? <span className="bs-visually-hidden">Current frame</span> : null}
               </li>
             )

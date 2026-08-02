@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import {
+  calculateMaximumPossibleScore,
   gameFromFrameData,
   type GameState,
   initGame,
@@ -234,9 +235,11 @@ export default function BowlingScorer({
     pinSelections: state.pinSelections,
     splits,
   })
+  const maximumPossibleScore = useMemo(() => calculateMaximumPossibleScore(state), [state])
   const ribbonFrames = toFrameRibbonFrames(
     state.frames,
     state.isComplete ? undefined : state.currentFrame,
+    state.isComplete ? undefined : maximumPossibleScore,
   )
 
   const savePayload = (): SavedBowlingGame => ({

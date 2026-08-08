@@ -135,9 +135,12 @@
 .live-actions .strike { background: color-mix(in srgb, var(--score-gold) 16%, var(--score-surface)); color: var(--score-gold); }
 .live-actions .record { background: var(--score-violet); color: #fff; }
 .live-help { color: var(--score-secondary); font-size: .8125rem; margin: 8px auto; max-width: 390px; text-align: center; }
-.live-ball { align-items: center; background: var(--score-surface); border-radius: 14px; display: flex; gap: 10px; margin: 10px 0; min-height: 52px; padding: 6px 12px; }
-.live-ball label { color: var(--score-secondary); font-size: .75rem; font-weight: 650; }
-.live-ball select { background: transparent; border: 0; color: var(--score-ink); flex: 1; font: inherit; min-height: 44px; min-width: 0; outline: 0; }
+.live-ball { align-items: stretch; background: var(--score-surface); border-radius: 14px; display: grid; gap: 1px; grid-template-columns: 1fr 1fr; margin: 10px 0; overflow: hidden; }
+.live-ball__control { display: grid; gap: 2px; min-width: 0; padding: 6px 12px; }
+.live-ball__control + .live-ball__control { border-left: 1px solid var(--score-line); }
+.live-ball label { color: var(--score-secondary); font-size: .6875rem; font-weight: 650; }
+.live-ball select { background: transparent; border: 0; color: var(--score-ink); font: inherit; min-height: 44px; min-width: 0; outline: 0; padding: 0; width: 100%; }
+.live-ball select:focus-visible { outline: 3px solid color-mix(in srgb, var(--score-violet) 48%, transparent); outline-offset: -2px; }
 .lane-notes { background: var(--score-surface); border: 1px solid transparent; border-radius: 16px; margin: 10px 0; overflow: hidden; }
 .lane-notes.is-open { border-color: color-mix(in srgb, var(--score-violet) 32%, var(--score-line)); }
 .lane-notes-toggle { align-items: center; background: transparent; color: var(--score-ink); display: flex; gap: 10px; min-height: 58px; padding: 8px 12px; text-align: left; width: 100%; }
@@ -178,13 +181,29 @@
 .lane-notes-clear:focus-visible,
 .lane-notes input:focus-visible { outline: 3px solid color-mix(in srgb, var(--score-violet) 48%, transparent); outline-offset: 2px; }
 .live-summary { background: var(--score-surface); border-radius: 18px; overflow: hidden; }
-.live-summary-row { align-items: center; display: flex; min-height: 46px; padding: 0 14px; position: relative; }
-.live-summary-row.scoring-row-action { justify-content: flex-start; width: 100%; }
+.live-summary-row { align-items: center; display: flex; gap: 8px; min-height: 58px; padding: 5px 8px 5px 14px; position: relative; }
+.live-summary-edit { background: transparent; border-radius: 10px; color: var(--score-secondary); flex: 1; justify-content: flex-start; min-width: 0; padding: 8px 4px; }
 .live-summary-row + .live-summary-row::before { background: var(--score-line); content: ""; height: 1px; left: 14px; position: absolute; right: 0; top: 0; }
-.live-summary-row span:first-child { color: var(--score-secondary); flex: 1; }
+.live-summary-edit span:first-child { color: var(--score-secondary); flex: 1; text-align: left; }
 .live-summary-row strong { font-family: ui-monospace, SFMono-Regular, monospace; }
+.live-summary-row select { background: transparent; border: 1px solid var(--score-line); border-radius: 9px; color: var(--score-secondary); font-size: .6875rem; max-width: 45%; min-height: 40px; min-width: 0; outline: 0; padding: 0 6px; }
+.live-summary-row select:focus-visible { outline: 3px solid color-mix(in srgb, var(--score-violet) 48%, transparent); outline-offset: 2px; }
 .game-lane-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .game-lane-badges span { background: color-mix(in srgb, var(--score-violet) 11%, transparent); border: 1px solid color-mix(in srgb, var(--score-violet) 22%, var(--score-line)); border-radius: 999px; color: var(--score-violet); font-size: .6875rem; font-weight: 650; padding: 5px 8px; }
+.game-frame-balls { color: var(--score-secondary); display: flex; flex-wrap: wrap; font-size: .6875rem; gap: 6px; margin-top: 8px; }
+.game-frame-balls span { background: color-mix(in srgb, var(--score-gold) 11%, transparent); border: 1px solid color-mix(in srgb, var(--score-gold) 24%, var(--score-line)); border-radius: 999px; padding: 5px 8px; }
+.frame-ball-assignments { background: var(--score-surface); border: 1px solid var(--score-line); border-radius: 16px; display: grid; gap: 10px; margin: 10px 0 16px; padding: 13px 12px 12px; }
+.frame-ball-assignments__heading { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
+.frame-ball-assignments__heading strong { font-size: .875rem; }
+.frame-ball-assignments__heading > span { color: var(--score-secondary); font-size: .6875rem; text-align: right; }
+.frame-ball-assignments__hint { color: var(--score-secondary); font-size: .6875rem; line-height: 1.35; margin: 0; }
+.frame-ball-assignments__list { display: grid; gap: 1px; grid-template-columns: 1fr 1fr; overflow: hidden; }
+.frame-ball-row { align-items: center; background: color-mix(in srgb, var(--score-secondary) 6%, transparent); display: flex; gap: 7px; min-width: 0; padding: 6px 8px; }
+.frame-ball-row:nth-child(odd) { border-radius: 8px 0 0 8px; }
+.frame-ball-row:nth-child(even) { border-radius: 0 8px 8px 0; }
+.frame-ball-row > span { color: var(--score-secondary); flex: 0 0 45px; font-size: .6875rem; }
+.frame-ball-row select { background: transparent; border: 0; color: var(--score-ink); flex: 1; font-size: .6875rem; min-height: 44px; min-width: 0; outline: 0; }
+.frame-ball-row select:focus-visible { outline: 3px solid color-mix(in srgb, var(--score-violet) 48%, transparent); outline-offset: 2px; }
 .game-throw-notes { border-top: 1px solid var(--score-line); margin-top: 10px; padding-top: 8px; }
 .game-throw-notes summary { color: var(--score-violet); cursor: pointer; font-size: .75rem; font-weight: 700; min-height: 34px; padding: 7px 0; }
 .game-throw-notes__list { display: grid; gap: 5px; padding: 3px 0 6px; }
@@ -278,6 +297,13 @@
   .lane-notes-split { grid-template-columns: 1fr; }
   .throw-notes-selector__controls { grid-template-columns: 1fr 1.2fr 1fr; }
   .throw-notes-selector__controls .scoring-button { font-size: .625rem; padding-inline: 5px; }
+  .live-ball { grid-template-columns: 1fr; }
+  .live-ball__control + .live-ball__control { border-left: 0; border-top: 1px solid var(--score-line); }
+  .live-summary-row { padding-left: 10px; }
+  .live-summary-row select { max-width: 42%; }
+  .frame-ball-assignments__list { grid-template-columns: 1fr; }
+  .frame-ball-row:nth-child(odd),
+  .frame-ball-row:nth-child(even) { border-radius: 8px; }
 }
 
 @media (prefers-color-scheme: dark) {

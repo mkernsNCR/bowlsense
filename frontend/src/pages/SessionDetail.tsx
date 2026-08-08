@@ -170,9 +170,18 @@ export default function SessionDetail() {
 
   const session = sessionQuery.data
   const games = session?.games ?? []
+  const orderedGames = [...games].sort((first, second) => first.gameNumber - second.gameNumber || first.id - second.id)
   const balls = ballsQuery.data ?? []
-  const average = games.length ? Math.round(games.reduce((sum, game) => sum + game.score, 0) / games.length) : null
-  const high = games.length ? Math.max(...games.map((game) => game.score)) : null
+  const seriesTotal = orderedGames.reduce((sum, game) => sum + game.score, 0)
+  const average = orderedGames.length ? Math.round(seriesTotal / orderedGames.length) : null
+  const high = orderedGames.length ? Math.max(...orderedGames.map((game) => game.score)) : null
+  const totalStrikes = orderedGames.reduce((sum, game) => sum + game.strikes, 0)
+  const totalSpares = orderedGames.reduce((sum, game) => sum + game.spares, 0)
+  const totalSplits = orderedGames.reduce((sum, game) => sum + game.splits, 0)
+  const perfectGames = orderedGames.filter((game) => game.score === 300).length
+  const firstGame = orderedGames[0]
+  const lastGame = orderedGames[orderedGames.length - 1]
+  const sessionTrend = firstGame && lastGame && orderedGames.length > 1 ? lastGame.score - firstGame.score : null
   const activeSessionForm = resolveSessionForm(sessionForm, {
     date: session?.date ?? '',
     location: session?.location ?? '',
@@ -289,10 +298,86 @@ export default function SessionDetail() {
         <button type="button" className="scoring-icon-button" onClick={() => setShowSessionActions(true)} aria-label="Session actions"><Icon name="more" /></button>
       </div>
 
-      <section className="scoring-metrics" aria-label="Session summary">
-        <div className="scoring-metric"><span>Games</span><strong>{games.length}</strong></div>
-        <div className="scoring-metric"><span>Average</span><strong>{average ?? '—'}</strong></div>
-        <div className="scoring-metric"><span>High</span><strong>{high ?? '—'}</strong></div>
+      <section className="session-dashboard" aria-labelledby="session-dashboard-title">
+        <div className="session-dashboard__hero">
+          <div>
+            <p className="session-dashboard__eyebrow">Session tracker</p>
+            <h2 id="session-dashboard-title">Your set, at a glance</h2>
+            <p className="session-dashboard__intro">
+              {orderedGames.length ? 'A live read on the night so far.' : 'Add your first game to start tracking the night.'}
+            </p>
+          </div>
+          <div className="session-dashboard__series" aria-label={`Total series ${orderedGames.length ? seriesTotal : 'not available'}`}>
+            <span>Total series</span>
+            <strong>{orderedGames.length ? seriesTotal : '—'}</strong>
+            <small>{orderedGames.length ? `${orderedGames.length}-game set` : 'No games logged'}</small>
+          </div>
+        </div>
+
+        <div className="session-dashboard__stats">
+          <div className="session-dashboard__stat"><span>Average</span><strong>{average ?? '—'}</strong><small>per game</small></div>
+          <div className="session-dashboard__stat"><span>High game</span><strong>{high ?? '—'}</strong><small>{perfectGames ? `${perfectGames} perfect` : 'best score'}</small></div>
+          <div className="session-dashboard__stat"><span>Games logged</span><strong>{orderedGames.length}</strong><small>this session</small></div>
+          <div className="session-dashboard__stat">
+            <span>Momentum</span>
+            <strong className={sessionTrend == null ? '' : sessionTrend > 0 ? 'is-positive' : sessionTrend < 0 ? 'is-negative' : ''}>
+              {sessionTrend == null ? '—' : sessionTrend === 0 ? 'Steady' : `${sessionTrend > 0 ? '+' : ''}${sessionTrend}`}
+            </strong>
+            <small>{sessionTrend == null ? 'needs 2 games' : 'last vs first game'}</small>
+          </div>
+        </div>
+
+        {orderedGames.length > 0 && (
+          <>
+            <div className="session-dashboard__card session-dashboard__chart-card">
+              <div className="session-dashboard__card-heading">
+                <div>
+                  <p className="session-dashboard__eyebrow">Game-by-game</p>
+                  <h3>Score path</h3>
+                </div>
+                {average != null && <span className="session-dashboard__legend"><i aria-hidden="true" /> Avg {average}</span>}
+              </div>
+              <div
+                className="session-score-chart"
+                role="img"
+                aria-label={`Score path: ${orderedGames.map((game) => `Game ${game.gameNumber}, ${game.score}`).join('; ')}`}
+              >
+                {average != null && (
+                  <div className="session-score-chart__average" style={{ bottom: `${Math.min(100, Math.max(0, (average / 300) * 100))}%` }}>
+                    <span>Avg {average}</span>
+                  </div>
+                )}
+                <div className="session-score-chart__bars">
+                  {orderedGames.map((game) => (
+                    <div className="session-score-bar" key={game.id}>
+                      <span className="session-score-bar__value">{game.score}</span>
+                      <div className="session-score-bar__track" aria-hidden="true">
+                        <div
+                          className={`session-score-bar__fill${game.score === high ? ' is-high' : ''}`}
+                          style={{ height: `${Math.max(8, Math.min(100, (game.score / 300) * 100))}%` }}
+                        />
+                      </div>
+                      <span className="session-score-bar__label">G{game.gameNumber}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="session-score-chart__scale"><span>0</span><span>300 perfect game</span></div>
+            </div>
+
+            <div className="session-dashboard__card session-dashboard__breakdown">
+              <div>
+                <p className="session-dashboard__eyebrow">Pin story</p>
+                <h3>How you got there</h3>
+              </div>
+              <div className="session-dashboard__breakdown-grid">
+                <div><strong>{totalStrikes}</strong><span>Strikes</span></div>
+                <div><strong>{totalSpares}</strong><span>Spares</span></div>
+                <div><strong>{totalSplits}</strong><span>Splits</span></div>
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       {savedNotice && (
@@ -309,7 +394,7 @@ export default function SessionDetail() {
         </div>
       ) : (
         <div className="scoring-group">
-          {games.map((game) => {
+          {orderedGames.map((game) => {
             const ballName = balls.find((ball) => ball.id === game.ballId)?.name
             return (
               <article className="scoring-row" key={game.id} style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>

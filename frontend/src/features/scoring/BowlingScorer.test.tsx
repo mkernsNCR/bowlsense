@@ -198,29 +198,49 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.getByText('0', { selector: '.live-score-total strong' })).toBeTruthy()
   })
 
-  it('captures fast lane cues with chips and sliders when a game is complete', async () => {
+  it('captures independent cues for individual throws with target and arrow sliders', async () => {
     const onSave = vi.fn()
     renderScorer(undefined, { onSave })
 
     finishPerfectGame()
-    fireEvent.click(screen.getByRole('button', { name: /Lane notes/ }))
+
+    const throwSelector = screen.getByRole('slider', { name: 'Throw to annotate' })
+    fireEvent.change(throwSelector, { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Going high' }))
-    fireEvent.change(screen.getByRole('slider', { name: 'Frame reaction changed' }), { target: { value: '6' } })
+    fireEvent.change(screen.getByRole('slider', { name: 'Target board' }), { target: { value: '15' } })
+    fireEvent.change(screen.getByRole('slider', { name: 'Entry at arrows' }), { target: { value: '12' } })
+
+    fireEvent.change(throwSelector, { target: { value: '12' } })
     fireEvent.click(screen.getByRole('button', { name: 'Ball down' }))
-    fireEvent.change(screen.getByRole('slider', { name: 'Frame ball changed' }), { target: { value: '7' } })
     fireEvent.click(screen.getByRole('button', { name: 'Flat 10' }))
     fireEvent.change(screen.getByRole('slider', { name: 'Ball speed' }), { target: { value: '17.5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save 300' }))
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
-    expect(JSON.parse(String(onSave.mock.calls[0]?.[0].frameData)).laneNotes).toMatchObject({
+    const savedThrowNotes = JSON.parse(String(onSave.mock.calls[0]?.[0].frameData)).throwNotes
+    expect(savedThrowNotes[0]).toMatchObject({
       reaction: 'high',
-      reactionFrame: 6,
+      targetBoard: 15,
+      entryBoard: 12,
+    })
+    expect(savedThrowNotes[11]).toMatchObject({
       adjustment: 'ball-down',
-      ballChangeFrame: 7,
       leave: 'flat-10',
       speed: 17.5,
     })
+  })
+
+  it('clears moved-feet detail when that adjustment is deselected', async () => {
+    const onSave = vi.fn()
+    renderScorer(undefined, { onSave })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Moved feet' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Boards moved with feet' }), { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Moved feet' }))
+
+    expect(screen.queryByRole('slider', { name: 'Boards moved with feet' })).toBeNull()
+    expect(onSave).not.toHaveBeenCalled()
   })
 
   it('labels a full rack after a gutter as a spare opportunity', () => {

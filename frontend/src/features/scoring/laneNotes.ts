@@ -58,6 +58,10 @@ function optionalBoard(value: unknown) {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 40 ? value : undefined
 }
 
+function optionalMoveBoards(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10 ? value : undefined
+}
+
 function optionalSpeed(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 10 && value <= 30 ? value : undefined
 }
@@ -70,13 +74,17 @@ export function parseLaneNotes(frameData?: string | null): LaneNotes {
     const raw = (parsed as { laneNotes?: unknown }).laneNotes
     if (!raw || typeof raw !== 'object') return {}
     const notes = raw as Record<string, unknown>
+    const reaction = isOption(reactionOptions, notes.reaction) ? notes.reaction : undefined
+    const adjustment = isOption(adjustmentOptions, notes.adjustment) ? notes.adjustment : undefined
     return {
       laneFeel: isOption(laneFeelOptions, notes.laneFeel) ? notes.laneFeel : undefined,
-      reaction: isOption(reactionOptions, notes.reaction) ? notes.reaction : undefined,
-      reactionFrame: optionalFrame(notes.reactionFrame),
-      adjustment: isOption(adjustmentOptions, notes.adjustment) ? notes.adjustment : undefined,
-      moveBoards: optionalBoard(notes.moveBoards),
-      ballChangeFrame: optionalFrame(notes.ballChangeFrame),
+      reaction,
+      reactionFrame: reaction && reaction !== 'flush' ? optionalFrame(notes.reactionFrame) : undefined,
+      adjustment,
+      moveBoards: adjustment === 'moved-feet' ? optionalMoveBoards(notes.moveBoards) : undefined,
+      ballChangeFrame: adjustment === 'ball-down' || adjustment === 'ball-up'
+        ? optionalFrame(notes.ballChangeFrame)
+        : undefined,
       speed: optionalSpeed(notes.speed),
       leave: isOption(leaveOptions, notes.leave) ? notes.leave : undefined,
       startBoard: optionalBoard(notes.startBoard),

@@ -40,4 +40,21 @@ describe('lane notes', () => {
     expect(parseLaneNotes(JSON.stringify({ laneNotes: { reaction: 'wild', speed: 80, reactionFrame: 99 } }))).toEqual({})
     expect(addLaneNotes('{not-json', {})).toBe('{not-json')
   })
+
+  it('drops dependent values that do not match their selected cue', () => {
+    expect(parseLaneNotes(JSON.stringify({
+      laneNotes: {
+        reaction: 'flush',
+        reactionFrame: 6,
+        adjustment: 'stayed',
+        moveBoards: 40,
+        ballChangeFrame: 8,
+        speed: 17,
+      },
+    }))).toEqual({ reaction: 'flush', adjustment: 'stayed', speed: 17 })
+
+    expect(parseLaneNotes(JSON.stringify({
+      laneNotes: { adjustment: 'moved-feet', moveBoards: 11 },
+    }))).toEqual({ adjustment: 'moved-feet' })
+  })
 })

@@ -9,6 +9,7 @@ import { copyText } from '../features/scoring/copyText'
 import { formatSessionDate } from '../features/scoring/date'
 import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
 import { laneNoteBadges, parseLaneNotes } from '../features/scoring/laneNotes'
+import { frameBallEntries, parseFrameBallIds } from '../features/scoring/frameBalls'
 import { parseThrowNotes, throwNoteSummary } from '../features/scoring/throwNotes'
 import type { ScoringBall } from '../features/scoring/types'
 import { gameFromFrameData } from '../utils/bowlingScore'
@@ -399,6 +400,9 @@ export default function SessionDetail() {
           {orderedGames.map((game) => {
             const ballName = balls.find((ball) => ball.id === game.ballId)?.name
             const laneBadges = laneNoteBadges(parseLaneNotes(game.frameData))
+            const frameBallLabels = frameBallEntries(parseFrameBallIds(game.frameData))
+              .map(({ frame, ballId }) => ({ frame, name: balls.find((ball) => ball.id === ballId)?.name }))
+              .filter((item): item is { frame: number; name: string } => item.name != null)
             const throwSummaries = parseThrowNotes(game.frameData)
               .map((notes, index) => ({ index, summary: throwNoteSummary(notes, index) }))
               .filter((item): item is { index: number; summary: string } => item.summary != null)
@@ -414,6 +418,11 @@ export default function SessionDetail() {
                   {laneBadges.length > 0 && (
                     <div className="game-lane-badges" aria-label={`Game ${game.gameNumber} lane notes`}>
                       {laneBadges.map((badge) => <span key={badge}>{badge}</span>)}
+                    </div>
+                  )}
+                  {frameBallLabels.length > 0 && (
+                    <div className="game-frame-balls" aria-label={`Game ${game.gameNumber} frame balls`}>
+                      {frameBallLabels.map(({ frame, name }) => <span key={frame}>F{frame} · {name}</span>)}
                     </div>
                   )}
                   {throwSummaries.length > 0 && (

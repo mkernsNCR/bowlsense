@@ -13,6 +13,8 @@ import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
 import { requiresDiscardConfirmation } from '../features/scoring/interaction'
 import { countSplits } from '../features/scoring/splits'
 import { addLaneNotes, parseLaneNotes, type LaneNotes } from '../features/scoring/laneNotes'
+import FrameBallAssignments from '../features/scoring/FrameBallAssignments'
+import { addFrameBallIds, emptyFrameBallIds, parseFrameBallIds, type FrameBallIds } from '../features/scoring/frameBalls'
 import ThrowNotesPanel from '../features/scoring/ThrowNotesPanel'
 import { addThrowNotes, parseThrowNotes, type ThrowNotes } from '../features/scoring/throwNotes'
 import type { ScoringBall } from '../features/scoring/types'
@@ -130,6 +132,10 @@ interface CompletionSheetBodyProps {
   onToggleThrowNotes: () => void
   onSelectThrow: (index: number) => void
   onThrowNotesChange: (index: number, notes: ThrowNotes) => void
+  balls: ScoringBall[]
+  frameBallIds: FrameBallIds
+  defaultBallId: string
+  onFrameBallChange: (frameIndex: number, ballId: string) => void
 }
 
 function CompletionSheetBody({
@@ -154,6 +160,10 @@ function CompletionSheetBody({
   onToggleThrowNotes,
   onSelectThrow,
   onThrowNotesChange,
+  balls,
+  frameBallIds,
+  defaultBallId,
+  onFrameBallChange,
 }: CompletionSheetBodyProps) {
   if (saveStatus === 'saved') {
     return (
@@ -168,6 +178,14 @@ function CompletionSheetBody({
   return (
     <>
       {perfectGameElements}
+      {balls.length > 0 && (
+        <FrameBallAssignments
+          balls={balls}
+          frameBallIds={frameBallIds}
+          defaultBallId={defaultBallId}
+          onChange={onFrameBallChange}
+        />
+      )}
       <ThrowNotesPanel
         notes={throwNotes}
         throwCount={throwCount}
@@ -233,6 +251,8 @@ export default function BowlingScorer({
   const [showShareCard, setShowShareCard] = useState(false)
   const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(initialFrameData))
   const [laneNotes, setLaneNotes] = useState<LaneNotes>(() => parseLaneNotes(initialFrameData))
+  const [frameBallIds, setFrameBallIds] = useState<FrameBallIds>(() => parseFrameBallIds(initialFrameData))
+  const [frameBallSnapshot, setFrameBallSnapshot] = useState<FrameBallIds | null>(null)
   const [throwNotes, setThrowNotes] = useState<ThrowNotes[]>(() => parseThrowNotes(initialFrameData))
   const [selectedThrowIndex, setSelectedThrowIndex] = useState<number | null>(() => restoredGame.rolls.length ? restoredGame.rolls.length - 1 : null)
   const [throwNotesOpen, setThrowNotesOpen] = useState(() => parseThrowNotes(initialFrameData).some((notes) => Object.values(notes).some((value) => value != null)))
@@ -251,6 +271,7 @@ export default function BowlingScorer({
   }, [])
 
   const selectedBall = balls.find((ball) => String(ball.id) === selectedBallId)
+  const currentFrameBallId = frameBallIds[state.currentFrame] == null ? selectedBallId : String(frameBallIds[state.currentFrame])
   const strikes = useMemo(
     () => state.frames.reduce((count, frame, index) => {
       if (index < 9) return count + (frame.isStrike ? 1 : 0)
@@ -268,7 +289,8 @@ export default function BowlingScorer({
     splits,
   })
   const frameWithLegacyNotes = addLaneNotes(baseFrameData, laneNotes)
-  const frameData = addThrowNotes(frameWithLegacyNotes, throwNotes.slice(0, state.rolls.length))
+  const frameWithThrowNotes = addThrowNotes(frameWithLegacyNotes, throwNotes.slice(0, state.rolls.length))
+  const frameData = addFrameBallIds(frameWithThrowNotes, frameBallIds)
   const maximumPossibleScore = useMemo(() => calculateMaximumPossibleScore(state), [state])
   const ribbonFrames = toFrameRibbonFrames(
     state.frames,
@@ -297,6 +319,14 @@ export default function BowlingScorer({
     setSelectedKnocked([])
     setConfirmRetake(false)
     setSaveStatus('idle')
+  }
+
+  const updateFrameBall = (frameIndex: number, ballId: string) => {
+    setFrameBallIds((current) => {
+      const next = current.slice()
+      next[frameIndex] = ballId ? Number(ballId) : null
+      return next
+    })
   }
 
   const setPinSelected = (pin: number, selected: boolean) => {
@@ -364,10 +394,12 @@ export default function BowlingScorer({
   const restoreBeforeEdit = () => {
     if (!editSnapshot) return
     setState(editSnapshot)
+    if (frameBallSnapshot) setFrameBallIds(frameBallSnapshot)
     if (throwNotesSnapshot) setThrowNotes(throwNotesSnapshot)
     setSelectedThrowIndex(editSnapshot.rolls.length ? editSnapshot.rolls.length - 1 : null)
     setReviewingSavedGame(editSnapshot.isComplete)
     setEditSnapshot(null)
+    setFrameBallSnapshot(null)
     setThrowNotesSnapshot(null)
     setEditingFromFrame(null)
     setSelectedKnocked([])
@@ -377,8 +409,10 @@ export default function BowlingScorer({
     if (editCandidate == null) return
     const rewoundState = rewindToFrame(state, editCandidate)
     setEditSnapshot((current) => current ?? state)
+    setFrameBallSnapshot((current) => current ?? frameBallIds)
     setThrowNotesSnapshot((current) => current ?? throwNotes)
     setState(rewoundState)
+    setFrameBallIds((current) => current.map((ballId, index) => index < editCandidate ? ballId : null))
     setThrowNotes((current) => current.slice(0, rewoundState.rolls.length))
     setSelectedThrowIndex(rewoundState.rolls.length ? rewoundState.rolls.length - 1 : null)
     setReviewingSavedGame(false)
@@ -437,10 +471,12 @@ export default function BowlingScorer({
     setReviewingSavedGame(false)
     setSelectedKnocked([])
     setEditSnapshot(null)
+    setFrameBallSnapshot(null)
     setThrowNotesSnapshot(null)
     setEditingFromFrame(null)
     setCanDeriveSplits(true)
     setLaneNotes({})
+    setFrameBallIds(emptyFrameBallIds())
     setThrowNotes([])
     setSelectedThrowIndex(null)
     setThrowNotesSnapshot(null)
@@ -485,18 +521,34 @@ export default function BowlingScorer({
         />
 
         <div className="live-ball">
-          <label htmlFor={`ball-${gameNumber}`}>Ball</label>
-          <select
-            id={`ball-${gameNumber}`}
-            value={selectedBallId}
-            onChange={(event) => setSelectedBallId(event.target.value)}
-            aria-label="Ball used for this game"
-          >
-            <option value="">Not selected</option>
-            {balls.map((ball) => (
-              <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
-            ))}
-          </select>
+          <div className="live-ball__control">
+            <label htmlFor={`ball-default-${gameNumber}`}>Default ball</label>
+            <select
+              id={`ball-default-${gameNumber}`}
+              value={selectedBallId}
+              onChange={(event) => setSelectedBallId(event.target.value)}
+              aria-label="Ball used for this game"
+            >
+              <option value="">Not selected</option>
+              {balls.map((ball) => (
+                <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="live-ball__control">
+            <label htmlFor={`ball-frame-${gameNumber}`}>Frame {state.currentFrame + 1}</label>
+            <select
+              id={`ball-frame-${gameNumber}`}
+              value={currentFrameBallId}
+              onChange={(event) => updateFrameBall(state.currentFrame, event.target.value)}
+              aria-label={`Ball for frame ${state.currentFrame + 1}`}
+            >
+              <option value="">Use default{selectedBall ? ` · ${selectedBall.name}` : ' · no ball selected'}</option>
+              {balls.map((ball) => (
+                <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -599,18 +651,28 @@ export default function BowlingScorer({
       {activeView === 'scores' && (
         <div className="live-summary">
           {state.frames.map((frame, index) => (
-            <button
-              type="button"
-              className="live-summary-row scoring-row-action"
-              key={index}
-              disabled={frame.ball1 == null}
-              onClick={() => setEditCandidate(index)}
-              aria-label={frame.ball1 == null ? `Frame ${index + 1}, not started` : `Edit from frame ${index + 1}`}
-            >
-              <span>Frame {index + 1}</span>
-              <strong>{frame.cumulative ?? '—'}</strong>
-              <Icon name="chevron-right" size={16} />
-            </button>
+            <div className="live-summary-row" key={index}>
+              <button
+                type="button"
+                className="live-summary-edit scoring-row-action"
+                disabled={frame.ball1 == null}
+                onClick={() => setEditCandidate(index)}
+                aria-label={frame.ball1 == null ? `Frame ${index + 1}, not started` : `Edit from frame ${index + 1}`}
+              >
+                <span>Frame {index + 1}</span>
+                <strong>{frame.cumulative ?? '—'}</strong>
+                <Icon name="chevron-right" size={16} />
+              </button>
+              <select
+                aria-label={`Ball for frame ${index + 1}`}
+                value={frameBallIds[index] == null ? '' : String(frameBallIds[index])}
+                disabled={frame.ball1 == null && index !== state.currentFrame}
+                onChange={(event) => updateFrameBall(index, event.target.value)}
+              >
+                <option value="">Default{selectedBall ? ` · ${selectedBall.name}` : ''}</option>
+                {balls.map((ball) => <option key={ball.id} value={ball.id}>{ball.name}</option>)}
+              </select>
+            </div>
           ))}
         </div>
       )}
@@ -646,6 +708,10 @@ export default function BowlingScorer({
             onToggleThrowNotes={() => setThrowNotesOpen((open) => !open)}
             onSelectThrow={setSelectedThrowIndex}
             onThrowNotesChange={updateThrowNote}
+            balls={balls}
+            frameBallIds={frameBallIds}
+            defaultBallId={selectedBallId}
+            onFrameBallChange={updateFrameBall}
           />
         </Sheet>
       )}
@@ -732,6 +798,10 @@ export default function BowlingScorer({
             onToggleThrowNotes={() => setThrowNotesOpen((open) => !open)}
             onSelectThrow={setSelectedThrowIndex}
             onThrowNotesChange={updateThrowNote}
+            balls={balls}
+            frameBallIds={frameBallIds}
+            defaultBallId={selectedBallId}
+            onFrameBallChange={updateFrameBall}
           />
         </Sheet>
       )}

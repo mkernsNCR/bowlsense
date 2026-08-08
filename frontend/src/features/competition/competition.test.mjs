@@ -61,10 +61,17 @@ test('league score pills remain legible on the light public surface', async () =
 })
 
 test('public shell states, fact cards, and controls retain readable accessible styling', async () => {
+  const competition = await readFile(new URL('./CompetitionUI.tsx', import.meta.url), 'utf8')
   const profile = await readFile(new URL('../../pages/PublicProfile.tsx', import.meta.url), 'utf8')
   const css = await readFile(new URL('./competition.css', import.meta.url), 'utf8')
+  assert.match(competition, /className="public-scorecard public-scorecard--dark"/)
   assert.match(profile, /if \(loading\) return <PublicShell/)
   assert.match(profile, /if \(error \|\| !stats\) return <PublicShell/)
+  assert.match(css, /\.public-scorecard \{[^}]*--public-paper: #0d0d1a/)
+  assert.match(css, /\.public-scorecard \.btn-primary \{[^}]*color: var\(--public-paper\);[^}]*background: var\(--public-accent\)/)
+  assert.match(css, /\.public-scorecard \.btn-ghost \{[^}]*color: var\(--public-ink\);[^}]*background: rgba\(255, 255, 255, \.06\)/)
+  assert.match(css, /\.public-detail-row \{[^}]*background: #191423;[^}]*border: 1px solid var\(--public-rule\)/)
+  assert.match(css, /\.share-result__fact \{[^}]*background: #191423/)
   assert.match(css, /\.public-scorecard button, \.public-scorecard \.btn \{ min-height: 44px;/)
   assert.match(css, /\.public-legacy-content \.share-result__fact \{[^}]*color: var\(--public-ink\)/)
 })

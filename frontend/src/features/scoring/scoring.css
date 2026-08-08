@@ -140,6 +140,7 @@
 .live-ball__control + .live-ball__control { border-left: 1px solid var(--score-line); }
 .live-ball label { color: var(--score-secondary); font-size: .6875rem; font-weight: 650; }
 .live-ball select { background: transparent; border: 0; color: var(--score-ink); font: inherit; min-height: 44px; min-width: 0; outline: 0; padding: 0; width: 100%; }
+.live-ball select:focus-visible { outline: 3px solid color-mix(in srgb, var(--score-violet) 48%, transparent); outline-offset: -2px; }
 .lane-notes { background: var(--score-surface); border: 1px solid transparent; border-radius: 16px; margin: 10px 0; overflow: hidden; }
 .lane-notes.is-open { border-color: color-mix(in srgb, var(--score-violet) 32%, var(--score-line)); }
 .lane-notes-toggle { align-items: center; background: transparent; color: var(--score-ink); display: flex; gap: 10px; min-height: 58px; padding: 8px 12px; text-align: left; width: 100%; }

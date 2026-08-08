@@ -265,6 +265,25 @@ describe('BowlingScorer completion behavior', () => {
     expect(saved.frameBallIds[3]).toBe(12)
   })
 
+  it('shows the default option after clearing a frame override', () => {
+    render(
+      <BowlingScorer
+        gameNumber={1}
+        balls={[{ id: 11, name: 'Benchmark' }, { id: 12, name: 'Transition' }]}
+        defaultBallId="11"
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const frameBall = screen.getByRole('combobox', { name: 'Ball for frame 1' }) as HTMLSelectElement
+    expect(frameBall.value).toBe('')
+    fireEvent.change(frameBall, { target: { value: '12' } })
+    expect(frameBall.value).toBe('12')
+    fireEvent.change(frameBall, { target: { value: '' } })
+    expect(frameBall.value).toBe('')
+  })
+
   it('labels a full rack after a gutter as a spare opportunity', () => {
     renderScorer(JSON.stringify({ pinSelections: [[]] }))
 

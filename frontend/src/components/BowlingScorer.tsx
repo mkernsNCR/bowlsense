@@ -271,7 +271,7 @@ export default function BowlingScorer({
   }, [])
 
   const selectedBall = balls.find((ball) => String(ball.id) === selectedBallId)
-  const currentFrameBallId = frameBallIds[state.currentFrame] == null ? selectedBallId : String(frameBallIds[state.currentFrame])
+  const currentFrameBallId = frameBallIds[state.currentFrame] == null ? '' : String(frameBallIds[state.currentFrame])
   const strikes = useMemo(
     () => state.frames.reduce((count, frame, index) => {
       if (index < 9) return count + (frame.isStrike ? 1 : 0)

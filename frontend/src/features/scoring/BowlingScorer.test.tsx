@@ -230,6 +230,19 @@ describe('BowlingScorer completion behavior', () => {
     })
   })
 
+  it('clears moved-feet detail when that adjustment is deselected', async () => {
+    const onSave = vi.fn()
+    renderScorer(undefined, { onSave })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Moved feet' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Boards moved with feet' }), { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Moved feet' }))
+
+    expect(screen.queryByRole('slider', { name: 'Boards moved with feet' })).toBeNull()
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
   it('labels a full rack after a gutter as a spare opportunity', () => {
     renderScorer(JSON.stringify({ pinSelections: [[]] }))
 

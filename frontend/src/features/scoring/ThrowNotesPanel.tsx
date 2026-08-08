@@ -53,7 +53,9 @@ export default function ThrowNotesPanel({
   const chooseLeave = (value: Leave) => update({ leave: selectedNotes.leave === value ? undefined : value })
   const chooseAdjustment = (value: Adjustment) => update({
     adjustment: selectedNotes.adjustment === value ? undefined : value,
-    moveBoards: value === 'moved-feet' && selectedNotes.adjustment !== value ? selectedNotes.moveBoards ?? 2 : value === 'moved-feet' ? selectedNotes.moveBoards : undefined,
+    moveBoards: value === 'moved-feet' && selectedNotes.adjustment !== value
+      ? selectedNotes.moveBoards ?? 2
+      : undefined,
   })
 
   const moveSelection = (delta: number) => {

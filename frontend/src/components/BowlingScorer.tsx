@@ -12,6 +12,8 @@ import { FrameRibbon, Icon, Sheet } from '../design'
 import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
 import { requiresDiscardConfirmation } from '../features/scoring/interaction'
 import { countSplits } from '../features/scoring/splits'
+import LaneNotesPanel from '../features/scoring/LaneNotesPanel'
+import { addLaneNotes, parseLaneNotes, type LaneNotes } from '../features/scoring/laneNotes'
 import type { ScoringBall } from '../features/scoring/types'
 import ShareCard from './ShareCard'
 import '../features/scoring/scoring.css'
@@ -120,6 +122,11 @@ interface CompletionSheetBodyProps {
   onRetake: () => void
   onShare?: () => void
   onSave: () => void | Promise<void>
+  laneNotes?: LaneNotes
+  laneNotesOpen?: boolean
+  currentFrame?: number
+  onToggleLaneNotes?: () => void
+  onLaneNotesChange?: (notes: LaneNotes) => void
 }
 
 function CompletionSheetBody({
@@ -137,6 +144,11 @@ function CompletionSheetBody({
   onRetake,
   onShare,
   onSave,
+  laneNotes,
+  laneNotesOpen,
+  currentFrame,
+  onToggleLaneNotes,
+  onLaneNotesChange,
 }: CompletionSheetBodyProps) {
   if (saveStatus === 'saved') {
     return (
@@ -151,6 +163,15 @@ function CompletionSheetBody({
   return (
     <>
       {perfectGameElements}
+      {laneNotes && onToggleLaneNotes && onLaneNotesChange && currentFrame != null && (
+        <LaneNotesPanel
+          notes={laneNotes}
+          open={laneNotesOpen ?? false}
+          currentFrame={currentFrame}
+          onToggle={onToggleLaneNotes}
+          onChange={onLaneNotesChange}
+        />
+      )}
       {saveStatus === 'error' && <p className="scoring-error" role="alert">The game was not saved. Check your connection and try again.</p>}
       {canRestore && <button type="button" className="scoring-button secondary wide" style={{ marginTop: 16 }} disabled={isSaving} onClick={onRestore}>Restore original game</button>}
       <div className="scoring-sheet-actions">
@@ -206,6 +227,8 @@ export default function BowlingScorer({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [showShareCard, setShowShareCard] = useState(false)
   const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(initialFrameData))
+  const [laneNotes, setLaneNotes] = useState<LaneNotes>(() => parseLaneNotes(initialFrameData))
+  const [laneNotesOpen, setLaneNotesOpen] = useState(() => Object.keys(parseLaneNotes(initialFrameData)).length > 0)
   const isSaving = saving || saveStatus === 'saving'
 
   useEffect(() => {
@@ -230,12 +253,13 @@ export default function BowlingScorer({
   const spares = useMemo(() => state.frames.filter((frame) => frame.isSpare).length, [state.frames])
   const derivedSplits = useMemo(() => countSplits(state.pinSelections), [state.pinSelections])
   const splits = canDeriveSplits ? derivedSplits : (initialSplits ?? 0)
-  const frameData = JSON.stringify({
+  const baseFrameData = JSON.stringify({
     rolls: state.rolls,
     frames: state.frames,
     pinSelections: state.pinSelections,
     splits,
   })
+  const frameData = addLaneNotes(baseFrameData, laneNotes)
   const maximumPossibleScore = useMemo(() => calculateMaximumPossibleScore(state), [state])
   const ribbonFrames = toFrameRibbonFrames(
     state.frames,
@@ -392,6 +416,8 @@ export default function BowlingScorer({
     setEditSnapshot(null)
     setEditingFromFrame(null)
     setCanDeriveSplits(true)
+    setLaneNotes({})
+    setLaneNotesOpen(false)
     setConfirmRetake(false)
     setSaveStatus('idle')
   }
@@ -457,6 +483,16 @@ export default function BowlingScorer({
         <button type="button" className="scoring-segment" aria-pressed={activeView === 'pins'} onClick={() => setActiveView('pins')}>Pins</button>
         <button type="button" className="scoring-segment" aria-pressed={activeView === 'scores'} onClick={() => setActiveView('scores')}>Score details</button>
       </div>
+
+      {!state.isComplete && (
+        <LaneNotesPanel
+          notes={laneNotes}
+          open={laneNotesOpen}
+          currentFrame={state.currentFrame}
+          onToggle={() => setLaneNotesOpen((open) => !open)}
+          onChange={setLaneNotes}
+        />
+      )}
 
       {activeView === 'pins' && !state.isComplete && (
         <>
@@ -566,6 +602,11 @@ export default function BowlingScorer({
             onUndo={handleUndo}
             onRetake={handleRetake}
             onSave={handleSave}
+            laneNotes={laneNotes}
+            laneNotesOpen={laneNotesOpen}
+            currentFrame={state.currentFrame}
+            onToggleLaneNotes={() => setLaneNotesOpen((open) => !open)}
+            onLaneNotesChange={setLaneNotes}
           />
         </Sheet>
       )}
@@ -645,6 +686,11 @@ export default function BowlingScorer({
             onRetake={handleRetake}
             onShare={() => setShowShareCard(true)}
             onSave={handleSave}
+            laneNotes={laneNotes}
+            laneNotesOpen={laneNotesOpen}
+            currentFrame={state.currentFrame}
+            onToggleLaneNotes={() => setLaneNotesOpen((open) => !open)}
+            onLaneNotesChange={setLaneNotes}
           />
         </Sheet>
       )}

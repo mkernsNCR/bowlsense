@@ -1315,7 +1315,7 @@ async function shareMetadata(env: Env, rawPath: string, origin: string): Promise
   if (path === "/bowl") {
     const profileName = publicProfileName(env);
     return {
-      title: profileName ? `${profileName}'s BowlSense` : "BowlSense public profile",
+      title: profileName ? `${profileName} BowlSense` : "BowlSense public profile",
       description: "Bowling scores, form, and milestones tracked with BowlSense.",
       image: absolute("/api/profile/og-image"),
     };
@@ -1709,7 +1709,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   if ((path.endsWith("/og-image") || path.endsWith("/share-card")) && method === "GET") {
     if (path === "/api/profile/og-image") {
       const profileName = publicProfileName(env);
-      return await sharePng(profileName ? `${profileName}'s BowlSense` : "BowlSense", "Public bowling profile");
+      return await sharePng(profileName ? `${profileName} BowlSense` : "BowlSense", "Public bowling profile");
     }
     const sessionId = path.match(/^\/api\/sessions\/(\d+)\/(?:og-image|share-card)$/)?.[1];
     if (sessionId) {

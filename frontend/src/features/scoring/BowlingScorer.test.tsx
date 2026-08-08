@@ -198,6 +198,31 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.getByText('0', { selector: '.live-score-total strong' })).toBeTruthy()
   })
 
+  it('captures fast lane cues with chips and sliders when a game is complete', async () => {
+    const onSave = vi.fn()
+    renderScorer(undefined, { onSave })
+
+    finishPerfectGame()
+    fireEvent.click(screen.getByRole('button', { name: /Lane notes/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Going high' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Frame reaction changed' }), { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ball down' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Frame ball changed' }), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Flat 10' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Ball speed' }), { target: { value: '17.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save 300' }))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    expect(JSON.parse(String(onSave.mock.calls[0]?.[0].frameData)).laneNotes).toMatchObject({
+      reaction: 'high',
+      reactionFrame: 6,
+      adjustment: 'ball-down',
+      ballChangeFrame: 7,
+      leave: 'flat-10',
+      speed: 17.5,
+    })
+  })
+
   it('labels a full rack after a gutter as a spare opportunity', () => {
     renderScorer(JSON.stringify({ pinSelections: [[]] }))
 

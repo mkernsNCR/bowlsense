@@ -66,7 +66,16 @@ const detail = {
   lanes: '5-6',
   notes: '',
   games: [
-    { id: 1, gameNumber: 1, score: 180, strikes: 4, spares: 3, splits: 0, ballId: null },
+    {
+      id: 1,
+      gameNumber: 1,
+      score: 180,
+      strikes: 4,
+      spares: 3,
+      splits: 0,
+      ballId: null,
+      frameData: JSON.stringify({ laneNotes: { laneFeel: 'transitioning', reaction: 'high', reactionFrame: 6 } }),
+    },
     { id: 2, gameNumber: 4, score: 210, strikes: 6, spares: 2, splits: 0, ballId: null },
   ],
 }
@@ -84,6 +93,7 @@ describe('session detail review fixes', () => {
     expect(screen.getByText('+30', { exact: true })).toBeTruthy()
     expect(screen.getByText('How you got there')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Score path: Game 1, 180; Game 4, 210' })).toBeTruthy()
+    expect(screen.getByText('Going high · F6')).toBeTruthy()
   })
 
   it('starts after the highest existing game number when numbering has gaps', async () => {

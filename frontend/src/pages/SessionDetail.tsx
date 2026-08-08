@@ -8,6 +8,7 @@ import { FrameRibbon, Icon, Sheet } from '../design'
 import { copyText } from '../features/scoring/copyText'
 import { formatSessionDate } from '../features/scoring/date'
 import { toFrameRibbonFrames } from '../features/scoring/frameRibbon'
+import { laneNoteBadges, parseLaneNotes } from '../features/scoring/laneNotes'
 import type { ScoringBall } from '../features/scoring/types'
 import { gameFromFrameData } from '../utils/bowlingScore'
 import { downloadSessionCard, getSessionShareUrl, nativeShareSession } from '../utils/sessionShare'
@@ -396,6 +397,7 @@ export default function SessionDetail() {
         <div className="scoring-group">
           {orderedGames.map((game) => {
             const ballName = balls.find((ball) => ball.id === game.ballId)?.name
+            const laneBadges = laneNoteBadges(parseLaneNotes(game.frameData))
             return (
               <article className="scoring-row" key={game.id} style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <div className="scoring-row-copy" style={{ flexBasis: 'calc(100% - 64px)' }}>
@@ -405,6 +407,11 @@ export default function SessionDetail() {
                 <button type="button" className="scoring-row-action" onClick={() => { setActionGame(game); setConfirmDeleteGame(false) }} aria-label={`Actions for game ${game.gameNumber}`}><Icon name="more" /></button>
                 <div style={{ flexBasis: '100%', minWidth: 0 }}>
                   <FrameRibbon frames={toFrameRibbonFrames(gameFromFrameData(game.frameData).frames)} label={`Game ${game.gameNumber}, score ${game.score}`} compact />
+                  {laneBadges.length > 0 && (
+                    <div className="game-lane-badges" aria-label={`Game ${game.gameNumber} lane notes`}>
+                      {laneBadges.map((badge) => <span key={badge}>{badge}</span>)}
+                    </div>
+                  )}
                 </div>
               </article>
             )

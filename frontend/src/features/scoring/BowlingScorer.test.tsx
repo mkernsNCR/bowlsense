@@ -198,7 +198,7 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.getByText('0', { selector: '.live-score-total strong' })).toBeTruthy()
   })
 
-  it('captures independent cues for individual throws with target and arrow sliders', async () => {
+  it('captures independent cues for individual throws with starting, target, and arrow sliders', async () => {
     const onSave = vi.fn()
     renderScorer(undefined, { onSave })
 
@@ -207,6 +207,7 @@ describe('BowlingScorer completion behavior', () => {
     const throwSelector = screen.getByRole('slider', { name: 'Throw to annotate' })
     fireEvent.change(throwSelector, { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Going high' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Starting board' }), { target: { value: '18' } })
     fireEvent.change(screen.getByRole('slider', { name: 'Target board' }), { target: { value: '15' } })
     fireEvent.change(screen.getByRole('slider', { name: 'Entry at arrows' }), { target: { value: '12' } })
 
@@ -220,6 +221,7 @@ describe('BowlingScorer completion behavior', () => {
     const savedThrowNotes = JSON.parse(String(onSave.mock.calls[0]?.[0].frameData)).throwNotes
     expect(savedThrowNotes[0]).toMatchObject({
       reaction: 'high',
+      startingBoard: 18,
       targetBoard: 15,
       entryBoard: 12,
     })

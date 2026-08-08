@@ -16,6 +16,7 @@ export interface ThrowNotes {
   moveBoards?: number
   speed?: number
   leave?: Leave
+  startingBoard?: number
   targetBoard?: number
   entryBoard?: number
 }
@@ -46,6 +47,7 @@ function parseOne(value: unknown): ThrowNotes {
   const moveBoards = adjustment === 'moved-feet' ? optionalMoveBoards(raw.moveBoards) : undefined
   const speed = optionalSpeed(raw.speed)
   const leave = isOption(leaveOptions, raw.leave) ? raw.leave : undefined
+  const startingBoard = optionalBoard(raw.startingBoard)
   const targetBoard = optionalBoard(raw.targetBoard)
   const entryBoard = optionalBoard(raw.entryBoard)
   if (laneFeel) notes.laneFeel = laneFeel
@@ -54,6 +56,7 @@ function parseOne(value: unknown): ThrowNotes {
   if (moveBoards != null) notes.moveBoards = moveBoards
   if (speed != null) notes.speed = speed
   if (leave) notes.leave = leave
+  if (startingBoard != null) notes.startingBoard = startingBoard
   if (targetBoard != null) notes.targetBoard = targetBoard
   if (entryBoard != null) notes.entryBoard = entryBoard
   return notes
@@ -95,6 +98,7 @@ function labelFor<T extends string>(options: ReadonlyArray<{ value: T; label: st
 
 export function throwNoteSummary(notes: ThrowNotes, throwIndex: number) {
   const parts: string[] = [`T${throwIndex + 1}`]
+  if (notes.startingBoard != null) parts.push(`Start ${notes.startingBoard}`)
   if (notes.targetBoard != null) parts.push(`Target ${notes.targetBoard}`)
   if (notes.entryBoard != null) parts.push(`Arrows ${notes.entryBoard}`)
   const feel = labelFor(laneFeelOptions, notes.laneFeel)

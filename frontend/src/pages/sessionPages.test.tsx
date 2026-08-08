@@ -72,6 +72,20 @@ const detail = {
 }
 
 describe('session detail review fixes', () => {
+  it('shows the total series dashboard and score path for every session', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(
+      String(input) === '/api/balls' ? jsonResponse([]) : jsonResponse(detail),
+    )))
+
+    renderSessionDetail('/sessions/7')
+
+    expect(await screen.findByText('Your set, at a glance')).toBeTruthy()
+    expect(screen.getByText('390', { exact: true })).toBeTruthy()
+    expect(screen.getByText('+30', { exact: true })).toBeTruthy()
+    expect(screen.getByText('How you got there')).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Score path: Game 1, 180; Game 4, 210' })).toBeTruthy()
+  })
+
   it('starts after the highest existing game number when numbering has gaps', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => Promise.resolve(
       String(input) === '/api/balls' ? jsonResponse([]) : jsonResponse(detail),

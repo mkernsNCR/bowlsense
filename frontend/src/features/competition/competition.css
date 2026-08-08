@@ -37,7 +37,7 @@
 .competition-sheet-panel label { display: grid; gap: 6px; color: var(--muted, #746f7c); font-size: .78rem; font-weight: 650; }
 .competition-sheet-panel :is(input, select, textarea) { width: 100%; color: var(--text, #17131f); }
 
-.public-scorecard { --public-ink: #17131f; --public-muted: #625d69; --public-paper: #fbfaff; --public-rule: #ded9e8; --public-accent: #6941b5; min-height: 100vh; color: var(--public-ink); background: var(--public-paper); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+.public-scorecard { --public-ink: #f7f4ff; --public-muted: #b8aec8; --public-paper: #0d0d1a; --public-rule: rgba(255, 255, 255, .14); --public-accent: #a78bfa; --text: var(--public-ink); --muted: var(--public-muted); --border: var(--public-rule); --accent: var(--public-accent); --bg: var(--public-paper); --surface: #191423; --danger: #fc8181; --success: #34d399; min-height: 100vh; color: var(--public-ink); background: var(--public-paper); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 .public-scorecard__header { display: flex; align-items: center; justify-content: space-between; min-height: 54px; padding: 0 max(18px, calc((100vw - 1040px) / 2)); border-bottom: 1px solid var(--public-rule); }
 .public-scorecard__brand { display: inline-flex; min-height: 44px; align-items: center; gap: 9px; color: inherit; font-weight: 800; letter-spacing: -.02em; text-decoration: none; }
 .public-scorecard__mark { width: 16px; height: 16px; border: 5px double var(--public-accent); border-radius: 50%; }
@@ -47,10 +47,10 @@
 .public-scorecard__lead h1 { max-width: 720px; font-size: clamp(2rem, 6vw, 4.75rem); line-height: .98; }
 .public-scorecard__lead p:not(.competition-eyebrow) { margin: 9px 0 0; color: var(--public-muted); }
 .public-scorecard__action { flex: none; }
-.public-scorecard .card { color: var(--public-ink); background: #fff; border-color: var(--public-rule); box-shadow: none; }
+.public-scorecard .card { color: var(--public-ink); background: #191423; border-color: var(--public-rule); box-shadow: none; }
 .public-scorecard .muted { color: var(--public-muted); }
 .public-scorecard .btn-primary { color: #fff; background: var(--public-accent); border-color: var(--public-accent); }
-.public-scorecard .btn-ghost { color: var(--public-ink); border-color: var(--public-rule); background: #fff; }
+.public-scorecard .btn-ghost { color: var(--public-ink); border-color: var(--public-rule); background: rgba(255, 255, 255, .06); }
 .public-scorecard button, .public-scorecard .btn { min-height: 44px; }
 .public-scorecard__footer { margin-top: 24px; padding-top: 16px; color: var(--public-muted); border-top: 1px solid var(--public-rule); font: 700 .7rem/1.2 ui-monospace, SFMono-Regular, monospace; letter-spacing: .08em; text-transform: uppercase; }
 
@@ -59,14 +59,14 @@
 .share-result__score { font: 850 clamp(5.25rem, 18vw, 11rem)/.78 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.08em; }
 .share-result__label { margin-top: 22px; color: #c9bddf; font: 700 .75rem/1.2 ui-monospace, SFMono-Regular, monospace; letter-spacing: .12em; text-transform: uppercase; }
 .share-result__facts { display: grid; align-content: start; gap: 1px; overflow: hidden; background: var(--public-rule); border: 1px solid var(--public-rule); border-radius: 18px; }
-.share-result__fact { padding: 16px; background: #fff; }
+.share-result__fact { padding: 16px; background: #191423; }
 .share-result__fact dt { color: var(--public-muted); font-size: .75rem; }
 .share-result__fact dd { margin: 5px 0 0; font-size: 1.15rem; font-weight: 760; }
 .public-share-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 22px; }
 .perfect-game-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .perfect-game-actions > * { flex: 1 1 140px !important; min-width: 0; }
 .public-detail-list { display: grid; gap: 10px; margin-top: 22px; }
-.public-detail-row { display: grid; gap: 10px; padding: 16px; background: #fff; border: 1px solid var(--public-rule); border-radius: 14px; }
+.public-detail-row { display: grid; gap: 10px; padding: 16px; background: #191423; border: 1px solid var(--public-rule); border-radius: 14px; }
 .public-detail-row > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .public-detail-row span { color: var(--public-muted); }
 .public-game-scores { justify-content: flex-start !important; }

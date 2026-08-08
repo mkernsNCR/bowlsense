@@ -157,7 +157,7 @@ export function PublicShell({
   children: ReactNode
 }) {
   return (
-    <div className="public-scorecard">
+    <div className="public-scorecard public-scorecard--dark">
       <header className="public-scorecard__header">
         <Link to="/" className="public-scorecard__brand" aria-label="BowlSense home">
           <span className="public-scorecard__mark" aria-hidden="true" />

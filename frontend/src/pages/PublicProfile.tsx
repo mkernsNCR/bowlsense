@@ -36,7 +36,7 @@ export default function PublicProfile() {
   }, [])
 
   const profileName = (stats?.profileName || '').trim()
-  const profileTitle = profileName ? `${profileName}'s BowlSense` : 'BowlSense profile'
+  const profileTitle = profileName ? `${profileName} BowlSense` : 'BowlSense profile'
   const profileDescription = stats
     ? `${stats.totalGames} games · ${Math.round(stats.average)} average`
     : 'Bowling statistics'

@@ -337,7 +337,7 @@ assert.ok(!Number.isNaN(Date.parse(publicStats.generatedAt)));
 
 response = await publicRequest("/bowl");
 assert.equal(response.status, 200);
-assert.match(await response.text(), /Matt Kerns's BowlSense/);
+assert.match(await response.text(), /Matt Kerns BowlSense/);
 
 response = await request("/api/leagues");
 assert.equal(response.status, 200);

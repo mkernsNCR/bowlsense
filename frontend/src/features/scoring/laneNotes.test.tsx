@@ -41,6 +41,12 @@ describe('lane notes', () => {
     expect(addLaneNotes('{not-json', {})).toBe('{not-json')
   })
 
+  it('supports Messenger as a ball reaction', () => {
+    const notes = parseLaneNotes(JSON.stringify({ laneNotes: { reaction: 'messenger' } }))
+    expect(notes.reaction).toBe('messenger')
+    expect(laneNoteBadges(notes)).toEqual(['Messenger'])
+  })
+
   it('drops dependent values that do not match their selected cue', () => {
     expect(parseLaneNotes(JSON.stringify({
       laneNotes: {

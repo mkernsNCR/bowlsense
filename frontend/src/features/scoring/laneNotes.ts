@@ -9,6 +9,7 @@ export const reactionOptions = [
   { value: 'high', label: 'Going high' },
   { value: 'light', label: 'Going light' },
   { value: 'flat-10', label: 'Flat 10s' },
+  { value: 'messenger', label: 'Messenger' },
 ] as const
 
 export const adjustmentOptions = [

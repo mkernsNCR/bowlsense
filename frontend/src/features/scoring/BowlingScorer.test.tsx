@@ -232,6 +232,27 @@ describe('BowlingScorer completion behavior', () => {
     })
   })
 
+  it('starts the next throw with the prior throw cues while keeping the leave per throw', () => {
+    renderScorer()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Messenger' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Starting board' }), { target: { value: '18' } })
+    fireEvent.change(screen.getByRole('slider', { name: 'Target board' }), { target: { value: '15' } })
+    fireEvent.change(screen.getByRole('slider', { name: 'Entry at arrows' }), { target: { value: '12' } })
+    fireEvent.change(screen.getByRole('slider', { name: 'Ball speed' }), { target: { value: '17.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Flat 10' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+
+    expect((screen.getByRole('slider', { name: 'Starting board' }) as HTMLInputElement).value).toBe('18')
+    expect((screen.getByRole('slider', { name: 'Target board' }) as HTMLInputElement).value).toBe('15')
+    expect((screen.getByRole('slider', { name: 'Entry at arrows' }) as HTMLInputElement).value).toBe('12')
+    expect((screen.getByRole('slider', { name: 'Ball speed' }) as HTMLInputElement).value).toBe('17.5')
+    expect(screen.getByRole('button', { name: 'Messenger' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Flat 10' }).getAttribute('aria-pressed')).toBe('false')
+  })
+
   it('clears moved-feet detail when that adjustment is deselected', async () => {
     const onSave = vi.fn()
     renderScorer(undefined, { onSave })

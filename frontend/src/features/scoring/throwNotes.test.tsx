@@ -58,6 +58,16 @@ describe('per-throw notes', () => {
     ])
   })
 
+  it('enforces the 39-board lane on per-throw cues', () => {
+    expect(parseThrowNotes(JSON.stringify({ throwNotes: [
+      { startingBoard: 39, targetBoard: 39, entryBoard: 39 },
+      { startingBoard: 40, targetBoard: 40, entryBoard: 40 },
+    ] }))).toEqual([
+      { startingBoard: 39, targetBoard: 39, entryBoard: 39 },
+      {},
+    ])
+  })
+
   it('removes the property when every throw note is empty', () => {
     const frameData = addThrowNotes(JSON.stringify({ rolls: [0] }), [{}])
     expect(JSON.parse(frameData)).toEqual({ rolls: [0] })

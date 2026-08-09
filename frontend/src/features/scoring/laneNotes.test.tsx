@@ -63,4 +63,15 @@ describe('lane notes', () => {
       laneNotes: { adjustment: 'moved-feet', moveBoards: 11 },
     }))).toEqual({ adjustment: 'moved-feet' })
   })
+
+  it('enforces the 39-board lane on game-level line cues', () => {
+    expect(parseLaneNotes(JSON.stringify({ laneNotes: {
+      startBoard: 39,
+      endBoard: 39,
+    } }))).toEqual({ startBoard: 39, endBoard: 39 })
+    expect(parseLaneNotes(JSON.stringify({ laneNotes: {
+      startBoard: 40,
+      endBoard: 40,
+    } }))).toEqual({})
+  })
 })

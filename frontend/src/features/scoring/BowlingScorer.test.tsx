@@ -261,6 +261,14 @@ describe('BowlingScorer completion behavior', () => {
     expect([...document.querySelectorAll<HTMLElement>('.lane-notes-arrow-marker')].map((marker) => marker.dataset.board)).toEqual([
       '5', '10', '15', '20', '25', '30', '35',
     ])
+    const arrowMarkers = [...document.querySelectorAll<HTMLElement>('.lane-notes-arrow-marker')]
+    const rightmostArrow = arrowMarkers.find((marker) => marker.dataset.board === '5')!
+    const leftmostArrow = arrowMarkers.find((marker) => marker.dataset.board === '35')!
+    expect(Number.parseFloat(rightmostArrow.style.left)).toBeGreaterThan(Number.parseFloat(leftmostArrow.style.left))
+    expect([...document.querySelectorAll<HTMLElement>('.lane-notes-arrow-scale span')].map((label) => label.textContent)).toEqual(['39', '20', '1'])
+    expect(screen.getByRole('slider', { name: 'Starting board' }).getAttribute('max')).toBe('39')
+    expect(screen.getByRole('slider', { name: 'Target board' }).getAttribute('max')).toBe('39')
+    expect(screen.getByRole('slider', { name: 'Entry at arrows' }).getAttribute('max')).toBe('39')
     expect(screen.getByRole('slider', { name: 'Entry at arrows' }).getAttribute('aria-valuetext')).toBe('20 board')
   })
 

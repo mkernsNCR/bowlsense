@@ -1,6 +1,7 @@
 import { Icon } from '../../design'
 import {
   adjustmentOptions,
+  laneBoardCount,
   laneFeelOptions,
   leaveOptions,
   reactionOptions,
@@ -142,13 +143,13 @@ export default function ThrowNotesPanel({
                 <p className="lane-notes-label">Line and release</p>
                 <label className="lane-notes-range">
                   <span>Starting board <output>{selectedNotes.startingBoard ?? 20}</output></span>
-                  <input aria-label="Starting board" type="range" min="1" max="40" step="1" value={selectedNotes.startingBoard ?? 20} onChange={(event) => update({ startingBoard: Number(event.target.value) })} />
-                  <span className="lane-notes-range-scale"><span>1</span><span>40</span></span>
+                  <input aria-label="Starting board" type="range" min="1" max={laneBoardCount} step="1" value={selectedNotes.startingBoard ?? 20} onChange={(event) => update({ startingBoard: Number(event.target.value) })} />
+                  <span className="lane-notes-range-scale"><span>1</span><span>{laneBoardCount}</span></span>
                 </label>
                 <label className="lane-notes-range">
                   <span>Target board <output>{selectedNotes.targetBoard ?? 20}</output></span>
-                  <input aria-label="Target board" type="range" min="1" max="40" step="1" value={selectedNotes.targetBoard ?? 20} onChange={(event) => update({ targetBoard: Number(event.target.value) })} />
-                  <span className="lane-notes-range-scale"><span>1</span><span>40</span></span>
+                  <input aria-label="Target board" type="range" min="1" max={laneBoardCount} step="1" value={selectedNotes.targetBoard ?? 20} onChange={(event) => update({ targetBoard: Number(event.target.value) })} />
+                  <span className="lane-notes-range-scale"><span>1</span><span>{laneBoardCount}</span></span>
                 </label>
                 <div className="lane-notes-arrow-control">
                   <div className="lane-notes-range-heading">
@@ -162,7 +163,7 @@ export default function ThrowNotesPanel({
                           key={board}
                           className={`lane-notes-arrow-marker${entryBoard === board ? ' is-selected' : ''}`}
                           data-board={board}
-                          style={{ left: `${((board - 1) / 39) * 100}%` }}
+                          style={{ left: `${((laneBoardCount - board) / (laneBoardCount - 1)) * 100}%` }}
                         />
                       ))}
                     </div>
@@ -172,13 +173,13 @@ export default function ThrowNotesPanel({
                       aria-valuetext={`${entryBoard} board`}
                       type="range"
                       min="1"
-                      max="40"
+                      max={laneBoardCount}
                       step="1"
                       value={entryBoard}
                       onChange={(event) => update({ entryBoard: Number(event.target.value) })}
                     />
                   </div>
-                  <div className="lane-notes-arrow-scale" aria-hidden="true"><span>1</span><span>20</span><span>40</span></div>
+                  <div className="lane-notes-arrow-scale" aria-hidden="true"><span>{laneBoardCount}</span><span>20</span><span>1</span></div>
                   <p className="lane-notes-arrow-hint">Drag across the lane to mark the board your ball crosses.</p>
                 </div>
                 <label className="lane-notes-speed">

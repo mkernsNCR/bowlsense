@@ -1,5 +1,6 @@
 import {
   adjustmentOptions,
+  laneBoardCount,
   laneFeelOptions,
   leaveOptions,
   reactionOptions,
@@ -44,7 +45,7 @@ function isOption<T extends string>(options: ReadonlyArray<{ value: T }>, value:
 }
 
 function optionalBoard(value: unknown) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 40 ? value : undefined
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= laneBoardCount ? value : undefined
 }
 
 function optionalMoveBoards(value: unknown) {

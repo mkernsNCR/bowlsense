@@ -1,3 +1,5 @@
+export const laneBoardCount = 39
+
 export const laneFeelOptions = [
   { value: 'fresh', label: 'Fresh' },
   { value: 'transitioning', label: 'Transitioning' },
@@ -56,7 +58,7 @@ function optionalFrame(value: unknown) {
 }
 
 function optionalBoard(value: unknown) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 40 ? value : undefined
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= laneBoardCount ? value : undefined
 }
 
 function optionalMoveBoards(value: unknown) {

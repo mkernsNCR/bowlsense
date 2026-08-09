@@ -67,4 +67,18 @@ describe('SessionShare native sharing', () => {
 
     await waitFor(() => expect(shareMocks.copy).toHaveBeenCalledWith(window.location.href))
   })
+
+  it('previews the scorecard in the share page instead of opening a raw image tab', async () => {
+    const user = userEvent.setup()
+    renderSharePage()
+
+    expect(screen.queryByRole('img', { name: /scorecard image/i })).toBeNull()
+    await user.click(await screen.findByRole('button', { name: 'Open score card' }))
+
+    expect(screen.getByRole('img', { name: /scorecard image/i }).getAttribute('src')).toBe('/api/sessions/7/og-image')
+    expect(screen.getByRole('button', { name: 'Hide score card' }).getAttribute('aria-expanded')).toBe('true')
+    await user.click(screen.getByRole('button', { name: 'Hide score card' }))
+    expect(screen.queryByRole('img', { name: /scorecard image/i })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open score card' }).getAttribute('aria-expanded')).toBe('false')
+  })
 })

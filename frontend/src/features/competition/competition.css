@@ -63,6 +63,8 @@
 .share-result__fact dt { color: var(--public-muted); font-size: .75rem; }
 .share-result__fact dd { margin: 5px 0 0; font-size: 1.15rem; font-weight: 760; }
 .public-share-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 22px; }
+.public-scorecard__image-viewer { margin: 14px 0 22px; padding: clamp(10px, 2vw, 18px); background: #191423; border: 1px solid var(--public-rule); border-radius: 18px; }
+.public-scorecard__image-viewer img { display: block; width: 100%; height: auto; border-radius: 12px; box-shadow: 0 16px 42px rgba(0, 0, 0, .32); }
 .perfect-game-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .perfect-game-actions > * { flex: 1 1 140px !important; min-width: 0; }
 .public-detail-list { display: grid; gap: 10px; margin-top: 22px; }

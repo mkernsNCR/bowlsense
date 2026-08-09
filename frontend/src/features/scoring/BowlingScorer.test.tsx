@@ -266,6 +266,10 @@ describe('BowlingScorer completion behavior', () => {
     const leftmostArrow = arrowMarkers.find((marker) => marker.dataset.board === '35')!
     expect(Number.parseFloat(rightmostArrow.style.left)).toBeGreaterThan(Number.parseFloat(leftmostArrow.style.left))
     expect([...document.querySelectorAll<HTMLElement>('.lane-notes-arrow-scale span')].map((label) => label.textContent)).toEqual(['39', '20', '1'])
+    expect([...document.querySelectorAll<HTMLElement>('.lane-notes-board-scale')].map((scale) => [...scale.querySelectorAll('span')].map((label) => label.textContent))).toEqual([
+      ['39', '1'],
+      ['39', '1'],
+    ])
     expect(screen.getByRole('slider', { name: 'Starting board' }).getAttribute('max')).toBe('39')
     expect(screen.getByRole('slider', { name: 'Target board' }).getAttribute('max')).toBe('39')
     expect(screen.getByRole('slider', { name: 'Entry at arrows' }).getAttribute('max')).toBe('39')

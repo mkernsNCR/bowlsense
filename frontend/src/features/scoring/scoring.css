@@ -164,6 +164,7 @@
 .lane-notes-speed output { color: var(--score-ink); font-weight: 750; }
 .lane-notes-range input,
 .lane-notes-speed input { accent-color: var(--score-violet); min-height: 28px; width: 100%; }
+.lane-notes-board-input { direction: rtl; }
 .lane-notes-range-scale { color: var(--score-secondary); display: flex; font-size: .625rem; justify-content: space-between; }
 .lane-notes-arrow-control { display: grid; gap: 6px; }
 .lane-notes-range-heading { align-items: center; color: var(--score-secondary); display: flex; font-size: .75rem; justify-content: space-between; }

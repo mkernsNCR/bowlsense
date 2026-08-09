@@ -143,13 +143,13 @@ export default function ThrowNotesPanel({
                 <p className="lane-notes-label">Line and release</p>
                 <label className="lane-notes-range">
                   <span>Starting board <output>{selectedNotes.startingBoard ?? 20}</output></span>
-                  <input aria-label="Starting board" type="range" min="1" max={laneBoardCount} step="1" value={selectedNotes.startingBoard ?? 20} onChange={(event) => update({ startingBoard: Number(event.target.value) })} />
-                  <span className="lane-notes-range-scale"><span>1</span><span>{laneBoardCount}</span></span>
+                  <input className="lane-notes-board-input" aria-label="Starting board" type="range" min="1" max={laneBoardCount} step="1" value={selectedNotes.startingBoard ?? 20} onChange={(event) => update({ startingBoard: Number(event.target.value) })} />
+                  <span className="lane-notes-range-scale lane-notes-board-scale"><span>{laneBoardCount}</span><span>1</span></span>
                 </label>
                 <label className="lane-notes-range">
                   <span>Target board <output>{selectedNotes.targetBoard ?? 20}</output></span>
-                  <input aria-label="Target board" type="range" min="1" max={laneBoardCount} step="1" value={selectedNotes.targetBoard ?? 20} onChange={(event) => update({ targetBoard: Number(event.target.value) })} />
-                  <span className="lane-notes-range-scale"><span>1</span><span>{laneBoardCount}</span></span>
+                  <input className="lane-notes-board-input" aria-label="Target board" type="range" min="1" max={laneBoardCount} step="1" value={selectedNotes.targetBoard ?? 20} onChange={(event) => update({ targetBoard: Number(event.target.value) })} />
+                  <span className="lane-notes-range-scale lane-notes-board-scale"><span>{laneBoardCount}</span><span>1</span></span>
                 </label>
                 <div className="lane-notes-arrow-control">
                   <div className="lane-notes-range-heading">

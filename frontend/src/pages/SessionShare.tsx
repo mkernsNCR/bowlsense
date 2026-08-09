@@ -40,6 +40,7 @@ export default function SessionShare() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [busy, setBusy] = useState<'share' | 'download' | null>(null)
+  const [showScorecard, setShowScorecard] = useState(false)
   const { copied, copyLink } = useCopyLink()
 
   useEffect(() => {
@@ -135,10 +136,20 @@ export default function SessionShare() {
           { label: 'Game scores', value: data.games.map((game) => game.score).join(' · ') },
         ]}
       />
+      {showScorecard && (
+        <section id="scorecard-preview" className="public-scorecard__image-viewer" aria-label="Scorecard preview">
+          <img
+            src={imageUrl}
+            alt={`Scorecard image for the ${data.summary.series} series at ${data.session.location || 'BowlSense'}`}
+          />
+        </section>
+      )}
       <div className="public-share-actions">
         <button className="btn btn-ghost" onClick={copyLink}>{copied ? 'Link copied' : 'Copy link'}</button>
         <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading…' : 'Download image'}</button>
-        <a className="btn btn-ghost" href={imageUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Open score card</a>
+        <button className="btn btn-ghost" type="button" aria-expanded={showScorecard} aria-controls="scorecard-preview" onClick={() => setShowScorecard((open) => !open)}>
+          {showScorecard ? 'Hide score card' : 'Open score card'}
+        </button>
       </div>
     </PublicShell>
   )

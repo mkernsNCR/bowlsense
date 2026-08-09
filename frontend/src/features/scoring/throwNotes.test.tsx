@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addThrowNotes, parseThrowNotes, throwNoteSummary } from './throwNotes'
+import { addThrowNotes, carryForwardThrowNotes, parseThrowNotes, throwNoteSummary } from './throwNotes'
 
 describe('per-throw notes', () => {
   it('round-trips notes while preserving the rest of frame data', () => {
@@ -26,6 +26,29 @@ describe('per-throw notes', () => {
       { adjustment: 'stayed' },
       { adjustment: 'moved-feet', moveBoards: 3 },
     ])
+  })
+
+  it('carries reusable cues into the next throw without copying the prior leave', () => {
+    expect(carryForwardThrowNotes({
+      laneFeel: 'transitioning',
+      reaction: 'messenger',
+      adjustment: 'moved-feet',
+      moveBoards: 3,
+      speed: 17.5,
+      leave: 'flat-10',
+      startingBoard: 18,
+      targetBoard: 15,
+      entryBoard: 12,
+    })).toEqual({
+      laneFeel: 'transitioning',
+      reaction: 'messenger',
+      adjustment: 'moved-feet',
+      moveBoards: 3,
+      speed: 17.5,
+      startingBoard: 18,
+      targetBoard: 15,
+      entryBoard: 12,
+    })
   })
 
   it('normalizes the approach starting board as a per-throw cue', () => {

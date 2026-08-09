@@ -21,6 +21,24 @@ export interface ThrowNotes {
   entryBoard?: number
 }
 
+/**
+ * Seed the next throw with the cues that usually stay the same from shot to
+ * shot. A leave is deliberately omitted because it describes the result of
+ * the previous throw, not the next one.
+ */
+export function carryForwardThrowNotes(notes: ThrowNotes): ThrowNotes {
+  return {
+    laneFeel: notes.laneFeel,
+    reaction: notes.reaction,
+    adjustment: notes.adjustment,
+    moveBoards: notes.moveBoards,
+    speed: notes.speed,
+    startingBoard: notes.startingBoard,
+    targetBoard: notes.targetBoard,
+    entryBoard: notes.entryBoard,
+  }
+}
+
 function isOption<T extends string>(options: ReadonlyArray<{ value: T }>, value: unknown): value is T {
   return typeof value === 'string' && options.some((option) => option.value === value)
 }

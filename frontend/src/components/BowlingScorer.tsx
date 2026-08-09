@@ -16,7 +16,7 @@ import { addLaneNotes, parseLaneNotes, type LaneNotes } from '../features/scorin
 import FrameBallAssignments from '../features/scoring/FrameBallAssignments'
 import { addFrameBallIds, emptyFrameBallIds, parseFrameBallIds, type FrameBallIds } from '../features/scoring/frameBalls'
 import ThrowNotesPanel from '../features/scoring/ThrowNotesPanel'
-import { addThrowNotes, parseThrowNotes, type ThrowNotes } from '../features/scoring/throwNotes'
+import { addThrowNotes, carryForwardThrowNotes, parseThrowNotes, type ThrowNotes } from '../features/scoring/throwNotes'
 import type { ScoringBall } from '../features/scoring/types'
 import ShareCard from './ShareCard'
 import '../features/scoring/scoring.css'
@@ -313,7 +313,11 @@ export default function BowlingScorer({
     const throwIndex = state.rolls.length
     setReviewingSavedGame(false)
     setState((current) => knockPins(current, pins))
-    setThrowNotes((current) => current.length > throwIndex ? current : [...current, {}])
+    setThrowNotes((current) => {
+      if (current.length > throwIndex) return current
+      const previous = current[throwIndex - 1]
+      return [...current, previous ? carryForwardThrowNotes(previous) : {}]
+    })
     setSelectedThrowIndex(throwIndex)
     setThrowNotesOpen(true)
     setSelectedKnocked([])

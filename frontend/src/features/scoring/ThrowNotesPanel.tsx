@@ -96,7 +96,7 @@ export default function ThrowNotesPanel({
               />
               <button type="button" className="scoring-button secondary" disabled={selectedIndex == null || selectedIndex === throwCount - 1} onClick={() => moveSelection(1)}>Next throw</button>
             </div>
-            <p className="throw-notes-hint">Keep the selector on the throw you just recorded, or revisit any earlier shot.</p>
+            <p className="throw-notes-hint">New throws start with the previous throw’s cues. Update only what changed; leaves stay unique to each throw.</p>
           </div>
 
           {selectedIndex != null && (

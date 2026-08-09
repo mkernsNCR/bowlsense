@@ -253,6 +253,17 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.getByRole('button', { name: 'Flat 10' }).getAttribute('aria-pressed')).toBe('false')
   })
 
+  it('renders entry at arrows as a lane with the seven standard arrow marks', () => {
+    renderScorer()
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+
+    expect(document.querySelectorAll('.lane-notes-arrow-marker')).toHaveLength(7)
+    expect([...document.querySelectorAll<HTMLElement>('.lane-notes-arrow-marker')].map((marker) => marker.dataset.board)).toEqual([
+      '5', '10', '15', '20', '25', '30', '35',
+    ])
+    expect(screen.getByRole('slider', { name: 'Entry at arrows' }).getAttribute('aria-valuetext')).toBe('20 board')
+  })
+
   it('clears moved-feet detail when that adjustment is deselected', async () => {
     const onSave = vi.fn()
     renderScorer(undefined, { onSave })

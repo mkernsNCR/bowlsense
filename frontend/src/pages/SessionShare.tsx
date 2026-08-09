@@ -136,14 +136,19 @@ export default function SessionShare() {
           { label: 'Game scores', value: data.games.map((game) => game.score).join(' · ') },
         ]}
       />
-      {showScorecard && (
-        <section id="scorecard-preview" className="public-scorecard__image-viewer" aria-label="Scorecard preview">
+      <section
+        id="scorecard-preview"
+        className="public-scorecard__image-viewer"
+        aria-label="Scorecard preview"
+        hidden={!showScorecard}
+      >
+        {showScorecard && (
           <img
             src={imageUrl}
             alt={`Scorecard image for the ${data.summary.series} series at ${data.session.location || 'BowlSense'}`}
           />
-        </section>
-      )}
+        )}
+      </section>
       <div className="public-share-actions">
         <button className="btn btn-ghost" onClick={copyLink}>{copied ? 'Link copied' : 'Copy link'}</button>
         <button className="btn btn-ghost" onClick={download} disabled={busy !== null}>{busy === 'download' ? 'Downloading…' : 'Download image'}</button>

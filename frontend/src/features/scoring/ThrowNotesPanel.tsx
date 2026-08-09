@@ -11,6 +11,8 @@ import {
 } from './laneNotes'
 import { hasThrowNotes, type ThrowNotes, throwNoteSummary } from './throwNotes'
 
+const entryArrowBoards = [5, 10, 15, 20, 25, 30, 35]
+
 interface ThrowNotesPanelProps {
   notes: ThrowNotes[]
   throwCount: number
@@ -39,6 +41,7 @@ export default function ThrowNotesPanel({
     ? Math.min(throwCount - 1, Math.max(0, selectedThrowIndex ?? throwCount - 1))
     : null
   const selectedNotes = selectedIndex == null ? {} : notes[selectedIndex] ?? {}
+  const entryBoard = selectedNotes.entryBoard ?? 20
   const summary = selectedIndex == null
     ? 'Record a throw to start tracking'
     : throwNoteSummary(selectedNotes, selectedIndex) ?? 'Add a cue for this throw'
@@ -147,11 +150,37 @@ export default function ThrowNotesPanel({
                   <input aria-label="Target board" type="range" min="1" max="40" step="1" value={selectedNotes.targetBoard ?? 20} onChange={(event) => update({ targetBoard: Number(event.target.value) })} />
                   <span className="lane-notes-range-scale"><span>1</span><span>40</span></span>
                 </label>
-                <label className="lane-notes-range">
-                  <span>Entry at arrows <output>{selectedNotes.entryBoard ?? 20}</output></span>
-                  <input aria-label="Entry at arrows" type="range" min="1" max="40" step="1" value={selectedNotes.entryBoard ?? 20} onChange={(event) => update({ entryBoard: Number(event.target.value) })} />
-                  <span className="lane-notes-range-scale"><span>1</span><span>40</span></span>
-                </label>
+                <div className="lane-notes-arrow-control">
+                  <div className="lane-notes-range-heading">
+                    <span>Entry at arrows</span>
+                    <output>{entryBoard}</output>
+                  </div>
+                  <div className="lane-notes-arrow-picker">
+                    <div className="lane-notes-arrow-lane" aria-hidden="true">
+                      {entryArrowBoards.map((board) => (
+                        <span
+                          key={board}
+                          className={`lane-notes-arrow-marker${entryBoard === board ? ' is-selected' : ''}`}
+                          data-board={board}
+                          style={{ left: `${((board - 1) / 39) * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                    <input
+                      className="lane-notes-arrow-input"
+                      aria-label="Entry at arrows"
+                      aria-valuetext={`${entryBoard} board`}
+                      type="range"
+                      min="1"
+                      max="40"
+                      step="1"
+                      value={entryBoard}
+                      onChange={(event) => update({ entryBoard: Number(event.target.value) })}
+                    />
+                  </div>
+                  <div className="lane-notes-arrow-scale" aria-hidden="true"><span>1</span><span>20</span><span>40</span></div>
+                  <p className="lane-notes-arrow-hint">Drag across the lane to mark the board your ball crosses.</p>
+                </div>
                 <label className="lane-notes-speed">
                   <span>Ball speed <output>{selectedNotes.speed == null ? '—' : `${selectedNotes.speed.toFixed(1)} mph`}</output></span>
                   <input aria-label="Ball speed" type="range" min="14" max="20" step="0.5" value={selectedNotes.speed ?? 17} onChange={(event) => update({ speed: Number(event.target.value) })} />

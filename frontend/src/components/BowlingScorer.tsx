@@ -113,6 +113,7 @@ function hasSavedPinSelections(frameData?: string | null) {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+type DraftSaveStatus = 'idle' | 'saved' | 'error'
 
 interface PinSwipeGesture {
   captureTarget: HTMLButtonElement
@@ -280,6 +281,7 @@ export default function BowlingScorer({
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [confirmRetake, setConfirmRetake] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [draftSaveStatus, setDraftSaveStatus] = useState<DraftSaveStatus>(() => restoredDraft ? 'saved' : 'idle')
   const [showShareCard, setShowShareCard] = useState(false)
   const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(effectiveFrameData))
   const [laneNotes, setLaneNotes] = useState<LaneNotes>(() => parseLaneNotes(effectiveFrameData))
@@ -337,7 +339,8 @@ export default function BowlingScorer({
       return
     }
 
-    writeLocalDraft(autosaveId, draftBaseline, {
+    let active = true
+    const saved = writeLocalDraft(autosaveId, draftBaseline, {
       game: {
         gameNumber,
         score: state.totalScore,
@@ -350,6 +353,12 @@ export default function BowlingScorer({
       },
       selectedKnocked,
     } satisfies BowlingScorerDraft)
+    queueMicrotask(() => {
+      if (active) setDraftSaveStatus(saved ? 'saved' : 'error')
+    })
+    return () => {
+      active = false
+    }
   }, [
     autosaveId,
     draftBaseline,
@@ -640,11 +649,15 @@ export default function BowlingScorer({
       )}
 
       {autosaveId && hasDraftProgress && (
-        <div className="live-autosave-status" role="status">
-          <Icon name="check" size={15} />
-          <span>{restoredDraft
-            ? 'Draft restored · changes save automatically on this device.'
-            : 'Draft saved automatically on this device.'}</span>
+        <div className={`live-autosave-status${draftSaveStatus === 'error' ? ' is-error' : ''}`} role="status">
+          <Icon name={draftSaveStatus === 'error' ? 'warning' : 'check'} size={15} />
+          <span>{draftSaveStatus === 'error'
+            ? 'Draft could not be saved on this device. Keep this page open and check browser storage.'
+            : restoredDraft
+              ? 'Draft restored · changes save automatically on this device.'
+              : draftSaveStatus === 'saved'
+                ? 'Draft saved automatically on this device.'
+                : 'Saving draft on this device…'}</span>
         </div>
       )}
 

@@ -632,6 +632,7 @@ export function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, loc
   const [scoringGame, setScoringGame] = useState<number | null>(restoredDraft?.value.scoringGame ?? null)
   const [createdWeekId, setCreatedWeekId] = useState<number | null>(restoredDraft?.value.createdWeekId ?? null)
   const [savedGameNumbers, setSavedGameNumbers] = useState<number[]>(restoredDraft?.value.savedGameNumbers ?? [])
+  const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saved' | 'error'>(() => restoredDraft ? 'saved' : 'idle')
   const hasDraftProgress = weekNumber !== String(nextWeekNumber)
     || date !== initialDate
     || opponent.trim().length > 0
@@ -648,7 +649,8 @@ export function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, loc
       clearLocalDraft(draftScope)
       return
     }
-    writeLocalDraft(draftScope, null, {
+    let active = true
+    const saved = writeLocalDraft(draftScope, null, {
       weekNumber,
       date,
       opponent,
@@ -660,6 +662,12 @@ export function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, loc
       createdWeekId,
       savedGameNumbers,
     } satisfies LeagueWeekDraft)
+    queueMicrotask(() => {
+      if (active) setDraftSaveStatus(saved ? 'saved' : 'error')
+    })
+    return () => {
+      active = false
+    }
   }, [
     createdWeekId,
     date,
@@ -693,6 +701,18 @@ export function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, loc
         })
         weekId = week.id
         setCreatedWeekId(weekId)
+      } else {
+        await requestJson(`/api/leagues/weeks/${weekId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date,
+            opponent,
+            gamesWon: Number(gamesWon || 0),
+            gamesLost: Number(gamesLost || 0),
+            notes,
+          }),
+        })
       }
 
       const sortedGames = [...weekGames].sort((a, b) => a.gameNumber - b.gameNumber)
@@ -725,11 +745,15 @@ export function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, loc
   return (
     <div className="card" style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
       {hasDraftProgress && (
-        <div className="league-autosave-status" role="status">
-          <Icon name="check" size={16} />
-          <span>{restoredDraft
-            ? 'Week draft restored. Changes save automatically on this device.'
-            : 'Week draft saved automatically on this device.'}</span>
+        <div className={`league-autosave-status${draftSaveStatus === 'error' ? ' is-error' : ''}`} role="status">
+          <Icon name={draftSaveStatus === 'error' ? 'warning' : 'check'} size={16} />
+          <span>{draftSaveStatus === 'error'
+            ? 'Week draft could not be saved on this device. Keep this page open and check browser storage.'
+            : restoredDraft
+              ? 'Week draft restored. Changes save automatically on this device.'
+              : draftSaveStatus === 'saved'
+                ? 'Week draft saved automatically on this device.'
+                : 'Saving week draft on this device…'}</span>
         </div>
       )}
       <label>Week number<input type="number" min={1} value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)} /></label>

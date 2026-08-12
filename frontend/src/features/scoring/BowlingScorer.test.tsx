@@ -113,6 +113,17 @@ describe('BowlingScorer completion behavior', () => {
     expect(screen.queryByText(/Draft restored/)).toBeNull()
   })
 
+  it('warns when the device rejects an autosave write', async () => {
+    renderScorer(undefined, { autosaveId: 'league:8:pending-week:game:1' })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage blocked', 'QuotaExceededError')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+
+    await waitFor(() => expect(screen.getByText('Draft could not be saved on this device. Keep this page open and check browser storage.')).toBeTruthy())
+  })
+
   it('keeps click selection and deselection for individual pins', () => {
     renderScorer()
     const pin = screen.getByRole('button', { name: 'Pin 1' })

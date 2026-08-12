@@ -131,6 +131,9 @@
 .pin-number { position: relative; top: 5px; }
 
 .live-edit-banner { align-items: center; background: color-mix(in srgb, var(--score-gold) 13%, var(--score-surface)); border-radius: 14px; color: var(--score-ink); display: flex; font-size: .8125rem; gap: 8px; justify-content: space-between; margin: 10px 0; padding: 8px 8px 8px 12px; }
+.live-autosave-status { align-items: center; color: var(--score-secondary); display: flex; font-size: .75rem; gap: 6px; justify-content: center; margin: 8px 0 2px; text-align: center; }
+.live-autosave-status svg { color: var(--score-violet); flex: 0 0 auto; }
+.live-autosave-status.is-error, .live-autosave-status.is-error svg { color: var(--warning); }
 .live-actions { display: grid; gap: 8px; grid-template-columns: .85fr 1.3fr .85fr; margin: 12px auto; max-width: 480px; }
 .live-actions .scoring-button { min-height: 56px; padding-inline: 8px; }
 .live-actions .strike { background: color-mix(in srgb, var(--score-gold) 16%, var(--score-surface)); color: var(--score-gold); }

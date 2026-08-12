@@ -18,6 +18,7 @@ import { addFrameBallIds, emptyFrameBallIds, parseFrameBallIds, type FrameBallId
 import ThrowNotesPanel from '../features/scoring/ThrowNotesPanel'
 import { addThrowNotes, carryForwardThrowNotes, parseThrowNotes, type ThrowNotes } from '../features/scoring/throwNotes'
 import type { ScoringBall } from '../features/scoring/types'
+import { clearLocalDraft, readLocalDraft, writeLocalDraft } from '../features/autosave/localDraft'
 import ShareCard from './ShareCard'
 import '../features/scoring/scoring.css'
 
@@ -39,6 +40,7 @@ interface BowlingScorerProps {
   initialFrameData?: string | null
   initialSplits?: number
   saving?: boolean
+  autosaveId?: string
   shareContext?: {
     location?: string | null
     date?: string | null
@@ -46,6 +48,27 @@ interface BowlingScorerProps {
   }
   onSave: (game: SavedBowlingGame) => void | Promise<void>
   onCancel: () => void
+}
+
+interface BowlingScorerDraft {
+  game: SavedBowlingGame
+  selectedKnocked: number[]
+}
+
+function isBowlingScorerDraft(value: unknown): value is BowlingScorerDraft {
+  if (!value || typeof value !== 'object') return false
+  const draft = value as Partial<BowlingScorerDraft>
+  const game = draft.game as Partial<SavedBowlingGame> | undefined
+  return Boolean(game)
+    && typeof game?.gameNumber === 'number'
+    && typeof game.score === 'number'
+    && typeof game.strikes === 'number'
+    && typeof game.spares === 'number'
+    && typeof game.splits === 'number'
+    && (game.ballId === null || typeof game.ballId === 'number')
+    && typeof game.frameData === 'string'
+    && Array.isArray(draft.selectedKnocked)
+    && draft.selectedKnocked.every((pin) => Number.isInteger(pin) && pin >= 1 && pin <= 10)
 }
 
 const pinRows = [
@@ -226,18 +249,27 @@ export default function BowlingScorer({
   initialFrameData,
   initialSplits,
   saving = false,
+  autosaveId,
   shareContext,
   onSave,
   onCancel,
 }: BowlingScorerProps) {
-  const restoredGame = useMemo(() => gameFromFrameData(initialFrameData), [initialFrameData])
+  const draftBaseline = initialFrameData ?? null
+  const restoredDraft = useMemo(
+    () => autosaveId ? readLocalDraft(autosaveId, draftBaseline, isBowlingScorerDraft) : null,
+    [autosaveId, draftBaseline],
+  )
+  const effectiveFrameData = restoredDraft?.value.game.frameData ?? initialFrameData
+  const restoredGame = useMemo(() => gameFromFrameData(effectiveFrameData), [effectiveFrameData])
   const [state, setState] = useState<GameState>(restoredGame)
-  const [reviewingSavedGame, setReviewingSavedGame] = useState(() => Boolean(initialFrameData && restoredGame.isComplete))
-  const [selectedKnocked, setSelectedKnocked] = useState<number[]>([])
+  const [reviewingSavedGame, setReviewingSavedGame] = useState(() => Boolean(!restoredDraft && initialFrameData && restoredGame.isComplete))
+  const [selectedKnocked, setSelectedKnocked] = useState<number[]>(() => restoredDraft?.value.selectedKnocked ?? [])
   const [activeView, setActiveView] = useState<'pins' | 'scores'>(() => (
-    initialFrameData && restoredGame.isComplete ? 'scores' : 'pins'
+    effectiveFrameData && restoredGame.isComplete ? 'scores' : 'pins'
   ))
-  const [selectedBallId, setSelectedBallId] = useState(defaultBallId ?? '')
+  const [selectedBallId, setSelectedBallId] = useState(() => restoredDraft
+    ? (restoredDraft.value.game.ballId != null ? String(restoredDraft.value.game.ballId) : '')
+    : (defaultBallId ?? ''))
   const keepScoreRef = useRef<HTMLButtonElement>(null)
   const keepScoringRef = useRef<HTMLButtonElement>(null)
   const pinSwipeRef = useRef<PinSwipeGesture | null>(null)
@@ -249,13 +281,13 @@ export default function BowlingScorer({
   const [confirmRetake, setConfirmRetake] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [showShareCard, setShowShareCard] = useState(false)
-  const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(initialFrameData))
-  const [laneNotes, setLaneNotes] = useState<LaneNotes>(() => parseLaneNotes(initialFrameData))
-  const [frameBallIds, setFrameBallIds] = useState<FrameBallIds>(() => parseFrameBallIds(initialFrameData))
+  const [canDeriveSplits, setCanDeriveSplits] = useState(() => hasSavedPinSelections(effectiveFrameData))
+  const [laneNotes, setLaneNotes] = useState<LaneNotes>(() => parseLaneNotes(effectiveFrameData))
+  const [frameBallIds, setFrameBallIds] = useState<FrameBallIds>(() => parseFrameBallIds(effectiveFrameData))
   const [frameBallSnapshot, setFrameBallSnapshot] = useState<FrameBallIds | null>(null)
-  const [throwNotes, setThrowNotes] = useState<ThrowNotes[]>(() => parseThrowNotes(initialFrameData))
+  const [throwNotes, setThrowNotes] = useState<ThrowNotes[]>(() => parseThrowNotes(effectiveFrameData))
   const [selectedThrowIndex, setSelectedThrowIndex] = useState<number | null>(() => restoredGame.rolls.length ? restoredGame.rolls.length - 1 : null)
-  const [throwNotesOpen, setThrowNotesOpen] = useState(() => parseThrowNotes(initialFrameData).some((notes) => Object.values(notes).some((value) => value != null)))
+  const [throwNotesOpen, setThrowNotesOpen] = useState(() => parseThrowNotes(effectiveFrameData).some((notes) => Object.values(notes).some((value) => value != null)))
   const [throwNotesSnapshot, setThrowNotesSnapshot] = useState<ThrowNotes[] | null>(null)
   const isSaving = saving || saveStatus === 'saving'
 
@@ -281,7 +313,7 @@ export default function BowlingScorer({
   )
   const spares = useMemo(() => state.frames.filter((frame) => frame.isSpare).length, [state.frames])
   const derivedSplits = useMemo(() => countSplits(state.pinSelections), [state.pinSelections])
-  const splits = canDeriveSplits ? derivedSplits : (initialSplits ?? 0)
+  const splits = canDeriveSplits ? derivedSplits : (restoredDraft?.value.game.splits ?? initialSplits ?? 0)
   const baseFrameData = JSON.stringify({
     rolls: state.rolls,
     frames: state.frames,
@@ -291,6 +323,48 @@ export default function BowlingScorer({
   const frameWithLegacyNotes = addLaneNotes(baseFrameData, laneNotes)
   const frameWithThrowNotes = addThrowNotes(frameWithLegacyNotes, throwNotes.slice(0, state.rolls.length))
   const frameData = addFrameBallIds(frameWithThrowNotes, frameBallIds)
+  const hasDraftProgress = !reviewingSavedGame && (
+    state.rolls.length > 0
+    || selectedKnocked.length > 0
+    || selectedBallId !== (defaultBallId ?? '')
+    || frameBallIds.some((ballId) => ballId != null)
+  )
+
+  useEffect(() => {
+    if (!autosaveId || reviewingSavedGame) return
+    if (!hasDraftProgress) {
+      clearLocalDraft(autosaveId)
+      return
+    }
+
+    writeLocalDraft(autosaveId, draftBaseline, {
+      game: {
+        gameNumber,
+        score: state.totalScore,
+        strikes,
+        spares,
+        splits,
+        ballId: selectedBallId ? Number(selectedBallId) : null,
+        frameData,
+        pinLeaves: JSON.stringify(state.pinSelections),
+      },
+      selectedKnocked,
+    } satisfies BowlingScorerDraft)
+  }, [
+    autosaveId,
+    draftBaseline,
+    frameData,
+    gameNumber,
+    hasDraftProgress,
+    reviewingSavedGame,
+    selectedBallId,
+    selectedKnocked,
+    spares,
+    splits,
+    state.pinSelections,
+    state.totalScore,
+    strikes,
+  ])
   const maximumPossibleScore = useMemo(() => calculateMaximumPossibleScore(state), [state])
   const ribbonFrames = toFrameRibbonFrames(
     state.frames,
@@ -451,6 +525,7 @@ export default function BowlingScorer({
       setConfirmCancel(true)
       return
     }
+    if (autosaveId) clearLocalDraft(autosaveId)
     onCancel()
   }
 
@@ -459,6 +534,7 @@ export default function BowlingScorer({
     setSaveStatus('saving')
     try {
       await onSave(savePayload())
+      if (autosaveId) clearLocalDraft(autosaveId)
       setSaveStatus('saved')
     } catch {
       setSaveStatus('error')
@@ -560,6 +636,15 @@ export default function BowlingScorer({
         <div className="live-edit-banner" role="status">
           <span>Editing from frame {editingFromFrame + 1}. Later rolls are set aside.</span>
           <button type="button" className="scoring-button quiet" onClick={restoreBeforeEdit}>Restore</button>
+        </div>
+      )}
+
+      {autosaveId && hasDraftProgress && (
+        <div className="live-autosave-status" role="status">
+          <Icon name="check" size={15} />
+          <span>{restoredDraft
+            ? 'Draft restored · changes save automatically on this device.'
+            : 'Draft saved automatically on this device.'}</span>
         </div>
       )}
 
@@ -754,7 +839,16 @@ export default function BowlingScorer({
         >
           <div className="scoring-sheet-actions">
             <button ref={keepScoringRef} type="button" className="scoring-button secondary" onClick={() => setConfirmCancel(false)}>Keep scoring</button>
-            <button type="button" className="scoring-button danger" onClick={onCancel}>{initialFrameData ? 'Discard changes' : 'Discard game'}</button>
+            <button
+              type="button"
+              className="scoring-button danger"
+              onClick={() => {
+                if (autosaveId) clearLocalDraft(autosaveId)
+                onCancel()
+              }}
+            >
+              {initialFrameData ? 'Discard changes' : 'Discard game'}
+            </button>
           </div>
         </Sheet>
       )}

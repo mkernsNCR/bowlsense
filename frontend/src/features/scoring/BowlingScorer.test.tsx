@@ -19,6 +19,7 @@ class TestPointerEvent extends MouseEvent {
 }
 
 beforeEach(() => {
+  localStorage.clear()
   Object.defineProperty(Element.prototype, 'scrollIntoView', {
     configurable: true,
     value: vi.fn(),
@@ -58,6 +59,7 @@ function renderScorer(
     onSave?: (game: SavedBowlingGame) => void | Promise<void>
     onCancel?: () => void
     initialSplits?: number
+    autosaveId?: string
   } = {},
 ) {
   const onSave = callbacks.onSave ?? vi.fn()
@@ -68,6 +70,7 @@ function renderScorer(
       balls={[]}
       initialFrameData={initialFrameData}
       initialSplits={callbacks.initialSplits}
+      autosaveId={callbacks.autosaveId}
       onSave={onSave}
       onCancel={onCancel}
     />,
@@ -81,6 +84,35 @@ function finishPerfectGame() {
 }
 
 describe('BowlingScorer completion behavior', () => {
+  it('restores recorded rolls and the pins selected for the next throw from autosave', async () => {
+    renderScorer(undefined, { autosaveId: 'league:8:pending-week:game:1' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strike' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pin 1' }))
+    await waitFor(() => expect(screen.getByText('Draft saved automatically on this device.')).toBeTruthy())
+
+    cleanup()
+    renderScorer(undefined, { autosaveId: 'league:8:pending-week:game:1' })
+
+    expect(screen.getByText('Frame 2 · Ball 1')).toBeTruthy()
+    expect(screen.getByText('Draft restored · changes save automatically on this device.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pin 1, selected as knocked down' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('clears the autosaved game after a successful save', async () => {
+    const onSave = vi.fn()
+    renderScorer(undefined, { autosaveId: 'league:8:pending-week:game:1', onSave })
+    finishPerfectGame()
+    fireEvent.click(screen.getByRole('button', { name: 'Save 300' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+
+    cleanup()
+    renderScorer(undefined, { autosaveId: 'league:8:pending-week:game:1' })
+
+    expect(screen.getByText('Frame 1 · Ball 1')).toBeTruthy()
+    expect(screen.queryByText(/Draft restored/)).toBeNull()
+  })
+
   it('keeps click selection and deselection for individual pins', () => {
     renderScorer()
     const pin = screen.getByRole('button', { name: 'Pin 1' })

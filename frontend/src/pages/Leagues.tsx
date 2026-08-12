@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import BowlingScorer from '../components/BowlingScorer'
@@ -7,6 +7,7 @@ import { Icon } from '../design'
 import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
 import { useCompetitionArchive } from '../features/competition/archive'
 import { formatFrameMarks } from '../features/scoring/frameMarks'
+import { clearLocalDraft, readLocalDraft, writeLocalDraft } from '../features/autosave/localDraft'
 
 interface Ball { id: number; name: string }
 interface LeagueGame {
@@ -67,6 +68,60 @@ interface WeekGameScore {
   splits: number | null
   ballId: number | null
   frameData?: string | null
+}
+
+interface LeagueWeekDraft {
+  weekNumber: string
+  date: string
+  opponent: string
+  gamesWon: string
+  gamesLost: string
+  notes: string
+  weekGames: WeekGameScore[]
+  scoringGame: number | null
+  createdWeekId: number | null
+  savedGameNumbers: number[]
+}
+
+function leagueWeekDraftScope(leagueId: number | string) {
+  return `league:${leagueId}:pending-week`
+}
+
+function leagueNewGameDraftScope(leagueId: number, gameNumber: number) {
+  return `league:${leagueId}:pending-week:game:${gameNumber}`
+}
+
+function leagueGameDraftScope(leagueId: number, weekId: number, gameId: number) {
+  return `league:${leagueId}:week:${weekId}:game:${gameId}`
+}
+
+function isWeekGameScore(value: unknown): value is WeekGameScore {
+  if (!value || typeof value !== 'object') return false
+  const game = value as Partial<WeekGameScore>
+  return typeof game.gameNumber === 'number'
+    && (game.score === null || typeof game.score === 'number')
+    && (game.strikes === null || typeof game.strikes === 'number')
+    && (game.spares === null || typeof game.spares === 'number')
+    && (game.splits === null || typeof game.splits === 'number')
+    && (game.ballId === null || typeof game.ballId === 'number')
+    && (game.frameData == null || typeof game.frameData === 'string')
+}
+
+function isLeagueWeekDraft(value: unknown): value is LeagueWeekDraft {
+  if (!value || typeof value !== 'object') return false
+  const draft = value as Partial<LeagueWeekDraft>
+  return typeof draft.weekNumber === 'string'
+    && typeof draft.date === 'string'
+    && typeof draft.opponent === 'string'
+    && typeof draft.gamesWon === 'string'
+    && typeof draft.gamesLost === 'string'
+    && typeof draft.notes === 'string'
+    && Array.isArray(draft.weekGames)
+    && draft.weekGames.every(isWeekGameScore)
+    && (draft.scoringGame === null || typeof draft.scoringGame === 'number')
+    && (draft.createdWeekId === null || typeof draft.createdWeekId === 'number')
+    && Array.isArray(draft.savedGameNumbers)
+    && draft.savedGameNumbers.every((gameNumber) => typeof gameNumber === 'number')
 }
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -223,6 +278,7 @@ function LeagueDetail({ id }: { id: string }) {
   const [showLogWeek, setShowLogWeek] = useState(() => {
     if (typeof window === 'undefined') return false
     return new URLSearchParams(window.location.search).get('logWeek') === '1'
+      || Boolean(readLocalDraft(leagueWeekDraftScope(id), null, isLeagueWeekDraft))
   })
   const [editingWeekId, setEditingWeekId] = useState<number | null>(null)
   const [rescoringGameId, setRescoringGameId] = useState<number | null>(null)
@@ -414,6 +470,7 @@ function LeagueDetail({ id }: { id: string }) {
               qc.invalidateQueries({ queryKey: ['league', id] })
               qc.invalidateQueries({ queryKey: ['leagues'] })
             }}
+            onDiscard={() => setShowLogWeek(false)}
           />
         </CompetitionSheet>
       )}
@@ -524,6 +581,7 @@ function LeagueDetail({ id }: { id: string }) {
                                 balls={balls || []}
                                 defaultBallId={g.ballId ? String(g.ballId) : undefined}
                                 initialFrameData={g.frameData}
+                                autosaveId={leagueGameDraftScope(league.id, week.id, g.id)}
                                 shareContext={{ location: league.location, date: week.date }}
                                 onSave={async (result) => {
                                   await updateGame.mutateAsync({ gameId: g.id, data: result })
@@ -552,24 +610,70 @@ function LeagueDetail({ id }: { id: string }) {
   )
 }
 
-function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, onSaved }: { leagueId: number; gamesPerWeek: number; nextWeekNumber: number; balls: Ball[]; location?: string | null; onSaved: () => void }) {
+export function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, onSaved, onDiscard }: { leagueId: number; gamesPerWeek: number; nextWeekNumber: number; balls: Ball[]; location?: string | null; onSaved: () => void; onDiscard: () => void }) {
   // Pre-fill date from URL ?date=YYYY-MM-DD if present (set by Dashboard "Log This Week")
   const initialDate = (() => {
     if (typeof window === 'undefined') return new Date().toISOString().slice(0, 10)
     const fromUrl = new URLSearchParams(window.location.search).get('date')
     return fromUrl || new Date().toISOString().slice(0, 10)
   })()
+  const draftScope = leagueWeekDraftScope(leagueId)
+  const restoredDraft = useMemo(
+    () => readLocalDraft(draftScope, null, isLeagueWeekDraft),
+    [draftScope],
+  )
+  const [weekNumber, setWeekNumber] = useState(restoredDraft?.value.weekNumber ?? String(nextWeekNumber))
+  const [date, setDate] = useState(restoredDraft?.value.date ?? initialDate)
+  const [opponent, setOpponent] = useState(restoredDraft?.value.opponent ?? '')
+  const [gamesWon, setGamesWon] = useState(restoredDraft?.value.gamesWon ?? '0')
+  const [gamesLost, setGamesLost] = useState(restoredDraft?.value.gamesLost ?? '0')
+  const [notes, setNotes] = useState(restoredDraft?.value.notes ?? '')
+  const [weekGames, setWeekGames] = useState<WeekGameScore[]>(restoredDraft?.value.weekGames ?? [])
+  const [scoringGame, setScoringGame] = useState<number | null>(restoredDraft?.value.scoringGame ?? null)
+  const [createdWeekId, setCreatedWeekId] = useState<number | null>(restoredDraft?.value.createdWeekId ?? null)
+  const [savedGameNumbers, setSavedGameNumbers] = useState<number[]>(restoredDraft?.value.savedGameNumbers ?? [])
+  const hasDraftProgress = weekNumber !== String(nextWeekNumber)
+    || date !== initialDate
+    || opponent.trim().length > 0
+    || gamesWon !== '0'
+    || gamesLost !== '0'
+    || notes.trim().length > 0
+    || weekGames.length > 0
+    || scoringGame !== null
+    || createdWeekId !== null
+    || savedGameNumbers.length > 0
 
-  const [weekNumber, setWeekNumber] = useState(String(nextWeekNumber))
-  const [date, setDate] = useState(initialDate)
-  const [opponent, setOpponent] = useState('')
-  const [gamesWon, setGamesWon] = useState('0')
-  const [gamesLost, setGamesLost] = useState('0')
-  const [notes, setNotes] = useState('')
-  const [weekGames, setWeekGames] = useState<WeekGameScore[]>([])
-  const [scoringGame, setScoringGame] = useState<number | null>(null)
-  const [createdWeekId, setCreatedWeekId] = useState<number | null>(null)
-  const [savedGameNumbers, setSavedGameNumbers] = useState<number[]>([])
+  useEffect(() => {
+    if (!hasDraftProgress) {
+      clearLocalDraft(draftScope)
+      return
+    }
+    writeLocalDraft(draftScope, null, {
+      weekNumber,
+      date,
+      opponent,
+      gamesWon,
+      gamesLost,
+      notes,
+      weekGames,
+      scoringGame,
+      createdWeekId,
+      savedGameNumbers,
+    } satisfies LeagueWeekDraft)
+  }, [
+    createdWeekId,
+    date,
+    draftScope,
+    gamesLost,
+    gamesWon,
+    hasDraftProgress,
+    notes,
+    opponent,
+    savedGameNumbers,
+    scoringGame,
+    weekGames,
+    weekNumber,
+  ])
 
   const submitWeek = useMutation({
     mutationFn: async () => {
@@ -605,6 +709,10 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, 
       }
     },
     onSuccess: () => {
+      clearLocalDraft(draftScope)
+      for (let gameNumber = 1; gameNumber <= gamesPerWeek; gameNumber += 1) {
+        clearLocalDraft(leagueNewGameDraftScope(leagueId, gameNumber))
+      }
       setCreatedWeekId(null)
       setSavedGameNumbers([])
       onSaved()
@@ -616,6 +724,14 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, 
 
   return (
     <div className="card" style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+      {hasDraftProgress && (
+        <div className="league-autosave-status" role="status">
+          <Icon name="check" size={16} />
+          <span>{restoredDraft
+            ? 'Week draft restored. Changes save automatically on this device.'
+            : 'Week draft saved automatically on this device.'}</span>
+        </div>
+      )}
       <label>Week number<input type="number" min={1} value={weekNumber} onChange={(e) => setWeekNumber(e.target.value)} /></label>
       <label>Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       <label>Opponent<input value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
@@ -651,6 +767,7 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, 
             gameNumber={scoringGame}
             balls={balls}
             defaultBallId={undefined}
+            autosaveId={leagueNewGameDraftScope(leagueId, scoringGame)}
             shareContext={{ location, date }}
             onSave={(game) => {
               setWeekGames((prev) => [...prev.filter((g) => g.gameNumber !== game.gameNumber), game].sort((a, b) => a.gameNumber - b.gameNumber))
@@ -673,6 +790,21 @@ function LogWeekForm({ leagueId, gamesPerWeek, nextWeekNumber, balls, location, 
       </button>
       {submitWeek.isError && <p className="scoring-error" role="alert">Saving the week failed partway through. Tap “Save week” again to finish without duplicating saved games.</p>}
       {!allGamesLogged && <div className="muted" style={{ fontSize: 12 }}>Complete all {gamesPerWeek} games to submit this week.</div>}
+      {hasDraftProgress && createdWeekId == null && (
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => {
+            clearLocalDraft(draftScope)
+            for (let gameNumber = 1; gameNumber <= gamesPerWeek; gameNumber += 1) {
+              clearLocalDraft(leagueNewGameDraftScope(leagueId, gameNumber))
+            }
+            onDiscard()
+          }}
+        >
+          Discard week draft
+        </button>
+      )}
     </div>
   )
 }

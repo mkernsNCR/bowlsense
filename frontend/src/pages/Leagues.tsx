@@ -7,7 +7,7 @@ import { Icon } from '../design'
 import { CompetitionArchiveSheet, CompetitionHeader, CompetitionSheet } from '../features/competition/CompetitionUI'
 import { useCompetitionArchive } from '../features/competition/archive'
 import { formatFrameMarks } from '../features/scoring/frameMarks'
-import { clearLocalDraft, readLocalDraft, writeLocalDraft } from '../features/autosave/localDraft'
+import { clearLocalDraft, hasLocalDraft, readLocalDraft, writeLocalDraft } from '../features/autosave/localDraft'
 
 interface Ball { id: number; name: string }
 interface LeagueGame {
@@ -282,6 +282,7 @@ function LeagueDetail({ id }: { id: string }) {
   })
   const [editingWeekId, setEditingWeekId] = useState<number | null>(null)
   const [rescoringGameId, setRescoringGameId] = useState<number | null>(null)
+  const [dismissedDraftGameIds, setDismissedDraftGameIds] = useState<number[]>([])
   const [editingLeague, setEditingLeague] = useState(false)
   const [archiveSheetOpen, setArchiveSheetOpen] = useState(false)
   const [leagueForm, setLeagueForm] = useState({ name: '', location: '', season: '', dayOfWeek: '', gamesPerWeek: '', startDate: '', endDate: '', notes: '' })
@@ -336,6 +337,26 @@ function LeagueDetail({ id }: { id: string }) {
   })
 
   const nextWeekNumber = useMemo(() => ((league?.weeks?.length || 0) + 1), [league?.weeks?.length])
+  const resumedGameDraft = useMemo(() => {
+    if (!league) return null
+    for (const week of league.weeks || []) {
+      for (const game of week.games || []) {
+        if (dismissedDraftGameIds.includes(game.id)) continue
+        if (hasLocalDraft(leagueGameDraftScope(league.id, week.id, game.id), game.frameData ?? null)) {
+          return { gameId: game.id, weekId: week.id }
+        }
+      }
+    }
+    return null
+  }, [dismissedDraftGameIds, league])
+  const activeRescoringGameId = rescoringGameId ?? resumedGameDraft?.gameId ?? null
+
+  const closeGameEditor = (gameId: number) => {
+    setRescoringGameId(null)
+    if (resumedGameDraft?.gameId === gameId) {
+      setDismissedDraftGameIds((current) => current.includes(gameId) ? current : [...current, gameId])
+    }
+  }
 
   if (isLoading) return <div className="muted">Loading league...</div>
   if (isError) return <div className="card" role="alert"><p>The league could not be loaded. Check your connection or sign-in.</p><button className="btn btn-primary" type="button" onClick={() => void refetch()}>Retry</button></div>
@@ -477,7 +498,7 @@ function LeagueDetail({ id }: { id: string }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
         {(league.weeks || []).map((week) => {
-          const expanded = expandedWeeks.includes(week.id)
+          const expanded = expandedWeeks.includes(week.id) || resumedGameDraft?.weekId === week.id
           return (
             <div key={week.id} className="card" style={{ padding: 12 }}>
               <button
@@ -573,8 +594,8 @@ function LeagueDetail({ id }: { id: string }) {
                             </button>
                           </div>
 
-                          {rescoringGameId === g.id && (
-                            <CompetitionSheet title={`Edit game ${g.gameNumber}`} closeTo={`/leagues/${id}`} onClose={() => setRescoringGameId(null)}>
+                          {activeRescoringGameId === g.id && (
+                            <CompetitionSheet title={`Edit game ${g.gameNumber}`} closeTo={`/leagues/${id}`} onClose={() => closeGameEditor(g.id)}>
                             <div>
                               <BowlingScorer
                                 gameNumber={g.gameNumber}
@@ -585,9 +606,9 @@ function LeagueDetail({ id }: { id: string }) {
                                 shareContext={{ location: league.location, date: week.date }}
                                 onSave={async (result) => {
                                   await updateGame.mutateAsync({ gameId: g.id, data: result })
-                                  setRescoringGameId(null)
+                                  closeGameEditor(g.id)
                                 }}
-                                onCancel={() => setRescoringGameId(null)}
+                                onCancel={() => closeGameEditor(g.id)}
                               />
                             </div>
                             </CompetitionSheet>

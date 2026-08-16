@@ -58,6 +58,8 @@ interface BowlingScorerDraft {
   arsenalId?: number | null
 }
 
+type ArsenalRequestStatus = 'loading' | 'success' | 'error'
+
 function isBowlingScorerDraft(value: unknown): value is BowlingScorerDraft {
   if (!value || typeof value !== 'object') return false
   const draft = value as Partial<BowlingScorerDraft>
@@ -276,6 +278,7 @@ export default function BowlingScorer({
     ? (restoredDraft.value.game.ballId != null ? String(restoredDraft.value.game.ballId) : '')
     : (defaultBallId ?? ''))
   const [arsenals, setArsenals] = useState<Arsenal[]>([])
+  const [arsenalRequestStatus, setArsenalRequestStatus] = useState<ArsenalRequestStatus>('loading')
   const [selectedArsenalId, setSelectedArsenalId] = useState(() => restoredDraft?.value.arsenalId != null
     ? String(restoredDraft.value.arsenalId)
     : '')
@@ -305,10 +308,15 @@ export default function BowlingScorer({
     let active = true
     void requestJson<Arsenal[]>('/api/arsenals')
       .then((loaded) => {
-        if (active) setArsenals(loaded)
+        if (!active) return
+        setArsenals(loaded)
+        setSelectedArsenalId((current) => current && loaded.some((arsenal) => String(arsenal.id) === current) ? current : '')
+        setArsenalRequestStatus('success')
       })
       .catch(() => {
-        if (active) setArsenals([])
+        if (!active) return
+        setArsenals([])
+        setArsenalRequestStatus('error')
       })
     return () => {
       active = false
@@ -317,10 +325,11 @@ export default function BowlingScorer({
 
   const selectedArsenal = arsenals.find((arsenal) => String(arsenal.id) === selectedArsenalId)
   const availableBalls = useMemo(() => {
-    if (!selectedArsenal) return balls
+    if (!selectedArsenalId) return balls
+    if (arsenalRequestStatus !== 'success' || !selectedArsenal) return []
     const allowedBallIds = new Set(selectedArsenal.ballIds ?? [])
     return balls.filter((ball) => allowedBallIds.has(ball.id))
-  }, [balls, selectedArsenal])
+  }, [arsenalRequestStatus, balls, selectedArsenal, selectedArsenalId])
 
   const scopedSelectedBallId = useMemo(
     () => selectedBallId && availableBalls.some((ball) => String(ball.id) === selectedBallId) ? selectedBallId : '',
@@ -341,6 +350,7 @@ export default function BowlingScorer({
       return sanitized.every((ballId, index) => ballId === current[index]) ? current : sanitized
     })
   }
+  const showArsenalControl = arsenals.length > 0 || selectedArsenalId !== ''
 
   useEffect(() => {
     const previousHtmlOverflowX = document.documentElement.style.overflowX
@@ -662,7 +672,7 @@ export default function BowlingScorer({
         />
 
         <div className="live-ball">
-          {arsenals.length > 0 && (
+          {showArsenalControl && (
             <div className="live-ball__control live-ball__control--arsenal">
               <label htmlFor={`arsenal-${gameNumber}`}>Arsenal</label>
               <select
@@ -672,10 +682,17 @@ export default function BowlingScorer({
                 aria-label="Arsenal for this game"
               >
                 <option value="">All saved balls</option>
+                {selectedArsenalId && !selectedArsenal && <option value={selectedArsenalId}>{arsenalRequestStatus === 'loading' ? 'Loading saved arsenal…' : 'Saved arsenal unavailable'}</option>}
                 {arsenals.map((arsenal) => <option key={arsenal.id} value={arsenal.id}>{arsenal.name} · {arsenal.ballIds?.length ?? 0} balls</option>)}
               </select>
               <span className="live-ball__hint">
-                {selectedArsenal ? `${availableBalls.length} ball${availableBalls.length === 1 ? '' : 's'} available from this arsenal` : 'Choose an arsenal to limit ball choices'}
+                {selectedArsenal
+                  ? `${availableBalls.length} ball${availableBalls.length === 1 ? '' : 's'} available from this arsenal`
+                  : arsenalRequestStatus === 'loading'
+                    ? 'Loading saved arsenal…'
+                    : arsenalRequestStatus === 'error'
+                      ? 'Saved arsenal could not be loaded'
+                      : 'Choose an arsenal to limit ball choices'}
               </span>
             </div>
           )}

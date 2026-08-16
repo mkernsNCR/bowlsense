@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import BowlingScorer, { type SavedBowlingGame } from '../../components/BowlingScorer'
+import { writeLocalDraft } from '../autosave/localDraft'
 import { resetPins } from '../../utils/bowlingScore'
 
 const originalScrollIntoView = Element.prototype.scrollIntoView
@@ -377,6 +378,48 @@ describe('BowlingScorer completion behavior', () => {
     expect(within(ballSelect).getByRole('option', { name: 'Benchmark' })).toBeTruthy()
     expect(within(ballSelect).queryByRole('option', { name: 'Transition' })).toBeNull()
     expect(screen.getByText('1 ball available from this arsenal')).toBeTruthy()
+  })
+
+  it('does not expose unrestricted balls while a restored arsenal is loading', async () => {
+    let resolveArsenals: (response: Response) => void = () => undefined
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => {
+      resolveArsenals = resolve
+    })))
+    writeLocalDraft('pending-arsenal-game', null, {
+      game: {
+        gameNumber: 1,
+        score: 0,
+        strikes: 0,
+        spares: 0,
+        splits: 0,
+        ballId: 12,
+        frameData: JSON.stringify({ rolls: [] }),
+        pinLeaves: JSON.stringify([]),
+      },
+      selectedKnocked: [],
+      arsenalId: 7,
+    })
+
+    render(
+      <BowlingScorer
+        gameNumber={1}
+        balls={[{ id: 11, name: 'Benchmark' }, { id: 12, name: 'Transition' }]}
+        autosaveId="pending-arsenal-game"
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const ballSelect = screen.getByRole('combobox', { name: 'Ball used for this game' })
+    expect(within(ballSelect).queryByRole('option', { name: 'Benchmark' })).toBeNull()
+    expect(within(ballSelect).queryByRole('option', { name: 'Transition' })).toBeNull()
+    expect(screen.getByText('Loading saved arsenal…', { selector: 'span' })).toBeTruthy()
+
+    resolveArsenals(new Response(JSON.stringify([
+      { id: 7, name: 'League night', description: null, useCase: 'League', maxSize: 6, notes: null, ballCount: 1, ballIds: [11] },
+    ]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await waitFor(() => expect(within(ballSelect).getByRole('option', { name: 'Benchmark' })).toBeTruthy())
+    expect(within(ballSelect).queryByRole('option', { name: 'Transition' })).toBeNull()
   })
 
   it('shows the default option after clearing a frame override', () => {

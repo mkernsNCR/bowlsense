@@ -47,6 +47,21 @@ test('deleting a ball clears score references and removes arsenal membership', a
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM arsenal_balls').get().count, 0)
 })
 
+test('arsenal list includes its ball ids for score filtering', async (t) => {
+  const { fastify, sqlite } = await buildTestApp(t)
+  sqlite.exec(`
+    INSERT INTO balls (id, name) VALUES (11, 'Benchmark'), (12, 'Spare');
+    INSERT INTO arsenals (id, name) VALUES (7, 'League night');
+    INSERT INTO arsenal_balls (arsenal_id, ball_id, slot_order) VALUES (7, 12, 2), (7, 11, 1);
+  `)
+
+  for (const url of ['/arsenals', '/api/arsenals']) {
+    const response = await fastify.inject({ method: 'GET', url })
+    assert.equal(response.statusCode, 200, response.body)
+    assert.deepEqual(response.json()[0].ballIds, [11, 12])
+  }
+})
+
 test('JSON aliases relay the exact internal payload and attachment header', async (t) => {
   const { fastify } = await buildTestApp(t)
   const direct = await fastify.inject({ method: 'GET', url: '/backup' })

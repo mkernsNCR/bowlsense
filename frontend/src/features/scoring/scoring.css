@@ -141,10 +141,13 @@
 .live-help { color: var(--score-secondary); font-size: .8125rem; margin: 8px auto; max-width: 390px; text-align: center; }
 .live-ball { align-items: stretch; background: var(--score-surface); border-radius: 14px; display: grid; gap: 1px; grid-template-columns: 1fr 1fr; margin: 10px 0; overflow: hidden; }
 .live-ball__control { display: grid; gap: 2px; min-width: 0; padding: 6px 12px; }
+.live-ball__control--arsenal { border-bottom: 1px solid var(--score-line); grid-column: 1 / -1; }
 .live-ball__control + .live-ball__control { border-left: 1px solid var(--score-line); }
+.live-ball__control--arsenal + .live-ball__control { border-left: 0; }
 .live-ball label { color: var(--score-secondary); font-size: .6875rem; font-weight: 650; }
 .live-ball select { background: transparent; border: 0; color: var(--score-ink); font: inherit; min-height: 44px; min-width: 0; outline: 0; padding: 0; width: 100%; }
 .live-ball select:focus-visible { outline: 3px solid color-mix(in srgb, var(--score-violet) 48%, transparent); outline-offset: -2px; }
+.live-ball__hint { color: var(--score-secondary); font-size: .6875rem; }
 .lane-notes { background: var(--score-surface); border: 1px solid transparent; border-radius: 16px; margin: 10px 0; overflow: hidden; }
 .lane-notes.is-open { border-color: color-mix(in srgb, var(--score-violet) 32%, var(--score-line)); }
 .lane-notes-toggle { align-items: center; background: transparent; color: var(--score-ink); display: flex; gap: 10px; min-height: 58px; padding: 8px 12px; text-align: left; width: 100%; }
@@ -330,6 +333,7 @@
   .throw-notes-selector__controls { grid-template-columns: 1fr 1.2fr 1fr; }
   .throw-notes-selector__controls .scoring-button { font-size: .625rem; padding-inline: 5px; }
   .live-ball { grid-template-columns: 1fr; }
+  .live-ball__control--arsenal { border-bottom: 0; grid-column: auto; }
   .live-ball__control + .live-ball__control { border-left: 0; border-top: 1px solid var(--score-line); }
   .live-summary-row { padding-left: 10px; }
   .live-summary-row select { max-width: 42%; }

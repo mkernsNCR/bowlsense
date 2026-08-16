@@ -881,11 +881,27 @@ async function arsenalDetail(db: D1Database, id: number): Promise<Row | null> {
 }
 
 async function arsenalList(db: D1Database): Promise<Row[]> {
-  return camelizeAll(await all(db, `
+  const arsenals = camelizeAll(await all(db, `
     SELECT a.*, COUNT(ab.id) AS ball_count
     FROM arsenals a LEFT JOIN arsenal_balls ab ON ab.arsenal_id = a.id
     GROUP BY a.id ORDER BY a.created_at DESC, a.id DESC
   `));
+  const entries = camelizeAll(await all(db, `
+    SELECT id, arsenal_id, ball_id, slot_order
+    FROM arsenal_balls
+    ORDER BY arsenal_id ASC, slot_order ASC, id ASC
+  `));
+  const ballIdsByArsenal = new Map<number, number[]>();
+  for (const entry of entries) {
+    const arsenalId = Number(entry.arsenalId);
+    const ballIds = ballIdsByArsenal.get(arsenalId) || [];
+    ballIds.push(Number(entry.ballId));
+    ballIdsByArsenal.set(arsenalId, ballIds);
+  }
+  return arsenals.map((arsenal) => ({
+    ...arsenal,
+    ballIds: ballIdsByArsenal.get(Number(arsenal.id)) || [],
+  }));
 }
 
 async function tonightLeagues(db: D1Database, timeZone: string): Promise<Row[]> {

@@ -531,9 +531,18 @@ assert.equal((await response.json()).active, 0);
 
 response = await request("/api/arsenals");
 assert.equal(response.status, 200);
-assert.equal((await response.json()).length, backup.arsenals.length);
+const arsenalList = await response.json();
+assert.equal(arsenalList.length, backup.arsenals.length);
 
 if (backup.arsenals.length > 0) {
+  const listedArsenal = arsenalList.find((arsenal) => arsenal.id === backup.arsenals[0].id);
+  const expectedBallIds = backup.arsenalBalls
+    .filter((entry) => entry.arsenalId === backup.arsenals[0].id)
+    .sort((a, b) => a.slotOrder - b.slotOrder || a.id - b.id)
+    .map((entry) => entry.ballId);
+  assert.equal(listedArsenal.ballCount, expectedBallIds.length);
+  assert.deepEqual(listedArsenal.ballIds, expectedBallIds);
+
   response = await request(`/api/arsenals/${backup.arsenals[0].id}`);
   assert.equal(response.status, 200);
   const arsenal = await response.json();

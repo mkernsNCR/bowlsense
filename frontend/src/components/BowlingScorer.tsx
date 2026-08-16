@@ -19,6 +19,8 @@ import ThrowNotesPanel from '../features/scoring/ThrowNotesPanel'
 import { addThrowNotes, carryForwardThrowNotes, parseThrowNotes, type ThrowNotes } from '../features/scoring/throwNotes'
 import type { ScoringBall } from '../features/scoring/types'
 import { clearLocalDraft, readLocalDraft, writeLocalDraft } from '../features/autosave/localDraft'
+import { requestJson } from '../api/requestJson'
+import type { Arsenal } from '../features/gear/types'
 import ShareCard from './ShareCard'
 import '../features/scoring/scoring.css'
 
@@ -53,6 +55,7 @@ interface BowlingScorerProps {
 interface BowlingScorerDraft {
   game: SavedBowlingGame
   selectedKnocked: number[]
+  arsenalId?: number | null
 }
 
 function isBowlingScorerDraft(value: unknown): value is BowlingScorerDraft {
@@ -69,6 +72,7 @@ function isBowlingScorerDraft(value: unknown): value is BowlingScorerDraft {
     && typeof game.frameData === 'string'
     && Array.isArray(draft.selectedKnocked)
     && draft.selectedKnocked.every((pin) => Number.isInteger(pin) && pin >= 1 && pin <= 10)
+    && (draft.arsenalId == null || typeof draft.arsenalId === 'number')
 }
 
 const pinRows = [
@@ -271,6 +275,10 @@ export default function BowlingScorer({
   const [selectedBallId, setSelectedBallId] = useState(() => restoredDraft
     ? (restoredDraft.value.game.ballId != null ? String(restoredDraft.value.game.ballId) : '')
     : (defaultBallId ?? ''))
+  const [arsenals, setArsenals] = useState<Arsenal[]>([])
+  const [selectedArsenalId, setSelectedArsenalId] = useState(() => restoredDraft?.value.arsenalId != null
+    ? String(restoredDraft.value.arsenalId)
+    : '')
   const keepScoreRef = useRef<HTMLButtonElement>(null)
   const keepScoringRef = useRef<HTMLButtonElement>(null)
   const pinSwipeRef = useRef<PinSwipeGesture | null>(null)
@@ -294,6 +302,47 @@ export default function BowlingScorer({
   const isSaving = saving || saveStatus === 'saving'
 
   useEffect(() => {
+    let active = true
+    void requestJson<Arsenal[]>('/api/arsenals')
+      .then((loaded) => {
+        if (active) setArsenals(loaded)
+      })
+      .catch(() => {
+        if (active) setArsenals([])
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const selectedArsenal = arsenals.find((arsenal) => String(arsenal.id) === selectedArsenalId)
+  const availableBalls = useMemo(() => {
+    if (!selectedArsenal) return balls
+    const allowedBallIds = new Set(selectedArsenal.ballIds ?? [])
+    return balls.filter((ball) => allowedBallIds.has(ball.id))
+  }, [balls, selectedArsenal])
+
+  const scopedSelectedBallId = useMemo(
+    () => selectedBallId && availableBalls.some((ball) => String(ball.id) === selectedBallId) ? selectedBallId : '',
+    [availableBalls, selectedBallId],
+  )
+  const scopedFrameBallIds = useMemo(() => {
+    const allowedBallIds = new Set(availableBalls.map((ball) => ball.id))
+    return frameBallIds.map((ballId) => ballId != null && !allowedBallIds.has(ballId) ? null : ballId)
+  }, [availableBalls, frameBallIds])
+
+  const handleArsenalChange = (arsenalId: string) => {
+    const nextArsenal = arsenals.find((arsenal) => String(arsenal.id) === arsenalId)
+    const allowedBallIds = new Set(nextArsenal ? nextArsenal.ballIds ?? [] : balls.map((ball) => ball.id))
+    setSelectedArsenalId(arsenalId)
+    setSelectedBallId((current) => current && allowedBallIds.has(Number(current)) ? current : '')
+    setFrameBallIds((current) => {
+      const sanitized = current.map((ballId) => ballId != null && !allowedBallIds.has(ballId) ? null : ballId)
+      return sanitized.every((ballId, index) => ballId === current[index]) ? current : sanitized
+    })
+  }
+
+  useEffect(() => {
     const previousHtmlOverflowX = document.documentElement.style.overflowX
     const previousBodyOverflowX = document.body.style.overflowX
     document.documentElement.style.overflowX = 'clip'
@@ -304,8 +353,8 @@ export default function BowlingScorer({
     }
   }, [])
 
-  const selectedBall = balls.find((ball) => String(ball.id) === selectedBallId)
-  const currentFrameBallId = frameBallIds[state.currentFrame] == null ? '' : String(frameBallIds[state.currentFrame])
+  const selectedBall = availableBalls.find((ball) => String(ball.id) === scopedSelectedBallId)
+  const currentFrameBallId = scopedFrameBallIds[state.currentFrame] == null ? '' : String(scopedFrameBallIds[state.currentFrame])
   const strikes = useMemo(
     () => state.frames.reduce((count, frame, index) => {
       if (index < 9) return count + (frame.isStrike ? 1 : 0)
@@ -324,12 +373,13 @@ export default function BowlingScorer({
   })
   const frameWithLegacyNotes = addLaneNotes(baseFrameData, laneNotes)
   const frameWithThrowNotes = addThrowNotes(frameWithLegacyNotes, throwNotes.slice(0, state.rolls.length))
-  const frameData = addFrameBallIds(frameWithThrowNotes, frameBallIds)
+  const frameData = addFrameBallIds(frameWithThrowNotes, scopedFrameBallIds)
   const hasDraftProgress = !reviewingSavedGame && (
     state.rolls.length > 0
     || selectedKnocked.length > 0
-    || selectedBallId !== (defaultBallId ?? '')
-    || frameBallIds.some((ballId) => ballId != null)
+    || scopedSelectedBallId !== (defaultBallId ?? '')
+    || selectedArsenalId !== ''
+    || scopedFrameBallIds.some((ballId) => ballId != null)
   )
 
   useEffect(() => {
@@ -347,11 +397,12 @@ export default function BowlingScorer({
         strikes,
         spares,
         splits,
-        ballId: selectedBallId ? Number(selectedBallId) : null,
+        ballId: scopedSelectedBallId ? Number(scopedSelectedBallId) : null,
         frameData,
         pinLeaves: JSON.stringify(state.pinSelections),
       },
       selectedKnocked,
+      arsenalId: selectedArsenalId ? Number(selectedArsenalId) : null,
     } satisfies BowlingScorerDraft)
     queueMicrotask(() => {
       if (active) setDraftSaveStatus(saved ? 'saved' : 'error')
@@ -366,7 +417,8 @@ export default function BowlingScorer({
     gameNumber,
     hasDraftProgress,
     reviewingSavedGame,
-    selectedBallId,
+    selectedArsenalId,
+    scopedSelectedBallId,
     selectedKnocked,
     spares,
     splits,
@@ -387,7 +439,7 @@ export default function BowlingScorer({
     strikes,
     spares,
     splits,
-    ballId: selectedBallId ? Number(selectedBallId) : null,
+    ballId: scopedSelectedBallId ? Number(scopedSelectedBallId) : null,
     frameData,
     pinLeaves: JSON.stringify(state.pinSelections),
   })
@@ -496,7 +548,7 @@ export default function BowlingScorer({
     if (editCandidate == null) return
     const rewoundState = rewindToFrame(state, editCandidate)
     setEditSnapshot((current) => current ?? state)
-    setFrameBallSnapshot((current) => current ?? frameBallIds)
+    setFrameBallSnapshot((current) => current ?? scopedFrameBallIds)
     setThrowNotesSnapshot((current) => current ?? throwNotes)
     setState(rewoundState)
     setFrameBallIds((current) => current.map((ballId, index) => index < editCandidate ? ballId : null))
@@ -610,16 +662,33 @@ export default function BowlingScorer({
         />
 
         <div className="live-ball">
+          {arsenals.length > 0 && (
+            <div className="live-ball__control live-ball__control--arsenal">
+              <label htmlFor={`arsenal-${gameNumber}`}>Arsenal</label>
+              <select
+                id={`arsenal-${gameNumber}`}
+                value={selectedArsenalId}
+                onChange={(event) => handleArsenalChange(event.target.value)}
+                aria-label="Arsenal for this game"
+              >
+                <option value="">All saved balls</option>
+                {arsenals.map((arsenal) => <option key={arsenal.id} value={arsenal.id}>{arsenal.name} · {arsenal.ballIds?.length ?? 0} balls</option>)}
+              </select>
+              <span className="live-ball__hint">
+                {selectedArsenal ? `${availableBalls.length} ball${availableBalls.length === 1 ? '' : 's'} available from this arsenal` : 'Choose an arsenal to limit ball choices'}
+              </span>
+            </div>
+          )}
           <div className="live-ball__control">
             <label htmlFor={`ball-default-${gameNumber}`}>Default ball</label>
             <select
               id={`ball-default-${gameNumber}`}
-              value={selectedBallId}
+              value={scopedSelectedBallId}
               onChange={(event) => setSelectedBallId(event.target.value)}
               aria-label="Ball used for this game"
             >
               <option value="">Not selected</option>
-              {balls.map((ball) => (
+              {availableBalls.map((ball) => (
                 <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
               ))}
             </select>
@@ -633,7 +702,7 @@ export default function BowlingScorer({
               aria-label={`Ball for frame ${state.currentFrame + 1}`}
             >
               <option value="">Use default{selectedBall ? ` · ${selectedBall.name}` : ' · no ball selected'}</option>
-              {balls.map((ball) => (
+              {availableBalls.map((ball) => (
                 <option key={ball.id} value={ball.id}>{ball.brand ? `${ball.name} · ${ball.brand}` : ball.name}</option>
               ))}
             </select>
@@ -767,12 +836,12 @@ export default function BowlingScorer({
               </button>
               <select
                 aria-label={`Ball for frame ${index + 1}`}
-                value={frameBallIds[index] == null ? '' : String(frameBallIds[index])}
+                value={scopedFrameBallIds[index] == null ? '' : String(scopedFrameBallIds[index])}
                 disabled={frame.ball1 == null && index !== state.currentFrame}
                 onChange={(event) => updateFrameBall(index, event.target.value)}
               >
                 <option value="">Default{selectedBall ? ` · ${selectedBall.name}` : ''}</option>
-                {balls.map((ball) => <option key={ball.id} value={ball.id}>{ball.name}</option>)}
+                {availableBalls.map((ball) => <option key={ball.id} value={ball.id}>{ball.name}</option>)}
               </select>
             </div>
           ))}
@@ -810,9 +879,9 @@ export default function BowlingScorer({
             onToggleThrowNotes={() => setThrowNotesOpen((open) => !open)}
             onSelectThrow={setSelectedThrowIndex}
             onThrowNotesChange={updateThrowNote}
-            balls={balls}
-            frameBallIds={frameBallIds}
-            defaultBallId={selectedBallId}
+            balls={availableBalls}
+            frameBallIds={scopedFrameBallIds}
+            defaultBallId={scopedSelectedBallId}
             onFrameBallChange={updateFrameBall}
           />
         </Sheet>
@@ -909,9 +978,9 @@ export default function BowlingScorer({
             onToggleThrowNotes={() => setThrowNotesOpen((open) => !open)}
             onSelectThrow={setSelectedThrowIndex}
             onThrowNotesChange={updateThrowNote}
-            balls={balls}
-            frameBallIds={frameBallIds}
-            defaultBallId={selectedBallId}
+            balls={availableBalls}
+            frameBallIds={scopedFrameBallIds}
+            defaultBallId={scopedSelectedBallId}
             onFrameBallChange={updateFrameBall}
           />
         </Sheet>

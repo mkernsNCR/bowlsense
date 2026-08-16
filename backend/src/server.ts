@@ -3796,6 +3796,7 @@ fastify.get('/arsenals', async (request, reply) => {
     notes: a.notes,
     createdAt: a.created_at,
     ballCount: Number(a.ballCount || 0),
+    ballIds: sqlite.prepare('SELECT ball_id FROM arsenal_balls WHERE arsenal_id = ? ORDER BY slot_order ASC, id ASC').all(a.id).map((entry: any) => Number(entry.ball_id)),
   }));
 });
 
@@ -4962,6 +4963,7 @@ fastify.get('/api/arsenals', async () => {
     notes: a.notes,
     createdAt: a.created_at,
     ballCount: Number(a.ballCount || 0),
+    ballIds: sqlite.prepare('SELECT ball_id FROM arsenal_balls WHERE arsenal_id = ? ORDER BY slot_order ASC, id ASC').all(a.id).map((entry: any) => Number(entry.ball_id)),
   }));
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import BowlingScorer, { type SavedBowlingGame } from '../../components/BowlingScorer'
 import { resetPins } from '../../utils/bowlingScore'
 
@@ -352,6 +352,31 @@ describe('BowlingScorer completion behavior', () => {
     const saved = JSON.parse(String(onSave.mock.calls[0]?.[0].frameData))
     expect(saved.frameBallIds).toHaveLength(10)
     expect(saved.frameBallIds[3]).toBe(12)
+  })
+
+  it('limits ball selectors to the selected arsenal', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify([
+      { id: 7, name: 'League night', description: null, useCase: 'League', maxSize: 6, notes: null, ballCount: 1, ballIds: [11] },
+    ]), { status: 200, headers: { 'Content-Type': 'application/json' } }))))
+
+    render(
+      <BowlingScorer
+        gameNumber={1}
+        balls={[{ id: 11, name: 'Benchmark' }, { id: 12, name: 'Transition' }]}
+        defaultBallId="12"
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const arsenalSelect = await screen.findByRole('combobox', { name: 'Arsenal for this game' })
+    fireEvent.change(arsenalSelect, { target: { value: '7' } })
+
+    const ballSelect = screen.getByRole('combobox', { name: 'Ball used for this game' }) as HTMLSelectElement
+    await waitFor(() => expect(ballSelect.value).toBe(''))
+    expect(within(ballSelect).getByRole('option', { name: 'Benchmark' })).toBeTruthy()
+    expect(within(ballSelect).queryByRole('option', { name: 'Transition' })).toBeNull()
+    expect(screen.getByText('1 ball available from this arsenal')).toBeTruthy()
   })
 
   it('shows the default option after clearing a frame override', () => {

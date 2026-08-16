@@ -33,6 +33,7 @@ export interface Arsenal {
   maxSize: number
   notes: string | null
   ballCount?: number
+  ballIds?: number[]
 }
 
 export interface ArsenalBall {

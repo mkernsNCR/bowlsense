@@ -59,6 +59,18 @@ export function writeLocalDraft(scope: string, baseline: string | null, value: u
   }
 }
 
+export function hasLocalDraft(scope: string, baseline: string | null) {
+  if (typeof window === 'undefined') return false
+  try {
+    const raw = window.localStorage.getItem(storageKey(scope))
+    if (!raw) return false
+    const parsed: unknown = JSON.parse(raw)
+    return isStoredDraft(parsed) && parsed.baseline === baseline
+  } catch {
+    return false
+  }
+}
+
 export function clearLocalDraft(scope: string) {
   if (typeof window === 'undefined') return false
   try {

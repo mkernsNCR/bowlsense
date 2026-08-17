@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeLocalDraft } from '../features/autosave/localDraft'
-import { LogWeekForm } from './Leagues'
+import LeaguesPage, { LogWeekForm } from './Leagues'
 
 function renderLogWeek() {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } })
@@ -37,6 +38,145 @@ afterEach(() => {
 })
 
 describe('league week autosave', () => {
+  it('restores an active new-week game after navigating to another app page and back', async () => {
+    writeLocalDraft('league:8:pending-week', null, {
+      weekNumber: '1',
+      date: '2026-08-12',
+      opponent: 'Pin Crushers',
+      gamesWon: '0',
+      gamesLost: '0',
+      notes: '',
+      weekGames: [],
+      scoringGame: 1,
+      createdWeekId: null,
+      savedGameNumbers: [],
+    })
+    writeLocalDraft('league:8:pending-week:game:1', null, {
+      game: {
+        gameNumber: 1,
+        score: 0,
+        strikes: 1,
+        spares: 0,
+        splits: 0,
+        ballId: null,
+        frameData: JSON.stringify({ pinSelections: [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]] }),
+        pinLeaves: JSON.stringify([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]),
+      },
+      selectedKnocked: [],
+    })
+    const league = {
+      id: 8,
+      name: 'Tuesday Classic',
+      location: 'Crofton',
+      season: '2026',
+      dayOfWeek: 'Tuesday',
+      gamesPerWeek: 3,
+      startDate: null,
+      endDate: null,
+      notes: null,
+      active: 1,
+      weeks: [],
+      stats: { average: 0, high: 0, low: 0, totalPins: 0, totalGames: 0, gamesWon: 0, gamesLost: 0, totalWeeks: 0 },
+    }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (input) => new Response(JSON.stringify(String(input) === '/api/balls' ? [] : league), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/leagues/8']}>
+          <Routes>
+            <Route path="/leagues/:id" element={<LeaguesPage />} />
+            <Route path="/tournaments" element={<div>Other page <Link to="/leagues/8">Return to league</Link></div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('Frame 2 · Ball 1')).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: 'Tournaments' }))
+    expect(await screen.findByText('Other page')).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: 'Return to league' }))
+
+    expect(await screen.findByText('Frame 2 · Ball 1')).toBeTruthy()
+    expect(screen.getByText('Draft restored · changes save automatically on this device.')).toBeTruthy()
+  })
+
+  it('automatically reopens an autosaved edit when returning to an existing league game', async () => {
+    const originalFrameData = JSON.stringify({
+      pinSelections: Array.from({ length: 20 }, () => [] as number[]),
+    })
+    const draftFrameData = JSON.stringify({
+      pinSelections: [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]],
+    })
+    writeLocalDraft('league:8:week:81:game:811', originalFrameData, {
+      game: {
+        gameNumber: 1,
+        score: 0,
+        strikes: 1,
+        spares: 0,
+        splits: 0,
+        ballId: null,
+        frameData: draftFrameData,
+        pinLeaves: JSON.stringify([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]),
+      },
+      selectedKnocked: [],
+    })
+    const league = {
+      id: 8,
+      name: 'Tuesday Classic',
+      location: 'Crofton',
+      season: '2026',
+      dayOfWeek: 'Tuesday',
+      gamesPerWeek: 3,
+      startDate: null,
+      endDate: null,
+      notes: null,
+      active: 1,
+      weeks: [{
+        id: 81,
+        leagueId: 8,
+        weekNumber: 1,
+        date: '2026-08-11',
+        opponent: 'Pin Crushers',
+        gamesWon: 2,
+        gamesLost: 1,
+        notes: null,
+        games: [{
+          id: 811,
+          weekId: 81,
+          gameNumber: 1,
+          score: 0,
+          strikes: 0,
+          spares: 0,
+          splits: 0,
+          ballId: null,
+          frameData: originalFrameData,
+        }],
+      }],
+      stats: { average: 0, high: 0, low: 0, totalPins: 0, totalGames: 1, gamesWon: 2, gamesLost: 1, totalWeeks: 1 },
+    }
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (input) => new Response(JSON.stringify(String(input) === '/api/balls' ? [] : league), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })))
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/leagues/8']}>
+          <Routes>
+            <Route path="/leagues/:id" element={<LeaguesPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByRole('dialog', { name: 'Edit game 1' })).toBeTruthy()
+    expect(screen.getByText('Frame 2 · Ball 1')).toBeTruthy()
+    expect(screen.getByText('Draft restored · changes save automatically on this device.')).toBeTruthy()
+  })
+
   it('restores week fields, the active game, and its in-progress rolls after remounting', async () => {
     renderLogWeek()
     fireEvent.change(screen.getByLabelText('Opponent'), { target: { value: 'Pin Crushers' } })

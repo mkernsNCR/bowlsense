@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import SessionQuickShare from '../components/SessionQuickShare'
 
 interface Session {
   id: number
@@ -25,6 +26,7 @@ export default function Sessions() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const [shareSessionId, setShareSessionId] = useState<number | null>(null)
   const [sort, setSort] = useState<'date' | 'score'>('date')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(1)
@@ -83,7 +85,7 @@ export default function Sessions() {
             <button
               type="button"
               onClick={handleExportCSV}
-              className="btn btn-ghost desktop-only"
+              className="btn btn-ghost"
               title="Download all sessions + games as CSV"
               style={{ minHeight: 38 }}
             >
@@ -202,6 +204,25 @@ export default function Sessions() {
                 <span style={{ color: 'var(--accent)', fontSize: 18 }}>›</span>
               </Link>
 
+              <button
+                className="btn btn-ghost"
+                style={{
+                  minHeight: 34,
+                  padding: '6px 10px',
+                  borderRadius: 10,
+                  borderColor: 'rgba(167, 139, 250, 0.45)',
+                  flexShrink: 0,
+                }}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShareSessionId(s.id)
+                }}
+                aria-label={`Share session at ${s.location || 'unknown lanes'}`}
+                title="Share session"
+              >
+                📤
+              </button>
               <button className="btn btn-danger" style={{ minHeight: 34, padding: '6px 10px', borderRadius: 10 }} onClick={() => setConfirmDeleteId(s.id)}>
                 🗑️
               </button>
@@ -266,6 +287,20 @@ export default function Sessions() {
       >
         +
       </Link>
+
+      {shareSessionId !== null && (() => {
+        const target = sessions.find(s => s.id === shareSessionId)
+        if (!target) return null
+        return (
+          <SessionQuickShare
+            sessionId={target.id}
+            location={target.location}
+            highScore={target.highScore}
+            date={target.date}
+            onClose={() => setShareSessionId(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import sharp from 'sharp';
 import fastifyStatic from '@fastify/static';
 import { readFile, readFileSync, statSync, existsSync } from 'node:fs';
+import { readFile as readFileAsync } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -945,9 +946,11 @@ fastify.get('/api/sessions/:id/og-image', async (request, reply) => {
 });
 
 // Static OG share image (PNG rendered from SVG)
+// Fix (2026-08-20): was using callback readFile from node:fs with await — crashed
+// with ERR_INVALID_ARG_TYPE (cb must be function). Now uses node:fs/promises.
 fastify.get('/sessions/share-og.png', async (_request, reply) => {
   const svgPath = join(__dirname, 'assets', 'share-og.svg');
-  const svg = await readFile(svgPath, 'utf8');
+  const svg = await readFileAsync(svgPath, 'utf8');
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
 
   reply.header('Content-Type', 'image/png');
@@ -4521,6 +4524,38 @@ fastify.post('/api/restore', async (request, reply) => {
     return reply.status(500).send({ error: e.message });
   }
 });
+
+// POST /api/admin/seed-demo — wipe + reseed demo data (12 weeks Michelob Ultra + practice + 2 perfect games)
+fastify.post('/admin/seed-demo', async (request, reply) => {
+  return runSeedScript(false);
+});
+fastify.post('/api/admin/seed-demo', async (request, reply) => {
+  return runSeedScript(false);
+});
+
+// POST /api/admin/wipe-demo — only wipe demo rows (no reseed)
+fastify.post('/admin/wipe-demo', async () => {
+  return runSeedScript(true);
+});
+fastify.post('/api/admin/wipe-demo', async () => {
+  return runSeedScript(true);
+});
+
+function runSeedScript(wipeOnly: boolean) {
+  const scriptPath = join(__dirname, '..', 'scripts', 'seed-demo-db.ts');
+  try {
+    const args = wipeOnly ? ['--wipe'] : [];
+    const stdout = execSync(`npx tsx "${scriptPath}" ${args.join(' ')}`, {
+      cwd: join(__dirname, '..'),
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { ok: true, output: stdout.trim() };
+  } catch (e: any) {
+    return { ok: false, error: e.message, output: e.stdout?.toString() ?? '' };
+  }
+}
 
 // GET /api/games/perfect — used by PerfectGames page (SPA client-side route)
 fastify.get('/api/games/perfect', async () => {

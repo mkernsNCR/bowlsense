@@ -21,6 +21,7 @@ import PinLeavesPage from './pages/PinLeaves.tsx'
 import ScoreCalculatorPage from './pages/ScoreCalculator.tsx'
 import SettingsPage from './pages/Settings.tsx'
 import QuickStart from './pages/QuickStart.tsx'
+import QuickScore from './pages/QuickScore.tsx'
 import PublicProfile from './pages/PublicProfile.tsx'
 import ShareScore from './pages/ShareScore.tsx'
 import SessionShare from './pages/SessionShare.tsx'
@@ -81,6 +82,7 @@ function Root() {
               <Route path="/perfect-games" element={<PerfectGames />} />
               <Route path="/perfect-games/:id" element={<PerfectGameShare />} />
               <Route path="/quick" element={<QuickStart />} />
+              <Route path="/quick-score" element={<QuickScore />} />
 
               <Route path="/pin-leaves" element={<PinLeavesPage />} />
               <Route path="/score-calculator" element={<ScoreCalculatorPage />} />

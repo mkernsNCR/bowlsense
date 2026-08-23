@@ -984,6 +984,102 @@ fastify.post('/games', async (request) => {
   return result[0];
 });
 
+// Quick Score — one-tap entry from the alley (no frame data required)
+// POST /api/games/quick
+// body: { score: number, ballId?: number, location?: string, lanes?: string, date?: YYYY-MM-DD, autoCreateSession?: boolean, notes?: string }
+// - If sessionId provided, attaches to that session. Otherwise auto-creates/uses today's session at location.
+// - Returns: { game, session, derivedStrikes, derivedSpares }
+fastify.post('/api/games/quick', async (request, reply) => {
+  const { sessionId, score, ballId, location, lanes, date, autoCreateSession, gameNumber, notes } = request.body as any;
+
+  if (typeof score !== 'number' || Number.isNaN(score)) {
+    reply.code(400);
+    return { error: 'score must be a number' };
+  }
+  if (score < 0 || score > 300) {
+    reply.code(400);
+    return { error: 'score must be between 0 and 300' };
+  }
+
+  const effectiveDate = (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date))
+    ? date
+    : new Date().toISOString().slice(0, 10);
+
+  let targetSessionId: number | null = null;
+  let createdNewSession = false;
+
+  if (sessionId && Number.isInteger(sessionId) && sessionId > 0) {
+    const existing = sqlite.prepare('SELECT id FROM sessions WHERE id = ?').get(sessionId);
+    if (existing) {
+      targetSessionId = sessionId;
+    }
+  }
+
+  if (!targetSessionId && autoCreateSession !== false) {
+    const loc = (typeof location === 'string' && location.trim()) ? location.trim() : 'Unknown';
+    const lan = (typeof lanes === 'string' && lanes.trim()) ? lanes.trim() : null;
+
+    // Reuse today's most-recent session at the same location if one exists
+    const sameDaySameLoc = sqlite.prepare(`
+      SELECT id, lanes, location FROM sessions
+      WHERE date = ? AND location = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(effectiveDate, loc) as any;
+
+    if (sameDaySameLoc) {
+      targetSessionId = sameDaySameLoc.id;
+    } else {
+      const newSession = sqlite.prepare(
+        'INSERT INTO sessions (date, location, lanes, notes) VALUES (?, ?, ?, ?)'
+      ).run(effectiveDate, loc, lan, notes ?? null);
+      targetSessionId = Number(newSession.lastInsertRowid);
+      createdNewSession = true;
+    }
+  }
+
+  if (!targetSessionId) {
+    reply.code(400);
+    return { error: 'sessionId required when autoCreateSession is false' };
+  }
+
+  // Auto-derive game number: max + 1
+  const maxRow = sqlite.prepare(
+    'SELECT COALESCE(MAX(game_number), 0) as max_gn FROM games WHERE session_id = ?'
+  ).get(targetSessionId) as any;
+  const finalGameNumber = (Number.isInteger(gameNumber) && gameNumber > 0)
+    ? gameNumber
+    : Number(maxRow?.max_gn || 0) + 1;
+
+  // Heuristic strike/spare counts when no frame data is supplied (alley quick-log)
+  // Defaults: 300 = 12 strikes / 0 spares, otherwise left to 0 unless score suggests patterns
+  let derivedStrikes = 0;
+  let derivedSpares = 0;
+  if (score === 300) {
+    derivedStrikes = 12;
+  } else if (typeof score === 'number' && score >= 0) {
+    // No reliable way to count strikes/spares from a final score alone — leave 0
+    derivedStrikes = 0;
+    derivedSpares = 0;
+  }
+
+  const insertResult = sqlite.prepare(
+    'INSERT INTO games (session_id, game_number, score, strikes, spares, splits, ball_id, frame_data, pin_leaves) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(targetSessionId, finalGameNumber, score, derivedStrikes, derivedSpares, 0, ballId ?? null, null, null);
+
+  const gameId = Number(insertResult.lastInsertRowid);
+  const game = sqlite.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
+  const session = sqlite.prepare('SELECT * FROM sessions WHERE id = ?').get(targetSessionId);
+
+  return {
+    game: { ...(game as any), id: gameId },
+    session,
+    derivedStrikes,
+    derivedSpares,
+    createdNewSession,
+    gameNumber: finalGameNumber,
+  };
+});
+
 // Edit game
 fastify.put('/games/:id', async (request) => {
   const { id } = request.params as any;

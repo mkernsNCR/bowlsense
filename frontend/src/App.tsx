@@ -8,6 +8,7 @@ export default function App({ children }: { children: ReactNode }) {
   const desktopNav = [
     { path: '/', mobileLabel: 'Home', desktopLabel: 'Dashboard', icon: '🎳', section: 'Getting Started' },
     { path: '/quick', mobileLabel: 'Quick', desktopLabel: 'Quick Start', icon: '⚡', section: 'Getting Started' },
+    { path: '/quick-score', mobileLabel: 'Score', desktopLabel: 'Quick Score', icon: '🎯', section: 'Getting Started' },
     { path: '/sessions', mobileLabel: 'Sessions', desktopLabel: 'Sessions', icon: '📋', section: 'Tracking' },
     { path: '/leagues', mobileLabel: 'Leagues', desktopLabel: 'Leagues', icon: '🏆', section: 'Tracking' },
     { path: '/tournaments', mobileLabel: 'Events', desktopLabel: 'Tournaments', icon: '🎯', section: 'Tracking' },
@@ -24,6 +25,7 @@ export default function App({ children }: { children: ReactNode }) {
   const mobileNav = [
     { path: '/', mobileLabel: 'Home', icon: '🎳' },
     { path: '/quick', mobileLabel: 'Quick', icon: '⚡' },
+    { path: '/quick-score', mobileLabel: 'Score', icon: '🎯' },
     { path: '/sessions', mobileLabel: 'Sessions', icon: '📋' },
     { path: '/sessions/new', mobileLabel: 'New', icon: '➕' },
     { path: '/leagues', mobileLabel: 'Leagues', icon: '🏆' },

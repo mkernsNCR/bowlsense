@@ -311,13 +311,29 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Link to="/sessions/new" className="btn btn-primary" style={{ fontSize: 15, fontWeight: 800 }}>
             🎳 Start a Session
           </Link>
           <button type="button" className="btn" onClick={openQuickLog} style={{ fontSize: 15, fontWeight: 800 }}>
             ⚡ Quick Log
           </button>
+          <Link
+            to="/quick-score"
+            className="btn"
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              background: 'rgba(52,211,153,0.16)',
+              border: '1px solid rgba(52,211,153,0.4)',
+              color: '#34d399',
+            }}
+          >
+            🎯 Quick Score
+          </Link>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted, rgba(255,255,255,0.5))', marginTop: 4 }}>
+          Score-only entry for the alley — no frame-by-frame required.
         </div>
       </div>
 

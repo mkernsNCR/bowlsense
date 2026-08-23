@@ -194,7 +194,7 @@ export default function QuickStart() {
           )}
         </div>
 
-        {/* Hero button */}
+        {/* Hero button + Quick Score secondary */}
         <button
           onClick={() => setShowScorer(true)}
           style={{
@@ -211,7 +211,7 @@ export default function QuickStart() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: 12,
-            marginBottom: 32,
+            marginBottom: 12,
             boxShadow: '0 8px 32px rgba(124,58,237,0.4)',
             transition: 'transform 0.15s, box-shadow 0.15s',
           }}
@@ -227,6 +227,46 @@ export default function QuickStart() {
           <span style={{ fontSize: 32 }}>🎳</span>
           New Game
         </button>
+
+        <div
+          onClick={() => navigate('/quick-score')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/quick-score') }}
+          style={{
+            background: '#1a1a35',
+            border: '1px solid rgba(167,139,250,0.4)',
+            borderRadius: 14,
+            padding: '14px 18px',
+            marginBottom: 32,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            transition: 'background 0.15s, transform 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget as HTMLDivElement
+            el.style.background = '#22224a'
+            el.style.transform = 'translateY(-1px)'
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget as HTMLDivElement
+            el.style.background = '#1a1a35'
+            el.style.transform = ''
+          }}
+        >
+          <div style={{ fontSize: 28 }}>🎯</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#c4b5fd', marginBottom: 2 }}>
+              Quick Score
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
+              Just the final score — no frame-by-frame at the alley
+            </div>
+          </div>
+          <div style={{ fontSize: 20, color: 'rgba(255,255,255,0.4)' }}>›</div>
+        </div>
 
         {/* Recent sessions */}
         <div style={{ marginBottom: 24 }}>

@@ -2117,11 +2117,12 @@ fastify.get('/leagues/:id/leaderboard/og-image', async (request, reply) => {
 
 fastify.get('/api/leagues/:id/leaderboard/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/leaderboard/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  // fastify.inject() decodes res.body as a UTF-8 string — corrupts binary PNG bytes.
+  // res.rawPayload is the underlying Buffer — safe to forward.
+  const res = await fastify.inject({ method: 'GET', url: `/leagues/${id}/leaderboard/og-image` })
+  reply.header('Content-Type', res.headers['content-type'] || 'image/png')
+  reply.header('Cache-Control', 'public, max-age=86400')
+  return reply.send(res.rawPayload)
 })
 
 // ── League Recap: most recent week data ─────────────────────────
@@ -2250,11 +2251,12 @@ function buildLeagueRecapOgSvg(opts: {
 
 fastify.get('/api/leagues/:id/recap/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/recap/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  // fastify.inject() decodes res.body as a UTF-8 string — corrupts binary PNG bytes.
+  // res.rawPayload is the underlying Buffer — safe to forward.
+  const res = await fastify.inject({ method: 'GET', url: `/leagues/${id}/recap/og-image` })
+  reply.header('Content-Type', res.headers['content-type'] || 'image/png')
+  reply.header('Cache-Control', 'public, max-age=86400')
+  return reply.send(res.rawPayload)
 })
 
 fastify.get('/leagues/:id/recap/og-image', async (request, reply) => {
@@ -2359,11 +2361,12 @@ fastify.get('/api/leagues/:id/weeks/:weekId', async (request, reply) => {
 
 fastify.get('/api/leagues/:id/weeks/:weekId/og-image', async (request, reply) => {
   const { id, weekId } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/weeks/${weekId}/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  // fastify.inject() decodes res.body as a UTF-8 string — corrupts binary PNG bytes.
+  // res.rawPayload is the underlying Buffer — safe to forward.
+  const res = await fastify.inject({ method: 'GET', url: `/leagues/${id}/weeks/${weekId}/og-image` })
+  reply.header('Content-Type', res.headers['content-type'] || 'image/png')
+  reply.header('Cache-Control', 'public, max-age=86400')
+  return reply.send(res.rawPayload)
 })
 
 fastify.get('/leagues/:id/weeks/:weekId/og-image', async (request, reply) => {
@@ -5290,7 +5293,7 @@ function buildLeagueShareOgSvg(opts: {
   ${subtitle ? `<text x="600" y="192" font-size="20" fill="rgba(255,255,255,0.6)" font-family="Arial, sans-serif" text-anchor="middle">${escapeXml(subtitle)}</text>` : ''}
   <g transform="translate(460, 218)">
     <rect x="0" y="0" width="280" height="56" rx="28" fill="${gamesWon > gamesLost ? 'rgba(52,211,153,0.2)' : gamesLost > gamesWon ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)'}" stroke="${gamesWon > gamesLost ? 'rgba(52,211,153,0.5)' : gamesLost > gamesWon ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.2)'}" stroke-width="1.5"/>
-    <text x="140" y="35" font-size="22" font-weight="800" fill="${gamesWon > gamesLost ? '#34d399' : gamesLost > gamesWon ? '#fc8181' : '#ffffff'}' font-family="Arial, sans-serif" text-anchor="middle">${escapeXml(recordLabel)}</text>
+    <text x="140" y="35" font-size="22" font-weight="800" fill="${gamesWon > gamesLost ? '#34d399' : gamesLost > gamesWon ? '#fc8181' : '#ffffff'}" font-family="Arial, sans-serif" text-anchor="middle">${escapeXml(recordLabel)}</text>
   </g>
   <text x="600" y="296" font-size="13" fill="rgba(255,255,255,0.4)" font-family="Arial, sans-serif" text-anchor="middle">${gamesWon + gamesLost + gamesTied} games tracked</text>
   ${statsRow}
@@ -5356,11 +5359,12 @@ fastify.get('/leagues/:id/share/og-image', async (request, reply) => {
 
 fastify.get('/api/leagues/:id/share/og-image', async (request, reply) => {
   const { id } = request.params as any
-  return fastify.inject({ method: 'GET', url: `/leagues/${id}/share/og-image` }).then((res) => {
-    reply.header('Content-Type', res.headers['content-type'] || 'image/png')
-    reply.header('Cache-Control', 'public, max-age=86400')
-    return reply.send(res.body)
-  })
+  // fastify.inject() decodes res.body as a UTF-8 string — corrupts binary PNG bytes.
+  // res.rawPayload is the underlying Buffer — safe to forward.
+  const res = await fastify.inject({ method: 'GET', url: `/leagues/${id}/share/og-image` })
+  reply.header('Content-Type', res.headers['content-type'] || 'image/png')
+  reply.header('Cache-Control', 'public, max-age=86400')
+  return reply.send(res.rawPayload)
 })
 
 // ── Serve frontend build (SPA — all from one origin for OG images) ──

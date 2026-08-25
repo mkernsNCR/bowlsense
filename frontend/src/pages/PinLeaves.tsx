@@ -120,7 +120,7 @@ export default function PinLeaves() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ margin: 0 }}>Pin Leave Analysis</h1>
           <p className="muted" style={{ margin: '4px 0 0' }}>
@@ -129,7 +129,18 @@ export default function PinLeaves() {
               : 'No pin data yet — log games to see your patterns'}
           </p>
         </div>
-        <Link to="/stats" className="btn btn-ghost" style={{ flexShrink: 0 }}>← Back to Stats</Link>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <a
+            href="/api/analytics/pin-leaves/export.csv"
+            download
+            className="btn btn-ghost"
+            title="Download all pin leaves as CSV (one row per first-throw leave)"
+            style={{ textDecoration: 'none' }}
+          >
+            📥 Export CSV
+          </a>
+          <Link to="/stats" className="btn btn-ghost">← Back to Stats</Link>
+        </div>
       </div>
 
       {total === 0 ? (

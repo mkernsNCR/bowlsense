@@ -302,6 +302,121 @@ fastify.get('/api/analytics/pin-leaves', async () => {
   return { totalFirstThrows: total, totalGames: rows.length, leaves, neverLeft, byMonth };
 });
 
+/** GET /api/analytics/pin-leaves/export.csv — Throw-level pin leave export
+ *  One row per first-throw pin leave across all games. Useful for coach review
+ *  in Excel/Sheets: group by pins_standing, see conversion rates by ball, etc.
+ *  Optional: ?session_id=N (filter to one session), ?from=YYYY-MM-DD, ?to=YYYY-MM-DD
+ */
+fastify.get('/api/analytics/pin-leaves/export.csv', async (request, reply) => {
+  const q = (request.query as any) || {};
+  const sessionId = q.session_id ? parseInt(String(q.session_id)) : null;
+  const from = typeof q.from === 'string' ? q.from : null;
+  const to = typeof q.to === 'string' ? q.to : null;
+
+  const where: string[] = ['g.pin_leaves IS NOT NULL', "g.pin_leaves != ''"];
+  const params: any[] = [];
+  if (sessionId) {
+    where.push('g.session_id = ?');
+    params.push(sessionId);
+  }
+  if (from) {
+    where.push('s.date >= ?');
+    params.push(from);
+  }
+  if (to) {
+    where.push('s.date <= ?');
+    params.push(to);
+  }
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const rows = sqlite.prepare(`
+    SELECT g.id as game_id, g.game_number, g.score, g.pin_leaves, g.frame_data,
+           s.id as session_id, s.date, s.location,
+           b.name as ball_name
+    FROM games g
+    JOIN sessions s ON g.session_id = s.id
+    LEFT JOIN balls b ON g.ball_id = b.id
+    ${whereClause}
+    ORDER BY s.date ASC, g.game_number ASC, g.id ASC
+  `).all(...params) as any[];
+
+  const ALL_PINS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const header = [
+    'game_id', 'session_id', 'date', 'location', 'game_number', 'score', 'ball_name',
+    'throw', 'pins_knocked', 'pins_standing', 'pins_left_count', 'is_split',
+  ];
+  const lines: string[] = [csvRow(header)];
+
+  let totalThrows = 0;
+  for (const row of rows) {
+    let pinData: any;
+    try {
+      pinData = JSON.parse(row.pin_leaves);
+    } catch {
+      continue;
+    }
+
+    // pin_leaves can be either an object {firstThrow:[...], secondThrow:[...]}
+    // or an array of arrays. Handle both — keys are throw names, values are pin arrays.
+    const throws: { name: string; pins: number[] }[] = [];
+    if (Array.isArray(pinData)) {
+      pinData.forEach((p: any, i: number) => {
+        throws.push({ name: `throw${i + 1}`, pins: Array.isArray(p) ? p : [] });
+      });
+    } else if (typeof pinData === 'object' && pinData !== null) {
+      for (const key of Object.keys(pinData)) {
+        const v = pinData[key];
+        throws.push({ name: key, pins: Array.isArray(v) ? v : [] });
+      }
+    }
+
+    for (const t of throws) {
+      const knockedSet = new Set(t.pins.map(Number));
+      const knockedCount = knockedSet.size;
+      const standing = [...ALL_PINS].filter(p => !knockedSet.has(p));
+      const pinsStanding = standing.join(',');
+      const isStrike = knockedCount === 10;
+
+      // Skip strikes on first throws (no leave possible in frames 1-9).
+      // For secondThrow/thirdThrow, include even if strike-on-first (frame 10 scenarios).
+      if (t.name === 'firstThrow' && isStrike) continue;
+
+      // Split detection: small (2-4 pin) leaves spanning 2+ rows of pins are split candidates.
+      let isSplit = false;
+      if (t.name === 'firstThrow' && !isStrike && standing.length >= 2 && standing.length <= 4) {
+        const inRow1 = standing.filter(p => p >= 1 && p <= 3).length > 0 ? 1 : 0;
+        const inRow2 = standing.filter(p => p >= 4 && p <= 6).length > 0 ? 1 : 0;
+        const inRow3 = standing.filter(p => p >= 7 && p <= 10).length > 0 ? 1 : 0;
+        const distinctRows = inRow1 + inRow2 + inRow3;
+        if (distinctRows >= 2) isSplit = true;
+      }
+
+      lines.push(csvRow([
+        row.game_id,
+        row.session_id,
+        row.date,
+        row.location,
+        row.game_number,
+        row.score,
+        row.ball_name,
+        t.name,
+        t.pins.join('|'),
+        pinsStanding,
+        standing.length,
+        isSplit ? 'yes' : 'no',
+      ]));
+      totalThrows++;
+    }
+  }
+
+  const csv = lines.join('\n') + '\n';
+
+  reply.header('Content-Type', 'text/csv; charset=utf-8');
+  reply.header('Content-Disposition', `attachment; filename="bowlsense_pin_leaves_${todayStamp()}.csv"`);
+  reply.header('X-Pin-Leaves-Total', String(totalThrows));
+  return reply.send(csv);
+});
+
 fastify.get('/api/balls', async () => db.select().from(balls));
 fastify.post('/api/balls', async (request) => {
   const { name, brand, color, notes, bowwwlId, coreType, coreRg, coreDiff, coverstockName, coverstockType, factoryFinish, thumbnailImage } = request.body as any;

@@ -198,6 +198,47 @@ export default function Dashboard() {
     setShowQuickLog(true)
   }
 
+  // ── Public Profile share (one-tap from Dashboard) ────────────────
+  const [sharePopoverOpen, setSharePopoverOpen] = useState(false)
+  const [profileCopied, setProfileCopied] = useState(false)
+  const publicProfileName = (settings.name || '').trim()
+  const publicProfileUrl = publicProfileName
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/bowl?name=${encodeURIComponent(publicProfileName)}`
+    : `${typeof window !== 'undefined' ? window.location.origin : ''}/bowl`
+  const publicProfileHasStats = (stats?.totalGames ?? 0) > 0
+
+  async function copyProfileLink() {
+    try {
+      await navigator.clipboard.writeText(publicProfileUrl)
+      setProfileCopied(true)
+      setTimeout(() => setProfileCopied(false), 2000)
+    } catch { /* ignore */ }
+  }
+
+  async function nativeShareProfile() {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: 'My BowlSense Profile',
+          text: publicProfileName
+            ? `${publicProfileName}'s bowling stats — BowlSense 🎳`
+            : 'My bowling stats — BowlSense 🎳',
+          url: publicProfileUrl,
+        })
+        return
+      } catch { /* fall through to copy */ }
+    }
+    await copyProfileLink()
+  }
+
+  function shareProfileOnX() {
+    const text = publicProfileName
+      ? `${publicProfileName}'s bowling stats — avg, high, and 300s on BowlSense 🎳`
+      : `My bowling stats on BowlSense 🎳`
+    const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(publicProfileUrl)}`
+    if (typeof window !== 'undefined') window.open(tweetUrl, '_blank', 'noopener,noreferrer')
+  }
+
   const closeQuickLog = () => {
     setShowQuickLog(false)
   }
@@ -331,10 +372,88 @@ export default function Dashboard() {
           >
             🎯 Quick Score
           </Link>
+          {publicProfileHasStats && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setSharePopoverOpen(v => !v)}
+              aria-expanded={sharePopoverOpen}
+              aria-controls="dashboard-share-popover"
+              style={{
+                fontSize: 15,
+                fontWeight: 800,
+                background: sharePopoverOpen ? 'rgba(167,139,250,0.22)' : 'rgba(167,139,250,0.12)',
+                border: '1px solid rgba(167,139,250,0.4)',
+                color: 'var(--accent)',
+              }}
+            >
+              📤 Share My Profile
+            </button>
+          )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted, rgba(255,255,255,0.5))', marginTop: 4 }}>
           Score-only entry for the alley — no frame-by-frame required.
         </div>
+
+        {/* Public Profile share popover — one-tap from Dashboard */}
+        {publicProfileHasStats && sharePopoverOpen && (
+          <div
+            id="dashboard-share-popover"
+            style={{
+              marginTop: 14,
+              padding: 14,
+              background: 'rgba(13,13,26,0.85)',
+              border: '1px solid rgba(167,139,250,0.3)',
+              borderRadius: 14,
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              🔗 Your public profile link
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                fontFamily: 'monospace',
+                background: 'rgba(167,139,250,0.08)',
+                border: '1px solid rgba(167,139,250,0.25)',
+                borderRadius: 10,
+                padding: '8px 10px',
+                wordBreak: 'break-all',
+                color: 'var(--accent)',
+                marginBottom: 12,
+              }}
+            >
+              {publicProfileUrl || '/bowl'}
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 12, lineHeight: 1.45 }}>
+              Anyone with this link sees your lifetime stats (avg, high, 300s, score distribution) — no login required.
+              {!publicProfileName && (
+                <span> Set a name in <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings</Link> to personalize the share card.</span>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <button onClick={nativeShareProfile} className="btn btn-primary" style={{ minHeight: 44 }}>
+                📤 Share
+              </button>
+              <button onClick={copyProfileLink} className="btn btn-ghost" style={{ minHeight: 44 }}>
+                {profileCopied ? '✅ Copied!' : '🔗 Copy Link'}
+              </button>
+            </div>
+            <button onClick={shareProfileOnX} className="btn btn-ghost" style={{ width: '100%', minHeight: 40, marginBottom: 8 }}>
+              𝕏 Share on X
+            </button>
+            <Link
+              to="/bowl"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost"
+              style={{ display: 'block', textAlign: 'center', textDecoration: 'none', minHeight: 38, fontSize: 13 }}
+            >
+              👁️ Open Profile Preview →
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Tonight's League — surfaces when a league is scheduled for today's day-of-week */}
@@ -476,6 +595,17 @@ export default function Dashboard() {
                 >
                   View League →
                 </Link>
+                {lg.stats.totalGames > 0 && (
+                  <Link
+                    to={`/leagues/${lg.id}/leaderboard`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-ghost"
+                    style={{ fontSize: 14, fontWeight: 700, color: '#34d399', borderColor: 'rgba(52,211,153,0.4)' }}
+                  >
+                    🏆 Public Leaderboard ↗
+                  </Link>
+                )}
               </div>
             </div>
           ))}

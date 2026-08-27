@@ -612,16 +612,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
-        <div className="card card-accent-top" style={{ padding: 14 }}>
+      <div className="dashboard-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
+        <div className="card card-accent-top dashboard-stat" style={{ padding: 14, minWidth: 0 }}>
           <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Average Score</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <div style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 900, color: 'var(--accent)' }}>{stats?.average ?? '—'}</div>
             {(stats?.average ?? 0) >= 200 && <span style={{ fontSize: 16, color: '#34d399' }}>🔥</span>}
           </div>
         </div>
 
-        <div className="card card-accent-top" style={{ padding: 14 }}>
+        <div className="card card-accent-top dashboard-stat" style={{ padding: 14, minWidth: 0 }}>
           <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{highScoreFromRecent !== null ? 'High Score' : 'Total Games'}</div>
           <div style={{ fontSize: 36, lineHeight: 1.1, fontWeight: 900, color: 'var(--accent)' }}>
             {highScoreFromRecent ?? (stats?.totalGames ?? '—')}
@@ -629,10 +629,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 24 }}>
-        <div className="card card-accent-top" style={{ padding: 14 }}>
+      <div className="dashboard-stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 24 }}>
+        <div className="card card-accent-top dashboard-stat" style={{ padding: 14, minWidth: 0 }}>
           <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Strike Rate</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <div style={{ fontSize: 24, lineHeight: 1.1, fontWeight: 700, color: 'var(--accent)' }}>
               {stats?.strikeRate ? `${stats.strikeRate}%` : '—'}
             </div>
@@ -640,7 +640,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card card-accent-top" style={{ padding: 14 }}>
+        <div className="card card-accent-top dashboard-stat" style={{ padding: 14, minWidth: 0 }}>
           <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>Spare Rate</div>
           <div style={{ fontSize: 24, lineHeight: 1.1, fontWeight: 700, color: 'var(--accent)' }}>
             {stats?.spareRate ? `${stats.spareRate}%` : '—'}

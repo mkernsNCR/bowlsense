@@ -250,16 +250,19 @@ textarea:focus {
   background: linear-gradient(180deg, rgba(30, 30, 48, 0.9), rgba(16, 16, 27, 0.94));
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
   backdrop-filter: blur(16px) saturate(140%);
-  padding: 9px;
+  padding: 8px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 480px;
+  margin: 0 auto;
+  overflow: visible;
 }
 
 .bottom-nav-item {
   text-decoration: none;
   border-radius: 14px;
-  min-height: 56px;
+  min-height: 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -273,6 +276,11 @@ textarea:focus {
   background: transparent;
   font-family: inherit;
   cursor: pointer;
+  min-width: 0;
+  padding: 4px 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .bottom-nav-item.active {
@@ -338,6 +346,21 @@ textarea:focus {
 
 .stats-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Dashboard stat cards: keep large numbers readable on small phones.
+   Inline fontSize:36px is fine on desktop but cramped at 375px width. */
+.dashboard-stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 480px) {
+  .dashboard-stat {
+    padding: 12px !important;
+  }
+  .dashboard-stat > div:last-child > div:first-child {
+    font-size: 28px !important;
+  }
 }
 
 .ball-performance-row {
@@ -451,6 +474,9 @@ textarea:focus {
   flex-direction: column;
   animation: drawerSlideIn 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
   overflow: hidden;
+  /* Defensive: never exceed viewport height (notch / landscape quirks) */
+  height: 100dvh;
+  height: 100vh;
 }
 
 @keyframes drawerSlideIn {

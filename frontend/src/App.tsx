@@ -22,15 +22,15 @@ export default function App({ children }: { children: ReactNode }) {
     { path: '/help', mobileLabel: 'Help', desktopLabel: 'Help', icon: '❓', section: 'Support' },
   ]
 
+  // Bottom nav is intentionally minimal (4 items + Menu trigger).
+  // 5 items at 375px width = ~70px tap targets. 6+ items made the nav
+  // wrap to 2 rows (140px tall, half the screen) on small phones.
+  // Everything else lives in the drawer, one tap away via the Menu button.
   const mobileNav = [
     { path: '/', mobileLabel: 'Home', icon: '🎳' },
-    { path: '/quick', mobileLabel: 'Quick', icon: '⚡' },
     { path: '/quick-score', mobileLabel: 'Score', icon: '🎯' },
-    { path: '/sessions', mobileLabel: 'Sessions', icon: '📋' },
-    { path: '/sessions/new', mobileLabel: 'New', icon: '➕' },
+    { path: '/sessions/new', mobileLabel: 'Log', icon: '➕' },
     { path: '/leagues', mobileLabel: 'Leagues', icon: '🏆' },
-    { path: '/pin-leaves', mobileLabel: 'Pin Leaves', icon: '📌' },
-    { path: '/score-calculator', mobileLabel: 'Calculator', icon: '🧮' },
   ]
 
   useEffect(() => {
@@ -42,6 +42,16 @@ export default function App({ children }: { children: ReactNode }) {
     return () => {
       document.body.style.overflow = ''
     }
+  }, [drawerOpen])
+
+  // Escape key closes the drawer (works on keyboard + virtual keyboard focus)
+  useEffect(() => {
+    if (!drawerOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [drawerOpen])
 
   return (
@@ -79,11 +89,11 @@ export default function App({ children }: { children: ReactNode }) {
       {drawerOpen && (
         <div className="nav-drawer-overlay" onClick={() => setDrawerOpen(false)}>
           <div id="mobile-nav-drawer" className="nav-drawer-panel" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0, paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))' }}>
               <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--accent)' }}>☰ Menu</span>
               <button
                 onClick={() => setDrawerOpen(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer', padding: 4, lineHeight: 1 }}
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 16, cursor: 'pointer', padding: 0, lineHeight: 1, minWidth: 36, minHeight: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 aria-label="Close menu"
               >
                 ✕

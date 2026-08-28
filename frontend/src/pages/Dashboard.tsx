@@ -3,6 +3,25 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useSettings } from '../hooks/useSettings'
 import BowlingScorer from '../components/BowlingScorer'
+import {
+  copyGameShareLink,
+  downloadGameImage,
+  nativeShareGame,
+  shareOnX,
+  getGameShareUrl,
+  getGameOgImageUrl,
+} from '../utils/gameShare'
+
+interface PerfectGameSummary {
+  id: number
+  gameNumber: number
+  score: number
+  ballId: number | null
+  ballName: string | null
+  date: string
+  location: string
+  lanes: string
+}
 
 interface TonightLeague {
   id: number
@@ -159,6 +178,55 @@ export default function Dashboard() {
     queryFn: () => fetch('/api/dashboard/tonight').then(r => r.json()),
     staleTime: 5 * 60 * 1000, // 5 min — day-of-week doesn't change rapidly
   })
+
+  const { data: perfectGames = [] } = useQuery<PerfectGameSummary[]>({
+    queryKey: ['games-perfect'],
+    queryFn: async () => {
+      const res = await fetch('/api/games/perfect')
+      if (!res.ok) return []
+      const data = await res.json()
+      return Array.isArray(data) ? data : (data.games ?? [])
+    },
+    staleTime: 10 * 60 * 1000, // 10 min — 300s don't change often
+  })
+
+  // One-tap 300 share state
+  const [share300PopoverOpen, setShare300PopoverOpen] = useState(false)
+  const [share300Copied, setShare300Copied] = useState(false)
+  const [share300Busy, setShare300Busy] = useState(false)
+
+  async function handleCopyPerfectLink(gameId: number) {
+    await copyGameShareLink(gameId)
+    setShare300Copied(true)
+    window.setTimeout(() => setShare300Copied(false), 1500)
+  }
+
+  async function handleNativeSharePerfect(game: PerfectGameSummary) {
+    setShare300Busy(true)
+    try {
+      const shared = await nativeShareGame({
+        gameId: game.id,
+        filename: `perfect-game-${game.id}.png`,
+        title: '🎳 Perfect 300 Game',
+        text: `I rolled a 300 at ${game.location}!`,
+      })
+      if (!shared) {
+        // Browser doesn't support native share — open X as fallback
+        shareOnX(game.id, 300, game.location)
+      }
+    } finally {
+      setShare300Busy(false)
+    }
+  }
+
+  async function handleDownloadPerfectImage(gameId: number) {
+    setShare300Busy(true)
+    try {
+      await downloadGameImage(gameId, `perfect-game-${gameId}.png`)
+    } finally {
+      setShare300Busy(false)
+    }
+  }
 
   const createSessionMutation = useMutation({
     mutationFn: async (payload: { date: string; location: string; lanes: string }) => {
@@ -609,6 +677,198 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 🏆 300 Club — surfaces when there's a perfect game, with one-tap share */}
+      {perfectGames.length > 0 && (
+        <div style={{ marginBottom: 18, position: 'relative' }}>
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(245,158,11,0.08) 50%, rgba(167,139,250,0.08) 100%)',
+              border: '1px solid rgba(251,191,36,0.36)',
+              borderRadius: 18,
+              padding: '16px 16px 14px',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: -40,
+                right: -40,
+                width: 140,
+                height: 140,
+                background: 'radial-gradient(circle, rgba(251,191,36,0.22) 0%, transparent 70%)',
+                pointerEvents: 'none',
+              }}
+            />
+            <div
+              style={{
+                display: 'inline-flex',
+                padding: '3px 10px',
+                borderRadius: 999,
+                background: 'rgba(251,191,36,0.24)',
+                color: '#fcd34d',
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: 0.6,
+                marginBottom: 8,
+                textTransform: 'uppercase',
+              }}
+            >
+              🏆 300 CLUB · {perfectGames.length} PERFECT
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+              <div style={{ fontSize: 36, lineHeight: 1, fontWeight: 900, color: '#fbbf24' }}>
+                300
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                Most recent · {perfectGames[0].location || 'Unknown Lanes'}
+                {perfectGames[0].lanes ? ` · Lanes ${perfectGames[0].lanes}` : ''}
+              </div>
+            </div>
+            {perfectGames[0].ballName && (
+              <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                🎳 {perfectGames[0].ballName}
+                <span style={{ marginLeft: 8 }}>
+                  · {new Date(perfectGames[0].date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShare300PopoverOpen(v => !v)}
+                aria-expanded={share300PopoverOpen}
+                aria-controls="dashboard-perfect-share"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                  borderColor: 'transparent',
+                  color: '#1a1a0f',
+                }}
+              >
+                📤 {share300PopoverOpen ? 'Hide Share' : 'Share This 300'}
+              </button>
+              <Link
+                to={`/score/${perfectGames[0].id}`}
+                className="btn btn-ghost"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: '#fcd34d',
+                  borderColor: 'rgba(251,191,36,0.4)',
+                }}
+              >
+                View Scorecard →
+              </Link>
+              <Link
+                to="/perfect-games"
+                className="btn btn-ghost"
+                style={{ fontSize: 14, fontWeight: 700, color: 'var(--muted)', borderColor: 'var(--border)' }}
+              >
+                All 300s ({perfectGames.length})
+              </Link>
+            </div>
+          </div>
+
+          {share300PopoverOpen && (
+            <div
+              id="dashboard-perfect-share"
+              role="dialog"
+              aria-label="Share your perfect 300 game"
+              style={{
+                marginTop: 10,
+                background: '#0d0d1a',
+                border: '1px solid rgba(251,191,36,0.32)',
+                borderRadius: 14,
+                padding: 14,
+              }}
+            >
+              <div className="muted" style={{ fontSize: 11, marginBottom: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+                Share your perfect 300
+              </div>
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  background: 'rgba(167,139,250,0.08)',
+                  border: '1px solid rgba(167,139,250,0.2)',
+                  borderRadius: 8,
+                  padding: '6px 10px',
+                  wordBreak: 'break-all',
+                  marginBottom: 10,
+                  color: '#c4b5fd',
+                }}
+              >
+                {getGameShareUrl(perfectGames[0].id)}
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 10, lineHeight: 1.4 }}>
+                Anyone with this link sees your scorecard + frame breakdown. The share card previews as a 1200×630 PNG on social feeds.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleCopyPerfectLink(perfectGames[0].id)}
+                  style={{ fontSize: 13, fontWeight: 700 }}
+                >
+                  {share300Copied ? '✅ Copied!' : '🔗 Copy Link'}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => handleNativeSharePerfect(perfectGames[0])}
+                  disabled={share300Busy}
+                  style={{ fontSize: 13, fontWeight: 700 }}
+                >
+                  {share300Busy ? 'Preparing…' : '📱 Share'}
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => shareOnX(perfectGames[0].id, 300, perfectGames[0].location)}
+                  style={{ fontSize: 13, fontWeight: 700 }}
+                >
+                  🐦 Post to X
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void handleDownloadPerfectImage(perfectGames[0].id)}
+                  disabled={share300Busy}
+                  style={{ fontSize: 13, fontWeight: 700 }}
+                >
+                  ⬇️ Download PNG
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <a
+                  href={getGameOgImageUrl(perfectGames[0].id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', borderColor: 'var(--border)', flex: 1, textAlign: 'center' }}
+                >
+                  Open Share Image ↗
+                </a>
+                <Link
+                  to={`/perfect-games/${perfectGames[0].id}`}
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', borderColor: 'var(--border)', flex: 1, textAlign: 'center' }}
+                >
+                  Full Share Page
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
